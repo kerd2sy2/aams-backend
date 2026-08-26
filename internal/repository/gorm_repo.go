@@ -946,7 +946,30 @@ func (r *gormInventoryRepository) FindPurchaseInvoiceByID(ctx context.Context, i
 }
 
 func (r *gormInventoryRepository) DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&domain.PurchaseInvoice{}, "id = ?", id).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var invoice domain.PurchaseInvoice
+		if err := tx.Preload("Items").First(&invoice, "id = ?", id).Error; err != nil {
+			return err
+		}
+
+		// Delete purchase invoice items
+		if err := tx.Where("invoice_id = ?", id).Delete(&domain.PurchaseInvoiceItem{}).Error; err != nil {
+			return err
+		}
+
+		// Delete any inventory stock-in transactions created by this invoice
+		if invoice.InvoiceNumber != "" {
+			pattern := "%فاتورة رقم: " + invoice.InvoiceNumber + "%"
+			_ = tx.Where("notes LIKE ?", pattern).Delete(&domain.InventoryTransaction{}).Error
+		}
+
+		// Delete the invoice itself
+		if err := tx.Delete(&domain.PurchaseInvoice{}, "id = ?", id).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 // GORM Maintenance Repository

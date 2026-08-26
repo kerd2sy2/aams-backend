@@ -2116,10 +2116,6 @@ func (h *InventoryHandler) GetPurchaseInvoiceByID(c *gin.Context) {
 }
 
 func (h *InventoryHandler) DeletePurchaseInvoice(c *gin.Context) {
-	if !checkAdminOnly(c) {
-		return
-	}
-
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الفاتورة غير صالح"})
