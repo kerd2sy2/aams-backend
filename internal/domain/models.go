@@ -171,9 +171,9 @@ type InventoryItem struct {
 	ID        uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
 	Name      string         `gorm:"type:varchar(150);not null;index" json:"name"`
 	Type      string         `gorm:"type:varchar(50);not null;index" json:"type"` // "oil" or "spare_part"
-	Unit      string         `gorm:"type:varchar(30)" json:"unit"`                // "ط¬ط±ظƒظ†", "ظ‚ط·ط¹ط©", etc.
-	Barcode   string         `gorm:"type:varchar(100);index" json:"barcode"`      // ط¨ط§ط±ظƒظˆط¯ ط§ظ„طµظ†ظپ
-	Quantity  int            `gorm:"not null;default:0" json:"quantity"`          // ط§ظ„ظƒظ…ظٹط© ط§ظ„ط¥ط¬ظ…ط§ظ„ظٹط© (ظ„ظ„طھط®ط²ظٹظ† ظپظ‚ط· - ظ„ط§ طھط³طھط®ط¯ظ… ظ„ظ„ط¹ط±ط¶)
+	Unit      string         `gorm:"type:varchar(30)" json:"unit"`                // "جركن", "قطعة", etc.
+	Barcode   string         `gorm:"type:varchar(100);index" json:"barcode"`      // باركود الصنف
+	Quantity  int            `gorm:"not null;default:0" json:"quantity"`          // الكمية الإجمالية (للتخزين فقط - لا تستخدم للعرض)
 	MinAlert  int            `gorm:"default:5" json:"min_alert"`                  // minimum quantity alert
 	Notes     string         `gorm:"type:text" json:"notes"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -205,6 +205,50 @@ type InventoryTransaction struct {
 func (t *InventoryTransaction) BeforeCreate(tx *gorm.DB) error {
 	if t.ID == uuid.Nil {
 		t.ID = uuid.New()
+	}
+	return nil
+}
+
+// PurchaseInvoice model for tracking supplier purchase bills
+type PurchaseInvoice struct {
+	ID            uuid.UUID             `gorm:"type:char(36);primary_key" json:"id"`
+	InvoiceNumber string                `gorm:"type:varchar(100);index;not null" json:"invoice_number"`
+	SupplierName  string                `gorm:"type:varchar(200);index;not null" json:"supplier_name"`
+	InvoiceDate   time.Time             `gorm:"not null" json:"invoice_date"`
+	TotalAmount   float64               `gorm:"type:decimal(12,2);not null;default:0" json:"total_amount"`
+	BranchID      *uuid.UUID            `gorm:"type:char(36);index" json:"branch_id"`
+	Branch        *Branch               `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
+	CreatedByName string                `gorm:"type:varchar(100)" json:"created_by_name"`
+	Notes         string                `gorm:"type:text" json:"notes"`
+	Items         []PurchaseInvoiceItem `gorm:"foreignKey:InvoiceID;constraint:OnDelete:CASCADE" json:"items,omitempty"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt        `gorm:"index" json:"-"`
+}
+
+func (p *PurchaseInvoice) BeforeCreate(tx *gorm.DB) error {
+	if p.ID == uuid.Nil {
+		p.ID = uuid.New()
+	}
+	return nil
+}
+
+// PurchaseInvoiceItem model for individual line items within a purchase invoice
+type PurchaseInvoiceItem struct {
+	ID         uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
+	InvoiceID  uuid.UUID      `gorm:"type:char(36);index;not null" json:"invoice_id"`
+	ItemID     uuid.UUID      `gorm:"type:char(36);index;not null" json:"item_id"`
+	Item       *InventoryItem `gorm:"foreignKey:ItemID" json:"item,omitempty"`
+	Quantity   int            `gorm:"not null" json:"quantity"`
+	UnitPrice  float64        `gorm:"type:decimal(10,2);not null;default:0" json:"unit_price"`
+	TotalPrice float64        `gorm:"type:decimal(12,2);not null;default:0" json:"total_price"`
+	Notes      string         `gorm:"type:text" json:"notes"`
+	CreatedAt  time.Time      `json:"created_at"`
+}
+
+func (pi *PurchaseInvoiceItem) BeforeCreate(tx *gorm.DB) error {
+	if pi.ID == uuid.Nil {
+		pi.ID = uuid.New()
 	}
 	return nil
 }

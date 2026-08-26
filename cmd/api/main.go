@@ -281,6 +281,10 @@ func main() {
 		protected.POST("/inventory/dispense-oil", invHandler.DispenseOil)
 		protected.GET("/inventory/transactions", invHandler.GetTransactions)
 		protected.DELETE("/inventory/transactions", invHandler.DeleteAllTransactions)
+		protected.GET("/inventory/purchases", invHandler.GetPurchaseInvoices)
+		protected.GET("/inventory/purchases/:id", invHandler.GetPurchaseInvoiceByID)
+		protected.POST("/inventory/purchases", invHandler.CreatePurchaseInvoice)
+		protected.DELETE("/inventory/purchases/:id", invHandler.DeletePurchaseInvoice)
 
 		// Maintenance
 		protected.GET("/maintenance/logs", maintHandler.GetAllLogs)

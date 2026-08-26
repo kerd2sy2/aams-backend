@@ -1499,6 +1499,10 @@ type InventoryService interface {
 	DispenseOil(ctx context.Context, req dto.DispenseOilRequest, adminName string, branchID *uuid.UUID) (*domain.MaintenanceLog, error)
 	GetTransactions(ctx context.Context, itemID *uuid.UUID, branchID *uuid.UUID, page, limit int) ([]domain.InventoryTransaction, int64, error)
 	DeleteAllTransactions(ctx context.Context) error
+	CreatePurchaseInvoice(ctx context.Context, req dto.CreatePurchaseInvoiceRequest, branchID *uuid.UUID, adminName string) (*domain.PurchaseInvoice, error)
+	GetPurchaseInvoices(ctx context.Context, branchID *uuid.UUID, search string, page, limit int) ([]domain.PurchaseInvoice, int64, error)
+	GetPurchaseInvoiceByID(ctx context.Context, id uuid.UUID) (*domain.PurchaseInvoice, error)
+	DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error
 }
 
 type inventoryService struct {
@@ -1880,6 +1884,100 @@ func (s *inventoryService) GetTransactions(ctx context.Context, itemID *uuid.UUI
 
 func (s *inventoryService) DeleteAllTransactions(ctx context.Context) error {
 	return s.invRepo.DeleteAllTransactions(ctx)
+}
+
+func (s *inventoryService) CreatePurchaseInvoice(ctx context.Context, req dto.CreatePurchaseInvoiceRequest, branchID *uuid.UUID, adminName string) (*domain.PurchaseInvoice, error) {
+	if strings.TrimSpace(req.SupplierName) == "" {
+		return nil, errors.New("اسم المورد مطلوب")
+	}
+	if len(req.Items) == 0 {
+		return nil, errors.New("يجب إضافة صنف واحد على الأقل في الفاتورة")
+	}
+
+	invoiceNumber := strings.TrimSpace(req.InvoiceNumber)
+	if invoiceNumber == "" {
+		invoiceNumber = fmt.Sprintf("INV-%s-%d", time.Now().Format("20060102"), time.Now().Unix()%10000)
+	}
+
+	invoiceDate := time.Now()
+	if req.InvoiceDate != nil && !req.InvoiceDate.IsZero() {
+		invoiceDate = *req.InvoiceDate
+	}
+
+	var totalAmount float64
+	invoiceItems := make([]domain.PurchaseInvoiceItem, 0, len(req.Items))
+	stockTxs := make([]*domain.InventoryTransaction, 0, len(req.Items))
+
+	for _, itemReq := range req.Items {
+		itemID, err := uuid.Parse(itemReq.ItemID)
+		if err != nil {
+			return nil, errors.New("معرف الصنف غير صالح")
+		}
+
+		item, err := s.invRepo.FindItemByID(ctx, itemID)
+		if err != nil {
+			return nil, fmt.Errorf("الصنف المحدد غير موجود: %s", itemReq.ItemID)
+		}
+
+		if itemReq.Quantity <= 0 {
+			return nil, fmt.Errorf("كمية الصنف %s يجب أن تكون أكبر من الصفر", item.Name)
+		}
+
+		rowTotal := float64(itemReq.Quantity) * itemReq.UnitPrice
+		totalAmount += rowTotal
+
+		invoiceItems = append(invoiceItems, domain.PurchaseInvoiceItem{
+			ItemID:     itemID,
+			Quantity:   itemReq.Quantity,
+			UnitPrice:  itemReq.UnitPrice,
+			TotalPrice: rowTotal,
+			Notes:      itemReq.Notes,
+		})
+
+		// Auto stock-in transaction
+		stockTxs = append(stockTxs, &domain.InventoryTransaction{
+			ItemID:   itemID,
+			Type:     "in",
+			Quantity: itemReq.Quantity,
+			BranchID: branchID,
+			Notes:    fmt.Sprintf("توريد مشتريات (فاتورة رقم: %s - مورد: %s)", invoiceNumber, req.SupplierName),
+		})
+	}
+
+	invoice := &domain.PurchaseInvoice{
+		InvoiceNumber: invoiceNumber,
+		SupplierName:  strings.TrimSpace(req.SupplierName),
+		InvoiceDate:   invoiceDate,
+		TotalAmount:   totalAmount,
+		BranchID:      branchID,
+		CreatedByName: adminName,
+		Notes:         req.Notes,
+		Items:         invoiceItems,
+	}
+
+	if err := s.invRepo.CreatePurchaseInvoice(ctx, invoice, stockTxs); err != nil {
+		return nil, fmt.Errorf("فشل في حفظ فاتورة المشتريات: %w", err)
+	}
+
+	return invoice, nil
+}
+
+func (s *inventoryService) GetPurchaseInvoices(ctx context.Context, branchID *uuid.UUID, search string, page, limit int) ([]domain.PurchaseInvoice, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	return s.invRepo.FindPurchaseInvoices(ctx, branchID, search, page, limit)
+}
+
+func (s *inventoryService) GetPurchaseInvoiceByID(ctx context.Context, id uuid.UUID) (*domain.PurchaseInvoice, error) {
+	return s.invRepo.FindPurchaseInvoiceByID(ctx, id)
+}
+
+func (s *inventoryService) DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error {
+	return s.invRepo.DeletePurchaseInvoice(ctx, id)
 }
 
 // MaintenanceService interface & impl

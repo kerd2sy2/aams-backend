@@ -82,6 +82,10 @@ type InventoryRepository interface {
 	GetItemStock(ctx context.Context, itemID uuid.UUID, branchID *uuid.UUID) (int, error)
 	FindOilItemsWithStock(ctx context.Context, branchID *uuid.UUID) ([]domain.InventoryItem, error)
 	DeleteAllTransactions(ctx context.Context) error
+	CreatePurchaseInvoice(ctx context.Context, invoice *domain.PurchaseInvoice, stockTxs []*domain.InventoryTransaction) error
+	FindPurchaseInvoices(ctx context.Context, branchID *uuid.UUID, search string, page, limit int) ([]domain.PurchaseInvoice, int64, error)
+	FindPurchaseInvoiceByID(ctx context.Context, id uuid.UUID) (*domain.PurchaseInvoice, error)
+	DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error
 }
 
 type MaintenanceRepository interface {

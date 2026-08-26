@@ -892,6 +892,63 @@ func (r *gormInventoryRepository) DeleteAllTransactions(ctx context.Context) err
 	return r.db.WithContext(ctx).Where("1 = 1").Delete(&domain.InventoryTransaction{}).Error
 }
 
+func (r *gormInventoryRepository) CreatePurchaseInvoice(ctx context.Context, invoice *domain.PurchaseInvoice, stockTxs []*domain.InventoryTransaction) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(invoice).Error; err != nil {
+			return err
+		}
+
+		for _, stx := range stockTxs {
+			if err := tx.Create(stx).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+func (r *gormInventoryRepository) FindPurchaseInvoices(ctx context.Context, branchID *uuid.UUID, search string, page, limit int) ([]domain.PurchaseInvoice, int64, error) {
+	var invoices []domain.PurchaseInvoice
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&domain.PurchaseInvoice{}).
+		Preload("Branch").
+		Preload("Items.Item")
+
+	if branchID != nil {
+		query = query.Where("branch_id = ?", *branchID)
+	}
+
+	if search != "" {
+		s := "%" + search + "%"
+		query = query.Where("invoice_number LIKE ? OR supplier_name LIKE ? OR notes LIKE ?", s, s, s)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := query.Order("invoice_date DESC, created_at DESC").Offset(offset).Limit(limit).Find(&invoices).Error
+	return invoices, total, err
+}
+
+func (r *gormInventoryRepository) FindPurchaseInvoiceByID(ctx context.Context, id uuid.UUID) (*domain.PurchaseInvoice, error) {
+	var invoice domain.PurchaseInvoice
+	if err := r.db.WithContext(ctx).
+		Preload("Branch").
+		Preload("Items.Item").
+		First(&invoice, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &invoice, nil
+}
+
+func (r *gormInventoryRepository) DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.PurchaseInvoice{}, "id = ?", id).Error
+}
+
 // GORM Maintenance Repository
 type gormMaintenanceRepository struct {
 	db *gorm.DB

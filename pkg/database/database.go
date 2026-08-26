@@ -52,6 +52,8 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		&domain.AuditLog{},
 		&domain.InventoryItem{},
 		&domain.InventoryTransaction{},
+		&domain.PurchaseInvoice{},
+		&domain.PurchaseInvoiceItem{},
 		&domain.MaintenanceLog{},
 		&domain.Investigation{},
 		&domain.Attendance{},

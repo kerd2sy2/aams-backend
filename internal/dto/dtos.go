@@ -372,6 +372,22 @@ type InventoryItemWithStock struct {
 	BranchQuantity int `json:"branch_quantity"` // الكمية المتاحة في الفرع الحالي
 }
 
+// Purchase Invoice DTOs
+type PurchaseInvoiceItemRequest struct {
+	ItemID    string  `json:"item_id" binding:"required,uuid"`
+	Quantity  int     `json:"quantity" binding:"required,gte=1"`
+	UnitPrice float64 `json:"unit_price" binding:"gte=0"`
+	Notes     string  `json:"notes"`
+}
+
+type CreatePurchaseInvoiceRequest struct {
+	InvoiceNumber string                       `json:"invoice_number"`
+	SupplierName  string                       `json:"supplier_name" binding:"required"`
+	InvoiceDate   *time.Time                   `json:"invoice_date"`
+	Notes         string                       `json:"notes"`
+	Items         []PurchaseInvoiceItemRequest `json:"items" binding:"required,min=1,dive"`
+}
+
 // Maintenance DTOs
 type MaintenanceLogResponse struct {
 	ID           string    `json:"id"`

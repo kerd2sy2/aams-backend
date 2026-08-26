@@ -2055,6 +2055,88 @@ func (h *InventoryHandler) DeleteAllTransactions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "تم مسح جميع حركات المخزون بنجاح"})
 }
 
+func (h *InventoryHandler) CreatePurchaseInvoice(c *gin.Context) {
+	var req dto.CreatePurchaseInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "يرجى ملء جميع الحقول المطلوبة", "details": err.Error()})
+		return
+	}
+
+	adminName := c.GetString("admin_name")
+	branchID := getBranchID(c)
+
+	invoice, err := h.invService.CreatePurchaseInvoice(c.Request.Context(), req, branchID, adminName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	_ = h.auditService.LogAction(c.Request.Context(), adminName, "إنشاء فاتورة مشتريات", fmt.Sprintf("تم إنشاء فاتورة مشتريات رقم %s للمورد %s بإجمالي %.2f", invoice.InvoiceNumber, invoice.SupplierName, invoice.TotalAmount), c.ClientIP(), branchID)
+
+	c.JSON(http.StatusCreated, invoice)
+}
+
+func (h *InventoryHandler) GetPurchaseInvoices(c *gin.Context) {
+	branchID := getBranchID(c)
+	search := strings.TrimSpace(c.Query("search"))
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	invoices, total, err := h.invService.GetPurchaseInvoices(c.Request.Context(), branchID, search, page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":        invoices,
+		"total":       total,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
+	})
+}
+
+func (h *InventoryHandler) GetPurchaseInvoiceByID(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الفاتورة غير صالح"})
+		return
+	}
+
+	invoice, err := h.invService.GetPurchaseInvoiceByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "فاتورة المشتريات غير موجودة"})
+		return
+	}
+
+	c.JSON(http.StatusOK, invoice)
+}
+
+func (h *InventoryHandler) DeletePurchaseInvoice(c *gin.Context) {
+	if !checkAdminOnly(c) {
+		return
+	}
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الفاتورة غير صالح"})
+		return
+	}
+
+	if err := h.invService.DeletePurchaseInvoice(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل في حذف فاتورة المشتريات: " + err.Error()})
+		return
+	}
+
+	adminName := c.GetString("admin_name")
+	_ = h.auditService.LogAction(c.Request.Context(), adminName, "حذف فاتورة مشتريات", "تم حذف فاتورة مشتريات معرف: "+id.String(), c.ClientIP(), getBranchID(c))
+
+	c.JSON(http.StatusOK, gin.H{"message": "تم حذف فاتورة المشتريات بنجاح"})
+}
+
 // MaintenanceHandler
 type MaintenanceHandler struct {
 	maintService service.MaintenanceService
