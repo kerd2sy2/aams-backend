@@ -384,6 +384,11 @@ type CreatePurchaseInvoiceRequest struct {
 	InvoiceNumber string                       `json:"invoice_number"`
 	SupplierName  string                       `json:"supplier_name" binding:"required"`
 	InvoiceDate   *time.Time                   `json:"invoice_date"`
+	Subtotal      float64                      `json:"subtotal"`
+	Discount      float64                      `json:"discount"`
+	TaxRate       float64                      `json:"tax_rate"`
+	TaxAmount     float64                      `json:"tax_amount"`
+	TotalAmount   float64                      `json:"total_amount"`
 	Notes         string                       `json:"notes"`
 	Items         []PurchaseInvoiceItemRequest `json:"items" binding:"required,min=1,dive"`
 }

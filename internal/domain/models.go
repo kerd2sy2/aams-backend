@@ -215,6 +215,10 @@ type PurchaseInvoice struct {
 	InvoiceNumber string                `gorm:"type:varchar(100);index;not null" json:"invoice_number"`
 	SupplierName  string                `gorm:"type:varchar(200);index;not null" json:"supplier_name"`
 	InvoiceDate   time.Time             `gorm:"not null" json:"invoice_date"`
+	Subtotal      float64               `gorm:"type:decimal(12,2);not null;default:0" json:"subtotal"`
+	Discount      float64               `gorm:"type:decimal(12,2);not null;default:0" json:"discount"`
+	TaxRate       float64               `gorm:"type:decimal(5,2);not null;default:0" json:"tax_rate"`
+	TaxAmount     float64               `gorm:"type:decimal(12,2);not null;default:0" json:"tax_amount"`
 	TotalAmount   float64               `gorm:"type:decimal(12,2);not null;default:0" json:"total_amount"`
 	BranchID      *uuid.UUID            `gorm:"type:char(36);index" json:"branch_id"`
 	Branch        *Branch               `gorm:"foreignKey:BranchID" json:"branch,omitempty"`

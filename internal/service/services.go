@@ -1944,11 +1944,30 @@ func (s *inventoryService) CreatePurchaseInvoice(ctx context.Context, req dto.Cr
 		})
 	}
 
+	subtotal := totalAmount
+	discount := req.Discount
+	taxRate := req.TaxRate
+	taxAmount := req.TaxAmount
+	if taxAmount == 0 && taxRate > 0 {
+		taxAmount = (subtotal - discount) * (taxRate / 100.0)
+	}
+	grandTotal := subtotal - discount + taxAmount
+	if grandTotal < 0 {
+		grandTotal = 0
+	}
+	if req.TotalAmount > 0 {
+		grandTotal = req.TotalAmount
+	}
+
 	invoice := &domain.PurchaseInvoice{
 		InvoiceNumber: invoiceNumber,
 		SupplierName:  strings.TrimSpace(req.SupplierName),
 		InvoiceDate:   invoiceDate,
-		TotalAmount:   totalAmount,
+		Subtotal:      subtotal,
+		Discount:      discount,
+		TaxRate:       taxRate,
+		TaxAmount:     taxAmount,
+		TotalAmount:   grandTotal,
 		BranchID:      branchID,
 		CreatedByName: adminName,
 		Notes:         req.Notes,
