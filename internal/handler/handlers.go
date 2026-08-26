@@ -1855,10 +1855,6 @@ func (h *InventoryHandler) UpdateItem(c *gin.Context) {
 		return
 	}
 
-	if !checkAdminOnly(c) {
-		return
-	}
-
 	var req dto.UpdateInventoryItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "البيانات غير صالحة", "details": err.Error()})
@@ -1882,10 +1878,6 @@ func (h *InventoryHandler) DeleteItem(c *gin.Context) {
 	itemID, err := uuid.Parse(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الصنف غير صالح"})
-		return
-	}
-
-	if !checkAdminOnly(c) {
 		return
 	}
 
