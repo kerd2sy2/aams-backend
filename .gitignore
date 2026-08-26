@@ -1,0 +1,28 @@
+# Executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Environments and configs
+.env
+*.local
+token.txt
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+be_out.log
+
+# Process IDs
+*.pid
+srv.pid
+
+# Uploads and Backups
+/uploads/
+/backups/
