@@ -275,25 +275,35 @@ type ReportFilter struct {
 }
 
 type WorkSessionDetailResponse struct {
-	ID              uuid.UUID  `json:"id"`
-	EmployeeID      uuid.UUID  `json:"employee_id"`
-	EmployeeName    string     `json:"employee_name"`
-	PersonalImage   string     `json:"personal_image"`
-	NationalID      string     `json:"national_id"`
-	KeyNumber       string     `json:"key_number"`
-	BranchName      string     `json:"branch_name"`
-	StartTime       time.Time  `json:"start_time"`
-	EndTime         *time.Time `json:"end_time"`
-	WorkingDuration string     `json:"working_duration"`
-	StartKM         float64    `json:"start_km"`
-	EndKM           float64    `json:"end_km"`
-	Distance        float64    `json:"distance"`
-	OrdersCount     int        `json:"orders_count"`
-	FuelCost        float64    `json:"fuel_cost"`
-	ApplicationID   string     `json:"application_id"`
-	ApplicationType string     `json:"application_type"`
-	Notes           string     `json:"notes"`
-	Status          string     `json:"status"`
+	ID                   uuid.UUID  `json:"id"`
+	EmployeeID           uuid.UUID  `json:"employee_id"`
+	EmployeeName         string     `json:"employee_name"`
+	PersonalImage        string     `json:"personal_image"`
+	NationalID           string     `json:"national_id"`
+	KeyNumber            string     `json:"key_number"`
+	BranchName           string     `json:"branch_name"`
+	StartTime            time.Time  `json:"start_time"`
+	EndTime              *time.Time `json:"end_time"`
+	WorkingDuration      string     `json:"working_duration"`
+	StartKM              float64    `json:"start_km"`
+	StartKMImage         string     `json:"start_km_image"`
+	EndKM                float64    `json:"end_km"`
+	EndKMImage           string     `json:"end_km_image"`
+	Distance             float64    `json:"distance"`
+	OrdersCount          int        `json:"orders_count"`
+	FuelCost             float64    `json:"fuel_cost"`
+	ApplicationID        string     `json:"application_id"`
+	ApplicationType      string     `json:"application_type"`
+	MotorcycleNumber     string     `json:"motorcycle_number"`
+	IsReviewed           bool       `json:"is_reviewed"`
+	ReviewNotes          string     `json:"review_notes"`
+	IsEditedBySupervisor bool       `json:"is_edited_by_supervisor"`
+	EditedByName         string     `json:"edited_by_name"`
+	OriginalOrdersCount  int        `json:"original_orders_count"`
+	OriginalEndKM        float64    `json:"original_end_km"`
+	OriginalStartKM      float64    `json:"original_start_km"`
+	Notes                string     `json:"notes"`
+	Status               string     `json:"status"`
 }
 
 type AuditLogResponse struct {
