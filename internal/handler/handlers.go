@@ -745,6 +745,57 @@ func (h *WorkHandler) UpdateWorkSession(c *gin.Context) {
 	c.JSON(http.StatusOK, session)
 }
 
+func (h *WorkHandler) ReviewWorkSession(c *gin.Context) {
+	sessionIDStr := c.Param("id")
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الشفت غير صالح"})
+		return
+	}
+
+	var req dto.ReviewWorkSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات غير صالحة", "details": err.Error()})
+		return
+	}
+
+	var reviewerID *uuid.UUID
+	if adminIDStr := c.GetString("admin_id"); adminIDStr != "" {
+		if parsed, err := uuid.Parse(adminIDStr); err == nil {
+			reviewerID = &parsed
+		}
+	}
+
+	session, err := h.workService.ReviewSession(c.Request.Context(), sessionID, req.IsReviewed, req.ReviewNotes, reviewerID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	adminName := c.GetString("admin_name")
+	_ = h.auditService.LogAction(c.Request.Context(), adminName, "مراجعة وتدقيق شفت",
+		fmt.Sprintf("تم تدقيق عدادات الشفت ID: %s (حالة المراجعة: %v) - ملاحظات: %s", sessionIDStr, req.IsReviewed, req.ReviewNotes), c.ClientIP(), getBranchID(c))
+
+	c.JSON(http.StatusOK, session)
+}
+
+func (h *WorkHandler) GetSessionByID(c *gin.Context) {
+	sessionIDStr := c.Param("id")
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الشفت غير صالح"})
+		return
+	}
+
+	session, err := h.workService.GetSessionByID(c.Request.Context(), sessionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "جلسة العمل غير موجودة"})
+		return
+	}
+
+	c.JSON(http.StatusOK, session)
+}
+
 func (h *WorkHandler) GetActiveSession(c *gin.Context) {
 	empIDStr := c.Query("employee_id")
 	empID, err := uuid.Parse(empIDStr)

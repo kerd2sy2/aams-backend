@@ -1049,6 +1049,7 @@ type WorkService interface {
 	StartWork(ctx context.Context, req dto.StartWorkRequest) (*domain.WorkSession, error)
 	EndWork(ctx context.Context, req dto.EndWorkRequest) (*domain.WorkSession, error)
 	UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest) (*domain.WorkSession, error)
+	ReviewSession(ctx context.Context, sessionID uuid.UUID, isReviewed bool, reviewNotes string, reviewerID *uuid.UUID) (*domain.WorkSession, error)
 	GetActiveSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	GetLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, error)
@@ -1149,6 +1150,7 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 		EmployeeID:       &empID,
 		StartTime:        time.Now(),
 		StartKM:          req.StartKM,
+		StartKMImage:     req.StartKMImage,
 		ApplicationID:    appID,
 		ApplicationType:  appType,
 		VehicleType:      vehicleType,
@@ -1219,6 +1221,9 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest) (*dom
 
 	activeSession.EndTime = &now
 	activeSession.EndKM = req.EndKM
+	if req.EndKMImage != "" {
+		activeSession.EndKMImage = req.EndKMImage
+	}
 	activeSession.Distance = distance
 	activeSession.OrdersCount = req.OrdersCount
 	activeSession.FuelCost = req.FuelCost
@@ -1296,6 +1301,9 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 	if req.StartKM > 0 {
 		session.StartKM = req.StartKM
 	}
+	if req.StartKMImage != "" {
+		session.StartKMImage = req.StartKMImage
+	}
 
 	if req.EndKM > 0 {
 		if req.EndKM <= session.StartKM {
@@ -1303,6 +1311,9 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 		}
 		session.EndKM = req.EndKM
 		session.Distance = req.EndKM - session.StartKM
+	}
+	if req.EndKMImage != "" {
+		session.EndKMImage = req.EndKMImage
 	}
 	// Update start_time and end_time if provided
 	if req.StartTime != nil {
@@ -1329,6 +1340,21 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 		return nil, err
 	}
 
+	return session, nil
+}
+
+func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, isReviewed bool, reviewNotes string, reviewerID *uuid.UUID) (*domain.WorkSession, error) {
+	session, err := s.workRepo.FindSessionByID(ctx, sessionID)
+	if err != nil || session == nil {
+		return nil, errors.New("جلسة العمل غير موجودة")
+	}
+	session.IsReviewed = isReviewed
+	session.ReviewNotes = reviewNotes
+	session.ReviewedBy = reviewerID
+
+	if err := s.workRepo.UpdateSession(ctx, session); err != nil {
+		return nil, err
+	}
 	return session, nil
 }
 

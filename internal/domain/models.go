@@ -131,7 +131,12 @@ type WorkSession struct {
 	ApplicationID    string         `gorm:"type:varchar(50)" json:"application_id"`
 	ApplicationType  string         `gorm:"type:varchar(50)" json:"application_type"`
 	VehicleType      string         `gorm:"type:varchar(20)" json:"vehicle_type"`      // override for this shift: "car" or "motorcycle"
-	MotorcycleNumber string         `gorm:"type:varchar(50)" json:"motorcycle_number"` // ط±ظ‚ظ… ط§ظ„ط¯ط¨ط§ط¨ ظ„ظ‡ط°ط§ ط§ظ„ط´ظپطھ (ظ‚ط¯ ظٹط®طھظ„ظپ ط¹ظ† ط§ظ„ظ…ط³ط¬ظ„)
+	MotorcycleNumber string         `gorm:"type:varchar(50)" json:"motorcycle_number"` // رقم الدباب لهذا الشفت (قد يختلف عن المسجل)
+	StartKMImage     string         `gorm:"type:text" json:"start_km_image"`           // صورة عداد البداية
+	EndKMImage       string         `gorm:"type:text" json:"end_km_image"`             // صورة عداد النهاية
+	IsReviewed       bool           `gorm:"default:false;index" json:"is_reviewed"`    // حالة مراجعة المشرف
+	ReviewNotes      string         `gorm:"type:text" json:"review_notes"`             // ملاحظات المشرف
+	ReviewedBy       *uuid.UUID     `gorm:"type:char(36)" json:"reviewed_by"`          // المشرف المراجع
 	Notes            string         `gorm:"type:text" json:"notes"`
 	Status           string         `gorm:"type:varchar(20);default:ACTIVE;index" json:"status"`
 	CreatedAt        time.Time      `json:"created_at"`

@@ -200,6 +200,7 @@ type PaginatedEmployeeResponse struct {
 type StartWorkRequest struct {
 	EmployeeID       string  `json:"employee_id" binding:"required,uuid"`
 	StartKM          float64 `json:"start_km" binding:"required,gte=0"`
+	StartKMImage     string  `json:"start_km_image"`    // صورة عداد البداية
 	ApplicationID    string  `json:"application_id"`
 	ApplicationType  string  `json:"application_type"`
 	VehicleType      string  `json:"vehicle_type"`      // override for this shift
@@ -210,6 +211,7 @@ type StartWorkRequest struct {
 type EndWorkRequest struct {
 	EmployeeID      string  `json:"employee_id" binding:"required,uuid"`
 	EndKM           float64 `json:"end_km" binding:"required,gte=0"`
+	EndKMImage      string  `json:"end_km_image"`      // صورة عداد النهاية
 	OrdersCount     int     `json:"orders_count"`
 	FuelCost        float64 `json:"fuel_cost"`
 	ApplicationID   string  `json:"application_id"`
@@ -217,10 +219,17 @@ type EndWorkRequest struct {
 	Notes           string  `json:"notes"`
 }
 
+type ReviewWorkSessionRequest struct {
+	IsReviewed  bool   `json:"is_reviewed"`
+	ReviewNotes string `json:"review_notes"`
+}
+
 type UpdateWorkSessionRequest struct {
 	EmployeeID      string     `json:"employee_id"`
 	StartKM         float64    `json:"start_km"`
+	StartKMImage    string     `json:"start_km_image"`
 	EndKM           float64    `json:"end_km"`
+	EndKMImage      string     `json:"end_km_image"`
 	OrdersCount     int        `json:"orders_count"`
 	FuelCost        float64    `json:"fuel_cost"`
 	StartTime       *time.Time `json:"start_time"`
