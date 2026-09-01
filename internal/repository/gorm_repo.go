@@ -422,7 +422,7 @@ func (r *gormWorkRepository) GetReports(ctx context.Context, filter dto.ReportFi
 	}
 
 	offset := (filter.Page - 1) * filter.Limit
-	orderClause := "(start_time AT TIME ZONE 'Asia/Riyadh')::date DESC, COALESCE((regexp_match(employees.key_number, '^[0-9]+'))[1], '0')::bigint ASC, employees.key_number ASC"
+	orderClause := "work_sessions.start_time DESC, work_sessions.created_at DESC"
 	err := query.Order(orderClause).Offset(offset).Limit(filter.Limit).Find(&sessions).Error
 	return sessions, total, err
 }
@@ -452,10 +452,10 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 	// Finished employees today
 	baseQuery().Where("start_time >= ? AND status = ?", startOfDay, domain.StatusCompleted).Count(&resp.FinishedEmployees)
 
-	// Today's Orders Sum
+	// Today's Orders Sum - only count reviewed / approved shifts
 	var ordersSum struct{ Total int64 }
 	baseQuery().Select("COALESCE(SUM(orders_count), 0) as total").
-		Where("start_time >= ?", startOfDay).
+		Where("start_time >= ? AND is_reviewed = true", startOfDay).
 		Scan(&ordersSum)
 	resp.TodayOrders = ordersSum.Total
 
@@ -486,7 +486,7 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 		resp.AvgWorkingHours = totalHours / float64(len(completedSessions))
 	}
 
-	// Chart Data - distance/fuel: Last 7 Days, orders: 1st of month to today
+	// Chart Data - distance/fuel: Last 7 Days, orders: 1st of month to today (only reviewed orders)
 	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	lastOfMonth := firstOfMonth.AddDate(0, 1, -1) // Last day of the month
 	monthDayCount := lastOfMonth.Day()            // 28, 29, 30, or 31
@@ -496,16 +496,17 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 	resp.FuelCostChart = make([]dto.ChartDataPoint, 0, 7)
 
 	type sessionAgg struct {
-		StartTime time.Time `gorm:"column:start_time"`
-		Distance  float64   `gorm:"column:distance"`
-		Orders    int       `gorm:"column:orders_count"`
-		Fuel      float64   `gorm:"column:fuel_cost"`
+		StartTime  time.Time `gorm:"column:start_time"`
+		Distance   float64   `gorm:"column:distance"`
+		Orders     int       `gorm:"column:orders_count"`
+		Fuel       float64   `gorm:"column:fuel_cost"`
+		IsReviewed bool      `gorm:"column:is_reviewed"`
 	}
 
 	var aggSessions []sessionAgg
 	chartQ := r.db.WithContext(ctx).
 		Model(&domain.WorkSession{}).
-		Select("start_time, distance, orders_count, fuel_cost").
+		Select("start_time, distance, orders_count, fuel_cost, is_reviewed").
 		Where("start_time >= ?", firstOfMonth)
 
 	if branchID != nil {
@@ -527,7 +528,9 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 			dayMap[key] = &dayTotals{}
 		}
 		dayMap[key].dist += s.Distance
-		dayMap[key].ord += float64(s.Orders)
+		if s.IsReviewed {
+			dayMap[key].ord += float64(s.Orders)
+		}
 		dayMap[key].fuel += s.Fuel
 	}
 
@@ -592,7 +595,7 @@ func (r *gormWorkRepository) GetDailyReport(ctx context.Context, branchID *uuid.
 
 	query := r.db.WithContext(ctx).
 		Table("work_sessions").
-		Select("work_sessions.employee_id, employees.name as employee_name, COALESCE(branches.name, '') as branch_name, employees.key_number as key_number, COALESCE(NULLIF(work_sessions.application_type, ''), employees.application_type, '') as application_type, COUNT(*) as session_count, COALESCE(SUM(distance), 0) as total_km, COALESCE(SUM(orders_count), 0) as total_orders, COALESCE(SUM(fuel_cost), 0) as total_fuel").
+		Select("work_sessions.employee_id, employees.name as employee_name, COALESCE(branches.name, '') as branch_name, employees.key_number as key_number, COALESCE(NULLIF(work_sessions.application_type, ''), employees.application_type, '') as application_type, COUNT(*) as session_count, COALESCE(SUM(distance), 0) as total_km, COALESCE(SUM(CASE WHEN work_sessions.is_reviewed = true THEN work_sessions.orders_count ELSE 0 END), 0) as total_orders, COALESCE(SUM(fuel_cost), 0) as total_fuel").
 		Joins("JOIN employees ON employees.id = work_sessions.employee_id").
 		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
 		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ?", startOfDay, endOfDay).
