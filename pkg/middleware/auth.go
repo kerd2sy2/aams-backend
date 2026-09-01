@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func AuthMiddleware(secret string, adminRepo repository.AdminRepository) gin.HandlerFunc {
+func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo repository.EmployeeRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -40,25 +40,41 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository) gin.Han
 			return
 		}
 
-		// Read current branch_id from DB (not JWT) to reflect real-time changes
+		// 1. Try finding Admin from DB
 		admin, err := adminRepo.FindByID(context.Background(), claims.AdminID)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "المستخدم غير موجود",
-			})
-			c.Abort()
+		if err == nil && admin != nil {
+			c.Set("admin_id", claims.AdminID)
+			c.Set("admin_email", claims.Email)
+			c.Set("admin_name", admin.Name)
+			c.Set("admin_role", admin.Role)
+			c.Set("admin_role_id", admin.RoleID)
+			c.Set("branch_id", admin.BranchID)
+			c.Set("admin", admin)
+			c.Set("is_employee", false)
+			c.Next()
 			return
 		}
 
-		c.Set("admin_id", claims.AdminID)
-		c.Set("admin_email", claims.Email)
-		c.Set("admin_name", admin.Name)
-		c.Set("admin_role", admin.Role)
-		c.Set("admin_role_id", admin.RoleID)
-		c.Set("branch_id", admin.BranchID)
-		c.Set("admin", admin)
+		// 2. Try finding Employee (Delegate) from DB
+		if empRepo != nil {
+			emp, empErr := empRepo.FindByID(context.Background(), claims.AdminID)
+			if empErr == nil && emp != nil {
+				c.Set("admin_id", claims.AdminID)
+				c.Set("employee_id", claims.AdminID)
+				c.Set("admin_email", claims.Email)
+				c.Set("admin_name", emp.Name)
+				c.Set("admin_role", "DRIVER")
+				c.Set("branch_id", emp.BranchID)
+				c.Set("employee", emp)
+				c.Set("is_employee", true)
+				c.Next()
+				return
+			}
+		}
 
-		c.Next()
-
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "المستخدم غير موجود",
+		})
+		c.Abort()
 	}
 }

@@ -80,13 +80,13 @@ func main() {
 	// Initialize Services (Business Layer)
 	storageService := service.NewStorageService(cfg)
 	auditService := service.NewAuditService(auditRepo)
-	authService := service.NewAuthService(adminRepo, branchRepo, cfg)
+	authService := service.NewAuthService(adminRepo, branchRepo, empRepo, cfg)
 	roleService := service.NewRoleService(roleRepo)
 	adminService := service.NewAdminService(adminRepo)
 	branchService := service.NewBranchService(branchRepo, empRepo)
 	empService := service.NewEmployeeService(empRepo)
 	vehicleService := service.NewVehicleService(vehicleRepo)
-	workService := service.NewWorkService(workRepo, empRepo, maintenanceRepo, vehicleRepo)
+	workService := service.NewWorkService(workRepo, empRepo, maintenanceRepo, vehicleRepo, notifRepo, auditRepo)
 	dashService := service.NewDashboardService(workRepo, auditRepo, empRepo)
 	reportService := service.NewReportService(workRepo)
 	invService := service.NewInventoryService(invRepo, empRepo, maintenanceRepo)
@@ -216,6 +216,7 @@ func main() {
 	authRoutes := r.Group("/api/v1")
 	{
 		authRoutes.POST("/login", middleware.StrictLoginLimiter(), authHandler.Login)
+		authRoutes.POST("/auth/login", middleware.StrictLoginLimiter(), authHandler.Login)
 		authRoutes.POST("/refresh", middleware.StrictLoginLimiter(), authHandler.RefreshToken)
 		authRoutes.POST("/auth/google/login", middleware.StrictLoginLimiter(), authHandler.GoogleLogin)
 	}
@@ -229,7 +230,7 @@ func main() {
 
 	// Protected Routes (JWT Required)
 	protected := r.Group("/api/v1")
-	protected.Use(middleware.AuthMiddleware(cfg.JWTSecret, adminRepo))
+	protected.Use(middleware.AuthMiddleware(cfg.JWTSecret, adminRepo, empRepo))
 	{
 		// Current authenticated user (real-time branch from DB)
 		protected.GET("/me", authHandler.Me)

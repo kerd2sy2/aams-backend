@@ -194,57 +194,143 @@ type AuthService interface {
 type authService struct {
 	adminRepo  repository.AdminRepository
 	branchRepo repository.BranchRepository
+	empRepo    repository.EmployeeRepository
 	cfg        *config.Config
 }
 
-func NewAuthService(adminRepo repository.AdminRepository, branchRepo repository.BranchRepository, cfg *config.Config) AuthService {
-	return &authService{adminRepo: adminRepo, branchRepo: branchRepo, cfg: cfg}
+func NewAuthService(adminRepo repository.AdminRepository, branchRepo repository.BranchRepository, empRepo repository.EmployeeRepository, cfg *config.Config) AuthService {
+	return &authService{adminRepo: adminRepo, branchRepo: branchRepo, empRepo: empRepo, cfg: cfg}
 }
 
 func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.LoginResponse, error) {
-	admin, err := s.adminRepo.FindByLogin(ctx, req.Login)
-	if err != nil {
-		return nil, errors.New("بيانات الدخول غير صحيحة")
+	loginInput := strings.TrimSpace(req.Login)
+	passwordInput := strings.TrimSpace(req.Password)
+
+	// 1. Try finding Admin first
+	admin, err := s.adminRepo.FindByLogin(ctx, loginInput)
+	if err == nil && admin != nil {
+		if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(passwordInput)); err != nil {
+			return nil, errors.New("بيانات الدخول غير صحيحة")
+		}
+
+		accessToken, refreshToken, err := jwt.GenerateTokens(admin.ID, admin.Email, admin.Name, admin.Role, admin.BranchID, s.cfg.JWTSecret, s.cfg.JWTRefreshSecret)
+		if err != nil {
+			return nil, fmt.Errorf("فشل في إنشاء رمز الجلسة: %w", err)
+		}
+
+		resp := &dto.LoginResponse{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			IsEmployee:   false,
+		}
+		resp.Admin.ID = admin.ID
+		resp.Admin.Name = admin.Name
+		resp.Admin.Email = admin.Email
+		resp.Admin.Username = admin.Username
+		resp.Admin.Phone = admin.Phone
+		resp.Admin.Role = admin.Role
+		resp.Admin.RoleID = admin.RoleID
+		resp.Admin.Permissions = ResolveAdminPermissions(admin)
+		resp.Admin.GoogleEmail = admin.GoogleEmail
+		resp.Admin.GoogleAvatar = admin.GoogleAvatar
+		resp.Admin.IsGoogleLinked = admin.GoogleEmail != ""
+		resp.Admin.BranchID = admin.BranchID
+
+		// Load branch info if admin has a branch
+		if admin.BranchID != nil {
+			branch, err := s.branchRepo.FindByID(ctx, *admin.BranchID)
+			if err == nil {
+				resp.Admin.Branch = &struct {
+					ID   uuid.UUID `json:"id"`
+					Name string    `json:"name"`
+				}{ID: branch.ID, Name: branch.Name}
+			}
+		}
+
+		return resp, nil
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.Password)); err != nil {
-		return nil, errors.New("بيانات الدخول غير صحيحة")
-	}
+	// 2. If not admin, check if it's an Employee (Delegate)
+	if s.empRepo != nil {
+		// Extract national_id from login input (e.g. "2569600022@aams-logistics.com" or "2569600022")
+		nationalID := loginInput
+		if idx := strings.Index(nationalID, "@"); idx != -1 {
+			nationalID = nationalID[:idx]
+		}
+		nationalID = strings.TrimSpace(nationalID)
 
-	accessToken, refreshToken, err := jwt.GenerateTokens(admin.ID, admin.Email, admin.Name, admin.Role, admin.BranchID, s.cfg.JWTSecret, s.cfg.JWTRefreshSecret)
-	if err != nil {
-		return nil, fmt.Errorf("فشل في إنشاء رمز الجلسة: %w", err)
-	}
+		emp, err := s.empRepo.FindByNationalID(ctx, nationalID)
+		if err == nil && emp != nil {
+			// Check password:
+			// Default password is the last 6 digits of the national ID (e.g. for "2569600022" -> "600022")
+			// Also accept the full national ID as password
+			isValidPassword := false
+			if len(emp.NationalID) >= 6 {
+				last6 := emp.NationalID[len(emp.NationalID)-6:]
+				if passwordInput == last6 || passwordInput == emp.NationalID {
+					isValidPassword = true
+				}
+			} else if passwordInput == emp.NationalID {
+				isValidPassword = true
+			}
 
-	resp := &dto.LoginResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}
-	resp.Admin.ID = admin.ID
-	resp.Admin.Name = admin.Name
-	resp.Admin.Email = admin.Email
-	resp.Admin.Username = admin.Username
-	resp.Admin.Phone = admin.Phone
-	resp.Admin.Role = admin.Role
-	resp.Admin.RoleID = admin.RoleID
-	resp.Admin.Permissions = ResolveAdminPermissions(admin)
-	resp.Admin.GoogleEmail = admin.GoogleEmail
-	resp.Admin.GoogleAvatar = admin.GoogleAvatar
-	resp.Admin.IsGoogleLinked = admin.GoogleEmail != ""
-	resp.Admin.BranchID = admin.BranchID
+			if !isValidPassword {
+				return nil, errors.New("كلمة المرور غير صحيحة (كلمة المرور الافتراضية هي آخر 6 أرقام من رقم الهوية)")
+			}
 
-	// Load branch info if admin has a branch
-	if admin.BranchID != nil {
-		branch, err := s.branchRepo.FindByID(ctx, *admin.BranchID)
-		if err == nil {
-			resp.Admin.Branch = &struct {
-				ID   uuid.UUID `json:"id"`
-				Name string    `json:"name"`
-			}{ID: branch.ID, Name: branch.Name}
+			// Generate tokens for employee
+			empEmail := fmt.Sprintf("%s@aams-logistics.com", emp.NationalID)
+			accessToken, refreshToken, err := jwt.GenerateTokens(emp.ID, empEmail, emp.Name, "DRIVER", emp.BranchID, s.cfg.JWTSecret, s.cfg.JWTRefreshSecret)
+			if err != nil {
+				return nil, fmt.Errorf("فشل في إنشاء رمز الجلسة للمندوب: %w", err)
+			}
+
+			branchName := ""
+			if emp.BranchID != nil {
+				b, err := s.branchRepo.FindByID(ctx, *emp.BranchID)
+				if err == nil && b != nil {
+					branchName = b.Name
+				}
+			}
+
+			resp := &dto.LoginResponse{
+				AccessToken:  accessToken,
+				RefreshToken: refreshToken,
+				IsEmployee:   true,
+				Employee: &dto.EmployeeInfo{
+					ID:               emp.ID,
+					Name:             emp.Name,
+					NationalID:       emp.NationalID,
+					MotorcycleNumber: emp.MotorcycleNumber,
+					KeyNumber:        emp.KeyNumber,
+					EmployeeNumber:   emp.EmployeeNumber,
+					JobRole:          emp.JobRole,
+					PersonalImage:    emp.PersonalImage,
+					ApplicationID:    emp.ApplicationID,
+					ApplicationType:  emp.ApplicationType,
+					Shift:            emp.Shift,
+					BranchID:         emp.BranchID,
+					BranchName:       branchName,
+				},
+			}
+			resp.Admin.ID = emp.ID
+			resp.Admin.Name = emp.Name
+			resp.Admin.Email = empEmail
+			resp.Admin.Role = "DRIVER"
+			resp.Admin.Permissions = []string{"work.start", "work.end", "work.view"}
+			resp.Admin.BranchID = emp.BranchID
+			if branchName != "" && emp.BranchID != nil {
+				resp.Admin.Branch = &struct {
+					ID   uuid.UUID `json:"id"`
+					Name string    `json:"name"`
+				}{ID: *emp.BranchID, Name: branchName}
+			}
+
+			return resp, nil
 		}
 	}
 
-	return resp, nil
+	return nil, errors.New("بيانات الدخول غير صحيحة")
 }
 
 func (s *authService) GoogleLogin(ctx context.Context, req dto.GoogleLoginRequest) (*dto.LoginResponse, error) {
@@ -976,10 +1062,26 @@ type workService struct {
 	empRepo         repository.EmployeeRepository
 	maintenanceRepo repository.MaintenanceRepository
 	vehicleRepo     repository.VehicleRepository
+	notifRepo       repository.NotificationRepository
+	auditRepo       repository.AuditRepository
 }
 
-func NewWorkService(workRepo repository.WorkRepository, empRepo repository.EmployeeRepository, maintenanceRepo repository.MaintenanceRepository, vehicleRepo repository.VehicleRepository) WorkService {
-	return &workService{workRepo: workRepo, empRepo: empRepo, maintenanceRepo: maintenanceRepo, vehicleRepo: vehicleRepo}
+func NewWorkService(
+	workRepo repository.WorkRepository,
+	empRepo repository.EmployeeRepository,
+	maintenanceRepo repository.MaintenanceRepository,
+	vehicleRepo repository.VehicleRepository,
+	notifRepo repository.NotificationRepository,
+	auditRepo repository.AuditRepository,
+) WorkService {
+	return &workService{
+		workRepo:        workRepo,
+		empRepo:         empRepo,
+		maintenanceRepo: maintenanceRepo,
+		vehicleRepo:     vehicleRepo,
+		notifRepo:       notifRepo,
+		auditRepo:       auditRepo,
+	}
 }
 
 // oilChangeInterval returns the oil change interval in km for a given vehicle type.
@@ -1034,8 +1136,12 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 
 	// Motorcycle number: use request override if provided, otherwise employee's default
 	motorcycleNumber := emp.MotorcycleNumber
+	isMismatch := false
 	if req.MotorcycleNumber != "" {
 		motorcycleNumber = req.MotorcycleNumber
+		if emp.MotorcycleNumber != "" && strings.TrimSpace(req.MotorcycleNumber) != strings.TrimSpace(emp.MotorcycleNumber) {
+			isMismatch = true
+		}
 	}
 
 	session := &domain.WorkSession{
@@ -1053,6 +1159,35 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 
 	if err := s.workRepo.CreateSession(ctx, session); err != nil {
 		return nil, err
+	}
+
+	// If motorcycle mismatched, notify supervisor in dashboard & create audit log
+	if isMismatch {
+		alertMsg := fmt.Sprintf("⚠️ تنبيه: المندوب %s (هوية: %s) بدأ شفت عمل بدباب رقم [%s] بينما الدباب المربوط به بالنظام هو [%s]",
+			emp.Name, emp.NationalID, req.MotorcycleNumber, emp.MotorcycleNumber)
+
+		if s.notifRepo != nil {
+			_ = s.notifRepo.Create(ctx, &domain.Notification{
+				ID:         uuid.New(),
+				Title:      "تنبيه تغيير دباب لمندوب",
+				Body:       alertMsg,
+				Type:       "WARNING",
+				Status:     "unread",
+				EmployeeID: &empID,
+				BranchID:   emp.BranchID,
+				CreatedAt:  time.Now(),
+			})
+		}
+		if s.auditRepo != nil {
+			_ = s.auditRepo.CreateLog(ctx, &domain.AuditLog{
+				ID:        uuid.New(),
+				Action:    "MOTORCYCLE_MISMATCH",
+				AdminName: "تطبيق الجوال / المندوب",
+				Details:   alertMsg,
+				BranchID:  emp.BranchID,
+				CreatedAt: time.Now(),
+			})
+		}
 	}
 
 	// Update vehicle status to in-use

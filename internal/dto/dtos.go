@@ -14,9 +14,27 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required,min=6"`
 }
 
+type EmployeeInfo struct {
+	ID               uuid.UUID  `json:"id"`
+	Name             string     `json:"name"`
+	NationalID       string     `json:"national_id"`
+	MotorcycleNumber string     `json:"motorcycle_number"`
+	KeyNumber        string     `json:"key_number"`
+	EmployeeNumber   string     `json:"employee_number"`
+	JobRole          string     `json:"job_role"`
+	PersonalImage    string     `json:"personal_image"`
+	ApplicationID    string     `json:"application_id"`
+	ApplicationType  string     `json:"application_type"`
+	Shift            string     `json:"shift"`
+	BranchID         *uuid.UUID `json:"branch_id"`
+	BranchName       string     `json:"branch_name,omitempty"`
+}
+
 type LoginResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	AccessToken  string        `json:"access_token"`
+	RefreshToken string        `json:"refresh_token"`
+	IsEmployee   bool          `json:"is_employee"`
+	Employee     *EmployeeInfo `json:"employee,omitempty"`
 	Admin        struct {
 		ID             uuid.UUID  `json:"id"`
 		Name           string     `json:"name"`
