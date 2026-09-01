@@ -766,13 +766,12 @@ func (h *WorkHandler) ReviewWorkSession(c *gin.Context) {
 		}
 	}
 
-	session, err := h.workService.ReviewSession(c.Request.Context(), sessionID, req.IsReviewed, req.ReviewNotes, reviewerID)
+	adminName := c.GetString("admin_name")
+	session, err := h.workService.ReviewSession(c.Request.Context(), sessionID, req, reviewerID, adminName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	adminName := c.GetString("admin_name")
 	_ = h.auditService.LogAction(c.Request.Context(), adminName, "مراجعة وتدقيق شفت",
 		fmt.Sprintf("تم تدقيق عدادات الشفت ID: %s (حالة المراجعة: %v) - ملاحظات: %s", sessionIDStr, req.IsReviewed, req.ReviewNotes), c.ClientIP(), getBranchID(c))
 

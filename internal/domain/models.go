@@ -134,14 +134,19 @@ type WorkSession struct {
 	MotorcycleNumber string         `gorm:"type:varchar(50)" json:"motorcycle_number"` // رقم الدباب لهذا الشفت (قد يختلف عن المسجل)
 	StartKMImage     string         `gorm:"type:text" json:"start_km_image"`           // صورة عداد البداية
 	EndKMImage       string         `gorm:"type:text" json:"end_km_image"`             // صورة عداد النهاية
-	IsReviewed       bool           `gorm:"default:false;index" json:"is_reviewed"`    // حالة مراجعة المشرف
-	ReviewNotes      string         `gorm:"type:text" json:"review_notes"`             // ملاحظات المشرف
-	ReviewedBy       *uuid.UUID     `gorm:"type:char(36)" json:"reviewed_by"`          // المشرف المراجع
-	Notes            string         `gorm:"type:text" json:"notes"`
-	Status           string         `gorm:"type:varchar(20);default:ACTIVE;index" json:"status"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+	IsReviewed           bool           `gorm:"default:false;index" json:"is_reviewed"`                      // حالة مراجعة وتصديق المشرف
+	ReviewNotes          string         `gorm:"type:text" json:"review_notes"`                               // ملاحظات المشرف
+	ReviewedBy           *uuid.UUID     `gorm:"type:char(36)" json:"reviewed_by"`                            // المشرف المراجع
+	IsEditedBySupervisor bool           `gorm:"default:false;index" json:"is_edited_by_supervisor"`           // هل تم تعديل البيانات بواسطة المشرف
+	EditedByName         string         `gorm:"type:varchar(100)" json:"edited_by_name"`                     // اسم المشرف الذي قام بالتعديل
+	OriginalOrdersCount  int            `gorm:"default:0" json:"original_orders_count"`                      // عدد الطلبات الأصلي المدخل من المندوب
+	OriginalEndKM        float64        `gorm:"default:0" json:"original_end_km"`                            // عداد النهاية الأصلي المدخل من المندوب
+	OriginalStartKM      float64        `gorm:"default:0" json:"original_start_km"`                          // عداد البداية الأصلي المدخل من المندوب
+	Notes                string         `gorm:"type:text" json:"notes"`
+	Status               string         `gorm:"type:varchar(20);default:ACTIVE;index" json:"status"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+	DeletedAt            gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 func (w *WorkSession) BeforeCreate(tx *gorm.DB) error {

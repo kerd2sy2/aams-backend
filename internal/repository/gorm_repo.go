@@ -2026,19 +2026,24 @@ func NewNotificationRepository(db *gorm.DB) NotificationRepository {
 }
 
 func (r *gormNotificationRepository) FindUnreadByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID) ([]domain.Notification, error) {
+	return r.FindAllByAdmin(ctx, adminID, branchID, "unread")
+}
+
+func (r *gormNotificationRepository) FindAllByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string) ([]domain.Notification, error) {
 	var notifs []domain.Notification
-	
-	// A notification is shown if AdminID matches OR BranchID matches (or both are null for global).
-	// But let's simplify based on the app logic: AdminID directly targets an admin, BranchID targets all branch admins, global targets all.
-	query := r.db.WithContext(ctx).Where("status = ?", "unread")
-	
+	query := r.db.WithContext(ctx)
+
+	if status == "unread" || status == "read" {
+		query = query.Where("status = ?", status)
+	}
+
 	if branchID != nil {
 		query = query.Where("admin_id = ? OR branch_id = ? OR (admin_id IS NULL AND branch_id IS NULL)", adminID, branchID)
 	} else {
 		query = query.Where("admin_id = ? OR (admin_id IS NULL AND branch_id IS NULL)", adminID)
 	}
 
-	if err := query.Order("created_at DESC").Find(&notifs).Error; err != nil {
+	if err := query.Order("created_at DESC").Limit(200).Find(&notifs).Error; err != nil {
 		return nil, err
 	}
 	return notifs, nil

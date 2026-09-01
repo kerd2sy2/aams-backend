@@ -220,8 +220,12 @@ type EndWorkRequest struct {
 }
 
 type ReviewWorkSessionRequest struct {
-	IsReviewed  bool   `json:"is_reviewed"`
-	ReviewNotes string `json:"review_notes"`
+	IsReviewed  bool     `json:"is_reviewed"`
+	ReviewNotes string   `json:"review_notes"`
+	OrdersCount *int     `json:"orders_count,omitempty"`
+	EndKM       *float64 `json:"end_km,omitempty"`
+	StartKM     *float64 `json:"start_km,omitempty"`
+	FuelCost    *float64 `json:"fuel_cost,omitempty"`
 }
 
 type UpdateWorkSessionRequest struct {

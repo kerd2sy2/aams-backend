@@ -1049,7 +1049,7 @@ type WorkService interface {
 	StartWork(ctx context.Context, req dto.StartWorkRequest) (*domain.WorkSession, error)
 	EndWork(ctx context.Context, req dto.EndWorkRequest) (*domain.WorkSession, error)
 	UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest) (*domain.WorkSession, error)
-	ReviewSession(ctx context.Context, sessionID uuid.UUID, isReviewed bool, reviewNotes string, reviewerID *uuid.UUID) (*domain.WorkSession, error)
+	ReviewSession(ctx context.Context, sessionID uuid.UUID, req dto.ReviewWorkSessionRequest, reviewerID *uuid.UUID, reviewerName string) (*domain.WorkSession, error)
 	GetActiveSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	GetLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, error)
@@ -1147,23 +1147,40 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 
 	session := &domain.WorkSession{
 		ID:               uuid.New(),
-		EmployeeID:       &empID,
-		StartTime:        time.Now(),
-		StartKM:          req.StartKM,
-		StartKMImage:     req.StartKMImage,
-		ApplicationID:    appID,
-		ApplicationType:  appType,
-		VehicleType:      vehicleType,
-		MotorcycleNumber: motorcycleNumber,
-		Notes:            req.Notes,
-		Status:           domain.StatusActive,
+		EmployeeID:          &empID,
+		StartTime:           time.Now(),
+		StartKM:             req.StartKM,
+		OriginalStartKM:     req.StartKM,
+		StartKMImage:        req.StartKMImage,
+		ApplicationID:       appID,
+		ApplicationType:     appType,
+		VehicleType:         vehicleType,
+		MotorcycleNumber:    motorcycleNumber,
+		Notes:               req.Notes,
+		Status:              domain.StatusActive,
 	}
 
 	if err := s.workRepo.CreateSession(ctx, session); err != nil {
 		return nil, err
 	}
 
-	// If motorcycle mismatched, notify supervisor in dashboard & create audit log
+	// Always notify supervisors when an employee starts work
+	if s.notifRepo != nil {
+		startNotifBody := fmt.Sprintf("🟢 بدأ المندوب %s (هوية: %s) شفت عمل جديد بدباب رقم [%s] وقراءة عداد [%.0f كم]",
+			emp.Name, emp.NationalID, motorcycleNumber, req.StartKM)
+		_ = s.notifRepo.Create(ctx, &domain.Notification{
+			ID:         uuid.New(),
+			Title:      "بدء شفت عمل جديد",
+			Body:       startNotifBody,
+			Type:       "WORK_START",
+			Status:     "unread",
+			EmployeeID: &empID,
+			BranchID:   emp.BranchID,
+			CreatedAt:  time.Now(),
+		})
+	}
+
+	// If motorcycle mismatched, notify supervisor with high warning in dashboard & create audit log
 	if isMismatch {
 		alertMsg := fmt.Sprintf("⚠️ تنبيه: المندوب %s (هوية: %s) بدأ شفت عمل بدباب رقم [%s] بينما الدباب المربوط به بالنظام هو [%s]",
 			emp.Name, emp.NationalID, req.MotorcycleNumber, emp.MotorcycleNumber)
@@ -1221,11 +1238,13 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest) (*dom
 
 	activeSession.EndTime = &now
 	activeSession.EndKM = req.EndKM
+	activeSession.OriginalEndKM = req.EndKM
 	if req.EndKMImage != "" {
 		activeSession.EndKMImage = req.EndKMImage
 	}
 	activeSession.Distance = distance
 	activeSession.OrdersCount = req.OrdersCount
+	activeSession.OriginalOrdersCount = req.OrdersCount
 	activeSession.FuelCost = req.FuelCost
 	if req.ApplicationID != "" {
 		activeSession.ApplicationID = req.ApplicationID
@@ -1247,6 +1266,22 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest) (*dom
 		if updateErr := s.empRepo.Update(ctx, emp); updateErr != nil {
 			return nil, fmt.Errorf("فشل في تحديث بيانات الموظف: %w", updateErr)
 		}
+	}
+
+	// Notify supervisors when an employee ends work
+	if s.notifRepo != nil && emp != nil {
+		endNotifBody := fmt.Sprintf("🔴 أنهى المندوب %s (هوية: %s) شفت العمل — سجل [%d] طلبات، مسافة [%.1f كم] وبانتظار مصادقة المشرف",
+			emp.Name, emp.NationalID, req.OrdersCount, distance)
+		_ = s.notifRepo.Create(ctx, &domain.Notification{
+			ID:         uuid.New(),
+			Title:      "إنهاء شفت عمل وبانتظار المصادقة",
+			Body:       endNotifBody,
+			Type:       "WORK_END",
+			Status:     "unread",
+			EmployeeID: &empID,
+			BranchID:   emp.BranchID,
+			CreatedAt:  time.Now(),
+		})
 	}
 
 	// Update vehicle odometer and return status to available
@@ -1343,14 +1378,64 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 	return session, nil
 }
 
-func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, isReviewed bool, reviewNotes string, reviewerID *uuid.UUID) (*domain.WorkSession, error) {
+func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, req dto.ReviewWorkSessionRequest, reviewerID *uuid.UUID, reviewerName string) (*domain.WorkSession, error) {
 	session, err := s.workRepo.FindSessionByID(ctx, sessionID)
 	if err != nil || session == nil {
 		return nil, errors.New("جلسة العمل غير موجودة")
 	}
-	session.IsReviewed = isReviewed
-	session.ReviewNotes = reviewNotes
+
+	session.IsReviewed = req.IsReviewed
+	session.ReviewNotes = req.ReviewNotes
 	session.ReviewedBy = reviewerID
+
+	isEdited := false
+
+	// Handle Orders Count adjustment
+	if req.OrdersCount != nil && *req.OrdersCount >= 0 && *req.OrdersCount != session.OrdersCount {
+		if session.OriginalOrdersCount == 0 {
+			session.OriginalOrdersCount = session.OrdersCount
+		}
+		session.OrdersCount = *req.OrdersCount
+		isEdited = true
+	}
+
+	// Handle Start KM adjustment
+	if req.StartKM != nil && *req.StartKM > 0 && *req.StartKM != session.StartKM {
+		if session.OriginalStartKM == 0 {
+			session.OriginalStartKM = session.StartKM
+		}
+		session.StartKM = *req.StartKM
+		isEdited = true
+	}
+
+	// Handle End KM adjustment
+	if req.EndKM != nil && *req.EndKM > 0 && *req.EndKM != session.EndKM {
+		if session.OriginalEndKM == 0 {
+			session.OriginalEndKM = session.EndKM
+		}
+		session.EndKM = *req.EndKM
+		isEdited = true
+	}
+
+	// Recalculate distance if KM was modified
+	if session.EndKM > session.StartKM {
+		session.Distance = session.EndKM - session.StartKM
+	}
+
+	// Handle Fuel Cost adjustment
+	if req.FuelCost != nil && *req.FuelCost >= 0 && *req.FuelCost != session.FuelCost {
+		session.FuelCost = *req.FuelCost
+		isEdited = true
+	}
+
+	if isEdited {
+		session.IsEditedBySupervisor = true
+		if reviewerName != "" {
+			session.EditedByName = reviewerName
+		} else {
+			session.EditedByName = "المشرف"
+		}
+	}
 
 	if err := s.workRepo.UpdateSession(ctx, session); err != nil {
 		return nil, err
@@ -3876,7 +3961,7 @@ func (s *supportTicketService) GetAll(ctx context.Context, filter dto.SupportTic
 
 
 type NotificationService interface {
-	GetMyNotifications(ctx context.Context, adminID uuid.UUID) ([]dto.NotificationResponse, error)
+	GetMyNotifications(ctx context.Context, adminID uuid.UUID, status string) ([]dto.NotificationResponse, error)
 	MarkAsRead(ctx context.Context, id uuid.UUID, adminID uuid.UUID) error
 	MarkAllAsRead(ctx context.Context, adminID uuid.UUID) error
 }
@@ -3890,13 +3975,13 @@ func NewNotificationService(notifRepo repository.NotificationRepository, adminRe
 	return &notificationService{notifRepo: notifRepo, adminRepo: adminRepo}
 }
 
-func (s *notificationService) GetMyNotifications(ctx context.Context, adminID uuid.UUID) ([]dto.NotificationResponse, error) {
+func (s *notificationService) GetMyNotifications(ctx context.Context, adminID uuid.UUID, status string) ([]dto.NotificationResponse, error) {
 	admin, err := s.adminRepo.FindByID(ctx, adminID)
 	if err != nil {
 		return nil, err
 	}
 
-	notifs, err := s.notifRepo.FindUnreadByAdmin(ctx, admin.ID, admin.BranchID)
+	notifs, err := s.notifRepo.FindAllByAdmin(ctx, admin.ID, admin.BranchID, status)
 	if err != nil {
 		return nil, err
 	}

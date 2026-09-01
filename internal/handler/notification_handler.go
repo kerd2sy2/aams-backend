@@ -39,7 +39,8 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 		return
 	}
 
-	notifs, err := h.notifService.GetMyNotifications(c.Request.Context(), id)
+	status := c.DefaultQuery("status", "")
+	notifs, err := h.notifService.GetMyNotifications(c.Request.Context(), id, status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -252,6 +252,7 @@ type SupportTicketRepository interface {
 
 type NotificationRepository interface {
 	FindUnreadByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID) ([]domain.Notification, error)
+	FindAllByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string) ([]domain.Notification, error)
 	MarkAsRead(ctx context.Context, id uuid.UUID, adminID uuid.UUID) error
 	MarkAllAsRead(ctx context.Context, adminID uuid.UUID) error
 	Create(ctx context.Context, notif *domain.Notification) error
