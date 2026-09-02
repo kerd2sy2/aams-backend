@@ -82,8 +82,10 @@ type Employee struct {
 	PersonalImage         string         `gorm:"type:text" json:"personal_image"`
 	NationalID            string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"national_id"`
 	IqamaExpirationDate   *string        `gorm:"type:varchar(20)" json:"iqama_expiration_date"` // YYYY-MM-DD
-	NationalIDImage       string         `gorm:"type:text" json:"national_id_image"`
-	DrivingLicenseImage   string         `gorm:"type:text" json:"driving_license_image"`
+	NationalIDImage           string         `gorm:"type:text" json:"national_id_image"`
+	DrivingLicenseImage       string         `gorm:"type:text" json:"driving_license_image"`
+	PassportImage             string         `gorm:"type:text" json:"passport_image"`
+	VehicleRegistrationImage  string         `gorm:"type:text" json:"vehicle_registration_image"`
 	KeyNumber             string         `gorm:"type:varchar(50)" json:"key_number"`
 	MotorcycleNumber      string         `gorm:"type:varchar(50)" json:"motorcycle_number"`
 	ApplicationID         string         `gorm:"type:varchar(50);index" json:"application_id"`

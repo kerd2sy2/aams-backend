@@ -881,17 +881,19 @@ func (s *employeeService) Create(ctx context.Context, req dto.CreateEmployeeRequ
 		PersonalImage:       req.PersonalImage,
 		NationalID:          req.NationalID,
 		IqamaExpirationDate: req.IqamaExpirationDate,
-		NationalIDImage:     req.NationalIDImage,
-		DrivingLicenseImage: req.DrivingLicenseImage,
-		KeyNumber:           req.KeyNumber,
-		MotorcycleNumber:    req.MotorcycleNumber,
-		ApplicationID:       req.ApplicationID,
-		ApplicationType:     req.ApplicationType,
-		VehicleType:         req.VehicleType,
-		Shift:               req.Shift,
-		BranchID:            req.BranchID,
-		Barcode:             barcodeData,
-		QRCode:              qrData,
+		NationalIDImage:          req.NationalIDImage,
+		DrivingLicenseImage:      req.DrivingLicenseImage,
+		PassportImage:            req.PassportImage,
+		VehicleRegistrationImage: req.VehicleRegistrationImage,
+		KeyNumber:                req.KeyNumber,
+		MotorcycleNumber:         req.MotorcycleNumber,
+		ApplicationID:            req.ApplicationID,
+		ApplicationType:          req.ApplicationType,
+		VehicleType:              req.VehicleType,
+		Shift:                    req.Shift,
+		BranchID:                 req.BranchID,
+		Barcode:                  barcodeData,
+		QRCode:                   qrData,
 	}
 	// Default to motorcycle if not specified
 	if emp.VehicleType == "" {
@@ -938,6 +940,12 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req dto.Upda
 	}
 	if req.DrivingLicenseImage != "" {
 		emp.DrivingLicenseImage = req.DrivingLicenseImage
+	}
+	if req.PassportImage != "" {
+		emp.PassportImage = req.PassportImage
+	}
+	if req.VehicleRegistrationImage != "" {
+		emp.VehicleRegistrationImage = req.VehicleRegistrationImage
 	}
 	if req.KeyNumber != "" {
 		emp.KeyNumber = req.KeyNumber
@@ -1065,6 +1073,7 @@ type workService struct {
 	vehicleRepo     repository.VehicleRepository
 	notifRepo       repository.NotificationRepository
 	auditRepo       repository.AuditRepository
+	storageService  StorageService
 }
 
 func NewWorkService(
@@ -1074,6 +1083,7 @@ func NewWorkService(
 	vehicleRepo repository.VehicleRepository,
 	notifRepo repository.NotificationRepository,
 	auditRepo repository.AuditRepository,
+	storageService StorageService,
 ) WorkService {
 	return &workService{
 		workRepo:        workRepo,
@@ -1082,6 +1092,7 @@ func NewWorkService(
 		vehicleRepo:     vehicleRepo,
 		notifRepo:       notifRepo,
 		auditRepo:       auditRepo,
+		storageService:  storageService,
 	}
 }
 
@@ -1145,19 +1156,26 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 		}
 	}
 
+	startImg := req.StartKMImage
+	if s.storageService != nil && strings.HasPrefix(startImg, "data:image") {
+		if savedUrl, err := s.storageService.SaveBase64Image(startImg, "odometer"); err == nil && savedUrl != "" {
+			startImg = savedUrl
+		}
+	}
+
 	session := &domain.WorkSession{
 		ID:               uuid.New(),
-		EmployeeID:          &empID,
-		StartTime:           time.Now(),
-		StartKM:             req.StartKM,
-		OriginalStartKM:     req.StartKM,
-		StartKMImage:        req.StartKMImage,
-		ApplicationID:       appID,
-		ApplicationType:     appType,
-		VehicleType:         vehicleType,
-		MotorcycleNumber:    motorcycleNumber,
-		Notes:               req.Notes,
-		Status:              domain.StatusActive,
+		EmployeeID:       &empID,
+		StartTime:        time.Now(),
+		StartKM:          req.StartKM,
+		OriginalStartKM:  req.StartKM,
+		StartKMImage:     startImg,
+		ApplicationID:    appID,
+		ApplicationType:  appType,
+		VehicleType:      vehicleType,
+		MotorcycleNumber: motorcycleNumber,
+		Notes:            req.Notes,
+		Status:           domain.StatusActive,
 	}
 
 	if err := s.workRepo.CreateSession(ctx, session); err != nil {
@@ -1240,7 +1258,13 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest) (*dom
 	activeSession.EndKM = req.EndKM
 	activeSession.OriginalEndKM = req.EndKM
 	if req.EndKMImage != "" {
-		activeSession.EndKMImage = req.EndKMImage
+		endImg := req.EndKMImage
+		if s.storageService != nil && strings.HasPrefix(endImg, "data:image") {
+			if savedUrl, err := s.storageService.SaveBase64Image(endImg, "odometer"); err == nil && savedUrl != "" {
+				endImg = savedUrl
+			}
+		}
+		activeSession.EndKMImage = endImg
 	}
 	activeSession.Distance = distance
 	activeSession.OrdersCount = req.OrdersCount

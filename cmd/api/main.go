@@ -86,7 +86,7 @@ func main() {
 	branchService := service.NewBranchService(branchRepo, empRepo)
 	empService := service.NewEmployeeService(empRepo)
 	vehicleService := service.NewVehicleService(vehicleRepo)
-	workService := service.NewWorkService(workRepo, empRepo, maintenanceRepo, vehicleRepo, notifRepo, auditRepo)
+	workService := service.NewWorkService(workRepo, empRepo, maintenanceRepo, vehicleRepo, notifRepo, auditRepo, storageService)
 	dashService := service.NewDashboardService(workRepo, auditRepo, empRepo)
 	reportService := service.NewReportService(workRepo)
 	invService := service.NewInventoryService(invRepo, empRepo, maintenanceRepo)

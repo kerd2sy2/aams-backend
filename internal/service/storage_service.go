@@ -38,6 +38,7 @@ var allowedCategories = map[string]bool{
 	"license":       true,
 	"logo":          true,
 	"investigation": true,
+	"odometer":      true,
 }
 
 type StorageService interface {
@@ -56,6 +57,7 @@ func NewStorageService(cfg *config.Config) StorageService {
 	_ = os.MkdirAll("uploads/license", 0755)
 	_ = os.MkdirAll("uploads/logo", 0755)
 	_ = os.MkdirAll("uploads/investigation", 0755)
+	_ = os.MkdirAll("uploads/odometer", 0755)
 	return &storageService{cfg: cfg}
 }
 

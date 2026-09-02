@@ -148,33 +148,37 @@ type CreateEmployeeRequest struct {
 	PersonalImage       string     `json:"personal_image"`
 	NationalID          string     `json:"national_id" binding:"required"`
 	IqamaExpirationDate *string    `json:"iqama_expiration_date"`
-	NationalIDImage     string     `json:"national_id_image"`
-	DrivingLicenseImage string     `json:"driving_license_image"`
-	KeyNumber           string     `json:"key_number"`
-	MotorcycleNumber    string     `json:"motorcycle_number"`
-	ApplicationID       string     `json:"application_id"`
-	ApplicationType     string     `json:"application_type"`
-	VehicleType         string     `json:"vehicle_type"`
-	Shift               string     `json:"shift"`
-	BranchID            *uuid.UUID `json:"branch_id"`
+	NationalIDImage          string     `json:"national_id_image"`
+	DrivingLicenseImage      string     `json:"driving_license_image"`
+	PassportImage            string     `json:"passport_image"`
+	VehicleRegistrationImage string     `json:"vehicle_registration_image"`
+	KeyNumber                string     `json:"key_number"`
+	MotorcycleNumber         string     `json:"motorcycle_number"`
+	ApplicationID            string     `json:"application_id"`
+	ApplicationType          string     `json:"application_type"`
+	VehicleType              string     `json:"vehicle_type"`
+	Shift                    string     `json:"shift"`
+	BranchID                 *uuid.UUID `json:"branch_id"`
 }
 
 type UpdateEmployeeRequest struct {
-	Name                string     `json:"name"`
-	JobRole             string     `json:"job_role"`
-	EmployeeNumber      string     `json:"employee_number"`
-	PersonalImage       string     `json:"personal_image"`
-	NationalID          string     `json:"national_id"`
-	IqamaExpirationDate *string    `json:"iqama_expiration_date"`
-	NationalIDImage     string     `json:"national_id_image"`
-	DrivingLicenseImage string     `json:"driving_license_image"`
-	KeyNumber           string     `json:"key_number"`
-	MotorcycleNumber    string     `json:"motorcycle_number"`
-	ApplicationID       string     `json:"application_id"`
-	ApplicationType     string     `json:"application_type"`
-	VehicleType         string     `json:"vehicle_type"`
-	Shift               string     `json:"shift"`
-	BranchID            *uuid.UUID `json:"branch_id"`
+	Name                     string     `json:"name"`
+	JobRole                  string     `json:"job_role"`
+	EmployeeNumber           string     `json:"employee_number"`
+	PersonalImage            string     `json:"personal_image"`
+	NationalID               string     `json:"national_id"`
+	IqamaExpirationDate      *string    `json:"iqama_expiration_date"`
+	NationalIDImage          string     `json:"national_id_image"`
+	DrivingLicenseImage      string     `json:"driving_license_image"`
+	PassportImage            string     `json:"passport_image"`
+	VehicleRegistrationImage string     `json:"vehicle_registration_image"`
+	KeyNumber                string     `json:"key_number"`
+	MotorcycleNumber         string     `json:"motorcycle_number"`
+	ApplicationID            string     `json:"application_id"`
+	ApplicationType          string     `json:"application_type"`
+	VehicleType              string     `json:"vehicle_type"`
+	Shift                    string     `json:"shift"`
+	BranchID                 *uuid.UUID `json:"branch_id"`
 }
 
 type EmployeeFilter struct {
