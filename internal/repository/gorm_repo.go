@@ -459,17 +459,17 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 		Scan(&ordersSum)
 	resp.TodayOrders = ordersSum.Total
 
-	// Today's Distance Sum
+	// Today's Distance Sum - only count reviewed / approved shifts
 	var distSum struct{ Total float64 }
 	baseQuery().Select("COALESCE(SUM(distance), 0) as total").
-		Where("start_time >= ?", startOfDay).
+		Where("start_time >= ? AND is_reviewed = true", startOfDay).
 		Scan(&distSum)
 	resp.TodayDistance = distSum.Total
 
-	// Today's Fuel Cost Sum
+	// Today's Fuel Cost Sum - only count reviewed / approved shifts
 	var fuelSum struct{ Total float64 }
 	baseQuery().Select("COALESCE(SUM(fuel_cost), 0) as total").
-		Where("start_time >= ?", startOfDay).
+		Where("start_time >= ? AND is_reviewed = true", startOfDay).
 		Scan(&fuelSum)
 	resp.TodayFuelCost = fuelSum.Total
 
@@ -527,11 +527,11 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 		if dayMap[key] == nil {
 			dayMap[key] = &dayTotals{}
 		}
-		dayMap[key].dist += s.Distance
 		if s.IsReviewed {
+			dayMap[key].dist += s.Distance
 			dayMap[key].ord += float64(s.Orders)
+			dayMap[key].fuel += s.Fuel
 		}
-		dayMap[key].fuel += s.Fuel
 	}
 
 	// Fill last 7 days for distance & fuel
@@ -595,7 +595,7 @@ func (r *gormWorkRepository) GetDailyReport(ctx context.Context, branchID *uuid.
 
 	query := r.db.WithContext(ctx).
 		Table("work_sessions").
-		Select("work_sessions.employee_id, employees.name as employee_name, COALESCE(branches.name, '') as branch_name, employees.key_number as key_number, COALESCE(NULLIF(work_sessions.application_type, ''), employees.application_type, '') as application_type, COUNT(*) as session_count, COALESCE(SUM(distance), 0) as total_km, COALESCE(SUM(CASE WHEN work_sessions.is_reviewed = true THEN work_sessions.orders_count ELSE 0 END), 0) as total_orders, COALESCE(SUM(fuel_cost), 0) as total_fuel").
+		Select("work_sessions.employee_id, employees.name as employee_name, COALESCE(branches.name, '') as branch_name, employees.key_number as key_number, COALESCE(NULLIF(work_sessions.application_type, ''), employees.application_type, '') as application_type, COUNT(*) as session_count, COALESCE(SUM(CASE WHEN work_sessions.is_reviewed = true THEN work_sessions.distance ELSE 0 END), 0) as total_km, COALESCE(SUM(CASE WHEN work_sessions.is_reviewed = true THEN work_sessions.orders_count ELSE 0 END), 0) as total_orders, COALESCE(SUM(CASE WHEN work_sessions.is_reviewed = true THEN work_sessions.fuel_cost ELSE 0 END), 0) as total_fuel").
 		Joins("JOIN employees ON employees.id = work_sessions.employee_id").
 		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
 		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ?", startOfDay, endOfDay).
