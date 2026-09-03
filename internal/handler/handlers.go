@@ -978,12 +978,24 @@ func (h *ReportHandler) GetReports(c *gin.Context) {
 	filter.EmployeeID = c.Query("employee_id")
 	filter.ApplicationID = c.Query("application_id")
 
-	// Auto-filter by branch for supervisors
-	if branchID, exists := c.Get("branch_id"); exists && branchID != nil {
-		if b, ok := branchID.(*uuid.UUID); ok {
-			filter.BranchID = b
-		} else if b, ok := branchID.(uuid.UUID); ok {
-			filter.BranchID = &b
+	// If caller is an employee (delegate mobile app), strictly query their own sessions
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if empID, exists := c.Get("employee_id"); exists && empID != nil {
+			if u, ok := empID.(uuid.UUID); ok {
+				filter.EmployeeID = u.String()
+			} else if u, ok := empID.(*uuid.UUID); ok && u != nil {
+				filter.EmployeeID = u.String()
+			}
+		}
+		filter.BranchID = nil
+	} else if filter.EmployeeID == "" {
+		// Auto-filter by branch for supervisors when not querying a specific employee
+		if branchID, exists := c.Get("branch_id"); exists && branchID != nil {
+			if b, ok := branchID.(*uuid.UUID); ok {
+				filter.BranchID = b
+			} else if b, ok := branchID.(uuid.UUID); ok {
+				filter.BranchID = &b
+			}
 		}
 	}
 

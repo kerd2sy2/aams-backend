@@ -393,7 +393,7 @@ func (r *gormWorkRepository) GetReports(ctx context.Context, filter dto.ReportFi
 	if filter.StartDate != "" {
 		startTime, err := time.ParseInLocation("2006-01-02", filter.StartDate, time.Local)
 		if err == nil {
-			query = query.Where("start_time >= ?", startTime)
+			query = query.Where("work_sessions.start_time >= ?", startTime)
 		}
 	}
 
@@ -401,20 +401,20 @@ func (r *gormWorkRepository) GetReports(ctx context.Context, filter dto.ReportFi
 		endTime, err := time.ParseInLocation("2006-01-02", filter.EndDate, time.Local)
 		if err == nil {
 			endTime = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 0, time.Local)
-			query = query.Where("start_time <= ?", endTime)
+			query = query.Where("work_sessions.start_time <= ?", endTime)
 		}
 	}
 
 	if filter.EmployeeID != "" {
-		parsedUUID, err := uuid.Parse(filter.EmployeeID)
-		if err != nil {
-			return nil, 0, fmt.Errorf("Ù…Ø¹Ø±Ù Ø§Ù„Ù…ÙˆØ¸Ù ØºÙŠØ± ØµØ§Ù„Ø­")
+		if parsedUUID, err := uuid.Parse(filter.EmployeeID); err == nil {
+			query = query.Where("work_sessions.employee_id = ?", parsedUUID)
+		} else {
+			query = query.Where("CAST(work_sessions.employee_id AS TEXT) LIKE ? OR employees.national_id = ? OR employees.employee_number = ?", "%"+filter.EmployeeID+"%", filter.EmployeeID, filter.EmployeeID)
 		}
-		query = query.Where("employee_id = ?", parsedUUID)
 	}
 
 	if filter.ApplicationID != "" {
-		query = query.Where("application_id = ?", filter.ApplicationID)
+		query = query.Where("work_sessions.application_id = ? OR employees.application_id = ?", filter.ApplicationID, filter.ApplicationID)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
