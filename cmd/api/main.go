@@ -253,6 +253,8 @@ func main() {
 		protected.PUT("/employees/:id", empHandler.Update)
 		protected.DELETE("/employees/:id", empHandler.Delete)
 		protected.POST("/employees/batch-oil-setup", empHandler.BatchSetOilChange)
+		protected.POST("/employees/me/change-password", empHandler.ChangeMyPassword)
+		protected.POST("/employees/:id/reset-password", empHandler.ResetPassword)
 		protected.GET("/employees/:id/barcode", empHandler.GetBarcode)
 		protected.GET("/employees/:id/qrcode", empHandler.GetQRCode)
 		protected.GET("/employees/:id/print-card", empHandler.GetPrintCard)

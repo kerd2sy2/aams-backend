@@ -264,20 +264,25 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		emp, err := s.empRepo.FindByNationalID(ctx, nationalID)
 		if err == nil && emp != nil {
 			// Check password:
-			// Default password is the last 6 digits of the national ID (e.g. for "2569600022" -> "600022")
-			// Also accept the full national ID as password
 			isValidPassword := false
-			if len(emp.NationalID) >= 6 {
-				last6 := emp.NationalID[len(emp.NationalID)-6:]
-				if passwordInput == last6 || passwordInput == emp.NationalID {
+			if emp.PasswordHash != "" {
+				if err := bcrypt.CompareHashAndPassword([]byte(emp.PasswordHash), []byte(passwordInput)); err == nil {
 					isValidPassword = true
 				}
-			} else if passwordInput == emp.NationalID {
-				isValidPassword = true
+			} else {
+				// Default password fallback: last 6 digits of national ID or full national ID
+				if len(emp.NationalID) >= 6 {
+					last6 := emp.NationalID[len(emp.NationalID)-6:]
+					if passwordInput == last6 || passwordInput == emp.NationalID {
+						isValidPassword = true
+					}
+				} else if passwordInput == emp.NationalID {
+					isValidPassword = true
+				}
 			}
 
 			if !isValidPassword {
-				return nil, errors.New("كلمة المرور غير صحيحة (كلمة المرور الافتراضية هي آخر 6 أرقام من رقم الهوية)")
+				return nil, errors.New("كلمة المرور غير صحيحة")
 			}
 
 			// Generate tokens for employee
@@ -846,6 +851,8 @@ type EmployeeService interface {
 	GetBarcode(ctx context.Context, id uuid.UUID) (string, error)
 	GetQRCode(ctx context.Context, id uuid.UUID) (string, error)
 	BatchSetOilChange(ctx context.Context, entries []dto.OilSetupEntry) error
+	ChangePassword(ctx context.Context, id uuid.UUID, oldPass, newPass string) error
+	ResetPassword(ctx context.Context, id uuid.UUID, newPass string) error
 }
 
 type employeeService struct {
@@ -1052,6 +1059,68 @@ func (s *employeeService) GetQRCode(ctx context.Context, id uuid.UUID) (string, 
 		return emp.QRCode, nil
 	}
 	return barcode.GenerateQRCodeBase64(id.String())
+}
+
+func (s *employeeService) ChangePassword(ctx context.Context, id uuid.UUID, oldPass, newPass string) error {
+	emp, err := s.empRepo.FindByID(ctx, id)
+	if err != nil || emp == nil {
+		return errors.New("الموظف غير موجود")
+	}
+
+	newPass = strings.TrimSpace(newPass)
+	if len(newPass) < 4 {
+		return errors.New("كلمة المرور الجديدة يجب ألا تقل عن 4 أرقام / أحرف")
+	}
+
+	oldPass = strings.TrimSpace(oldPass)
+	isValidOld := false
+	if emp.PasswordHash != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(emp.PasswordHash), []byte(oldPass)); err == nil {
+			isValidOld = true
+		}
+	} else {
+		// Default fallback password logic (last 6 digits or full national ID)
+		if len(emp.NationalID) >= 6 {
+			last6 := emp.NationalID[len(emp.NationalID)-6:]
+			if oldPass == last6 || oldPass == emp.NationalID {
+				isValidOld = true
+			}
+		} else if oldPass == emp.NationalID {
+			isValidOld = true
+		}
+	}
+
+	if !isValidOld {
+		return errors.New("كلمة المرور الحالية غير صحيحة")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPass), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("فشل تشفير كلمة المرور: %w", err)
+	}
+
+	emp.PasswordHash = string(hash)
+	return s.empRepo.Update(ctx, emp)
+}
+
+func (s *employeeService) ResetPassword(ctx context.Context, id uuid.UUID, newPass string) error {
+	emp, err := s.empRepo.FindByID(ctx, id)
+	if err != nil || emp == nil {
+		return errors.New("الموظف غير موجود")
+	}
+
+	newPass = strings.TrimSpace(newPass)
+	if len(newPass) < 4 {
+		return errors.New("كلمة المرور الجديدة يجب ألا تقل عن 4 أرقام / أحرف")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPass), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("فشل تشفير كلمة المرور: %w", err)
+	}
+
+	emp.PasswordHash = string(hash)
+	return s.empRepo.Update(ctx, emp)
 }
 
 // WorkService interface & impl

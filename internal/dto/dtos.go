@@ -11,7 +11,11 @@ import (
 // Auth DTOs
 type LoginRequest struct {
 	Login    string `json:"login" binding:"required"`
-	Password string `json:"password" binding:"required,min=6"`
+	Password string `json:"password" binding:"required"`
+}
+
+type ResetPasswordRequest struct {
+	NewPassword string `json:"new_password" binding:"required"`
 }
 
 type EmployeeInfo struct {

@@ -540,6 +540,74 @@ func (h *EmployeeHandler) GetPrintCard(c *gin.Context) {
 	})
 }
 
+func (h *EmployeeHandler) ChangeMyPassword(c *gin.Context) {
+	empIDVal, exists := c.Get("employee_id")
+	if !exists || empIDVal == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "جلسة المندوب غير صالحة"})
+		return
+	}
+
+	empID, ok := empIDVal.(uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "معرف المندوب غير صالح"})
+		return
+	}
+
+	var req dto.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "يرجى إدخال كلمة المرور الحالية والجديدة"})
+		return
+	}
+
+	if err := h.empService.ChangePassword(c.Request.Context(), empID, req.OldPassword, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "تم تغيير كلمة المرور بنجاح",
+	})
+}
+
+func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
+	idStr := c.Param("id")
+	empID, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
+		return
+	}
+
+	emp, err := h.empService.GetByID(c.Request.Context(), empID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+
+	if !checkEmployeeBranchAccess(c, emp) {
+		return
+	}
+
+	var req dto.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "يرجى إدخال كلمة المرور الجديدة"})
+		return
+	}
+
+	if err := h.empService.ResetPassword(c.Request.Context(), empID, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	adminName := c.GetString("admin_name")
+	_ = h.auditService.LogAction(c.Request.Context(), adminName, "تغيير كلمة مرور مندوب", "تم تعيين كلمة مرور جديدة للمندوب: "+emp.Name, c.ClientIP(), getBranchID(c))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "تم تحديث كلمة مرور المندوب بنجاح",
+	})
+}
+
 func (h *EmployeeHandler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
