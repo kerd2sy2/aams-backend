@@ -3258,5 +3258,95 @@ func (h *ArchiveHandler) BulkPermanentDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("تم حذف %d عناصر نهائياً بنجاح", len(req.IDs))})
 }
 
+// ------------------------------------------------------------------
+// 9. OTP Handler (إدارة وتوثيق رموز OTP للمناديب)
+// ------------------------------------------------------------------
+type OTPHandler struct {
+	otpService   service.OTPService
+	auditService service.AuditService
+}
+
+func NewOTPHandler(otpService service.OTPService, auditService service.AuditService) *OTPHandler {
+	return &OTPHandler{
+		otpService:   otpService,
+		auditService: auditService,
+	}
+}
+
+// Public: Request OTP by National ID
+func (h *OTPHandler) RequestOTP(c *gin.Context) {
+	var req dto.RequestOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات الطلب غير صالحة: " + err.Error()})
+		return
+	}
+
+	resp, err := h.otpService.RequestOTP(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// Public: Verify 4-digit OTP & Return Login Token
+func (h *OTPHandler) VerifyOTP(c *gin.Context) {
+	var req dto.VerifyOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات التحقق غير صالحة: " + err.Error()})
+		return
+	}
+
+	resp, err := h.otpService.VerifyOTP(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// Protected: Get OTP Requests List for Supervisors/Admins
+func (h *OTPHandler) GetOTPList(c *gin.Context) {
+	var query dto.OTPListQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معاملات البحث غير صالحة"})
+		return
+	}
+
+	list, total, err := h.otpService.GetOTPList(c.Request.Context(), query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل في جلب طلبات رموز التحقق: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  list,
+		"total": total,
+	})
+}
+
+// Protected: Cancel OTP Request
+func (h *OTPHandler) CancelOTP(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الرمز غير صالح"})
+		return
+	}
+
+	if err := h.otpService.CancelOTP(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	adminName := c.GetString("admin_name")
+	_ = h.auditService.LogAction(c.Request.Context(), adminName, "إلغاء رمز OTP", fmt.Sprintf("تم إلغاء رمز التحقق برقم %s", id.String()), c.ClientIP(), getBranchID(c))
+
+	c.JSON(http.StatusOK, gin.H{"message": "تم إلغاء رمز التحقق بنجاح"})
+}
+
+
 
 

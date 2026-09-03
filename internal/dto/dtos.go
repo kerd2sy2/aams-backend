@@ -71,6 +71,34 @@ type GoogleLinkRequest struct {
 	Avatar   string `json:"avatar"`
 }
 
+// OTP Management DTOs
+type RequestOTPRequest struct {
+	NationalID string `json:"national_id" binding:"required"`
+	DeviceInfo string `json:"device_info"`
+	DeviceUUID string `json:"device_uuid"`
+}
+
+type RequestOTPResponse struct {
+	Success      bool      `json:"success"`
+	Message      string    `json:"message"`
+	NationalID   string    `json:"national_id"`
+	EmployeeName string    `json:"employee_name"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+type VerifyOTPRequest struct {
+	NationalID string `json:"national_id" binding:"required"`
+	OTPCode    string `json:"otp_code" binding:"required"`
+	DeviceUUID string `json:"device_uuid"`
+}
+
+type OTPListQuery struct {
+	Status string `form:"status"`
+	Search string `form:"search"`
+	Limit  int    `form:"limit"`
+	Offset int    `form:"offset"`
+}
+
 // Role Management DTOs
 type RoleResponse struct {
 	ID          uuid.UUID `json:"id"`

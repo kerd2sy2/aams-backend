@@ -70,6 +70,7 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		&domain.LeaveRequest{},
 		&domain.SupportTicket{},
 		&domain.Notification{},
+		&domain.OTPRequest{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migration failed: %w", err)

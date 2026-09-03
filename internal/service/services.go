@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	crand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
@@ -4096,4 +4098,167 @@ func (s *archiveService) BulkRestore(ctx context.Context, itemType string, ids [
 func (s *archiveService) BulkPermanentDelete(ctx context.Context, itemType string, ids []uuid.UUID) error {
 	return s.archiveRepo.BulkPermanentDelete(ctx, itemType, ids)
 }
+
+// ------------------------------------------------------------------
+// 9. OTP Service (رموز التحقق OTP وتوثيق الأجهزة للمناديب)
+// ------------------------------------------------------------------
+type OTPService interface {
+	RequestOTP(ctx context.Context, req dto.RequestOTPRequest) (*dto.RequestOTPResponse, error)
+	VerifyOTP(ctx context.Context, req dto.VerifyOTPRequest) (*dto.LoginResponse, error)
+	GetOTPList(ctx context.Context, query dto.OTPListQuery) ([]domain.OTPRequest, int64, error)
+	CancelOTP(ctx context.Context, id uuid.UUID) error
+}
+
+type otpService struct {
+	otpRepo    repository.OTPRepository
+	empRepo    repository.EmployeeRepository
+	branchRepo repository.BranchRepository
+	cfg        *config.Config
+}
+
+func NewOTPService(
+	otpRepo repository.OTPRepository,
+	empRepo repository.EmployeeRepository,
+	branchRepo repository.BranchRepository,
+	cfg *config.Config,
+) OTPService {
+	return &otpService{
+		otpRepo:    otpRepo,
+		empRepo:    empRepo,
+		branchRepo: branchRepo,
+		cfg:        cfg,
+	}
+}
+
+func (s *otpService) RequestOTP(ctx context.Context, req dto.RequestOTPRequest) (*dto.RequestOTPResponse, error) {
+	nationalID := strings.TrimSpace(req.NationalID)
+	if nationalID == "" {
+		return nil, errors.New("رقم الهوية الوطنية مطلوب")
+	}
+
+	emp, err := s.empRepo.FindByNationalID(ctx, nationalID)
+	if err != nil || emp == nil {
+		return nil, errors.New("رقم الهوية غير مسجل في النظام كـ مندوب")
+	}
+
+	// Invalidate any previous pending OTPs
+	_ = s.otpRepo.InvalidatePreviousPending(ctx, nationalID)
+
+	// Generate a 4-digit code (e.g. "0000" to "9999")
+	n, err := crand.Int(crand.Reader, big.NewInt(10000))
+	otpCode := "1234"
+	if err == nil {
+		otpCode = fmt.Sprintf("%04d", n.Int64())
+	}
+
+	otp := &domain.OTPRequest{
+		EmployeeID:   emp.ID,
+		NationalID:   emp.NationalID,
+		EmployeeName: emp.Name,
+		OTPCode:      otpCode,
+		DeviceInfo:   strings.TrimSpace(req.DeviceInfo),
+		DeviceUUID:   strings.TrimSpace(req.DeviceUUID),
+		Status:       "PENDING",
+		ExpiresAt:    time.Now().Add(15 * time.Minute),
+	}
+
+	if err := s.otpRepo.Create(ctx, otp); err != nil {
+		return nil, fmt.Errorf("فشل في حفظ رمز التحقق: %w", err)
+	}
+
+	return &dto.RequestOTPResponse{
+		Success:      true,
+		Message:      "تم إنشاء رمز التحقق (4 أرقام) وتوجيهه للمشرف بنجاح",
+		NationalID:   emp.NationalID,
+		EmployeeName: emp.Name,
+		ExpiresAt:    otp.ExpiresAt,
+	}, nil
+}
+
+func (s *otpService) VerifyOTP(ctx context.Context, req dto.VerifyOTPRequest) (*dto.LoginResponse, error) {
+	nationalID := strings.TrimSpace(req.NationalID)
+	otpCode := strings.TrimSpace(req.OTPCode)
+
+	if nationalID == "" || otpCode == "" {
+		return nil, errors.New("رقم الهوية ورمز التحقق (4 أرقام) مطلوبان")
+	}
+
+	activeOtp, err := s.otpRepo.FindActiveByNationalID(ctx, nationalID)
+	if err != nil || activeOtp == nil {
+		return nil, errors.New("رمز التحقق غير موجود أو انتهت صلاحيته (15 دقيقة)")
+	}
+
+	if activeOtp.OTPCode != otpCode {
+		return nil, errors.New("رمز التحقق غير صحيح، يرجى التأكد من المشرف")
+	}
+
+	// Mark verified
+	if err := s.otpRepo.MarkVerified(ctx, activeOtp.ID); err != nil {
+		return nil, fmt.Errorf("فشل في توثيق الرمز: %w", err)
+	}
+
+	// Fetch employee details to generate session tokens
+	emp, err := s.empRepo.FindByID(ctx, activeOtp.EmployeeID)
+	if err != nil || emp == nil {
+		return nil, errors.New("لم يتم العثور على بيانات المندوب")
+	}
+
+	empEmail := fmt.Sprintf("%s@aams-logistics.com", emp.NationalID)
+	accessToken, refreshToken, err := jwt.GenerateTokens(emp.ID, empEmail, emp.Name, "DRIVER", emp.BranchID, s.cfg.JWTSecret, s.cfg.JWTRefreshSecret)
+	if err != nil {
+		return nil, fmt.Errorf("فشل في إنشاء رمز الجلسة للمندوب: %w", err)
+	}
+
+	branchName := ""
+	if emp.BranchID != nil {
+		b, err := s.branchRepo.FindByID(ctx, *emp.BranchID)
+		if err == nil && b != nil {
+			branchName = b.Name
+		}
+	}
+
+	resp := &dto.LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		IsEmployee:   true,
+		Employee: &dto.EmployeeInfo{
+			ID:               emp.ID,
+			Name:             emp.Name,
+			NationalID:       emp.NationalID,
+			MotorcycleNumber: emp.MotorcycleNumber,
+			KeyNumber:        emp.KeyNumber,
+			EmployeeNumber:   emp.EmployeeNumber,
+			JobRole:          emp.JobRole,
+			PersonalImage:    emp.PersonalImage,
+			ApplicationID:    emp.ApplicationID,
+			ApplicationType:  emp.ApplicationType,
+			Shift:            emp.Shift,
+			BranchID:         emp.BranchID,
+			BranchName:       branchName,
+		},
+	}
+	resp.Admin.ID = emp.ID
+	resp.Admin.Name = emp.Name
+	resp.Admin.Email = empEmail
+	resp.Admin.Role = "DRIVER"
+	resp.Admin.Permissions = []string{"work.start", "work.end", "work.view"}
+	resp.Admin.BranchID = emp.BranchID
+	if branchName != "" && emp.BranchID != nil {
+		resp.Admin.Branch = &struct {
+			ID   uuid.UUID `json:"id"`
+			Name string    `json:"name"`
+		}{ID: *emp.BranchID, Name: branchName}
+	}
+
+	return resp, nil
+}
+
+func (s *otpService) GetOTPList(ctx context.Context, query dto.OTPListQuery) ([]domain.OTPRequest, int64, error) {
+	return s.otpRepo.FindAll(ctx, query)
+}
+
+func (s *otpService) CancelOTP(ctx context.Context, id uuid.UUID) error {
+	return s.otpRepo.Cancel(ctx, id)
+}
+
 

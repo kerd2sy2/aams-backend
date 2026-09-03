@@ -76,11 +76,13 @@ func main() {
 	ticketRepo := repository.NewSupportTicketRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
 	archiveRepo := repository.NewArchiveRepository(db)
+	otpRepo := repository.NewOTPRepository(db)
 
 	// Initialize Services (Business Layer)
 	storageService := service.NewStorageService(cfg)
 	auditService := service.NewAuditService(auditRepo)
 	authService := service.NewAuthService(adminRepo, branchRepo, empRepo, cfg)
+	otpService := service.NewOTPService(otpRepo, empRepo, branchRepo, cfg)
 	roleService := service.NewRoleService(roleRepo)
 	adminService := service.NewAdminService(adminRepo)
 	branchService := service.NewBranchService(branchRepo, empRepo)
@@ -107,6 +109,7 @@ func main() {
 
 	// Initialize Handlers (Presentation Layer)
 	authHandler := handler.NewAuthHandler(authService, auditService)
+	otpHandler := handler.NewOTPHandler(otpService, auditService)
 	roleHandler := handler.NewRoleHandler(roleService, auditService)
 	adminHandler := handler.NewAdminHandler(adminService, auditService, adminRepo)
 
@@ -221,6 +224,8 @@ func main() {
 		authRoutes.POST("/auth/login", middleware.StrictLoginLimiter(), authHandler.Login)
 		authRoutes.POST("/refresh", middleware.StrictLoginLimiter(), authHandler.RefreshToken)
 		authRoutes.POST("/auth/google/login", middleware.StrictLoginLimiter(), authHandler.GoogleLogin)
+		authRoutes.POST("/auth/request-otp", middleware.StrictLoginLimiter(), otpHandler.RequestOTP)
+		authRoutes.POST("/auth/verify-otp", middleware.StrictLoginLimiter(), otpHandler.VerifyOTP)
 	}
 
 	// Public settings (no auth required) — used by login page
@@ -413,6 +418,10 @@ func main() {
 		protected.DELETE("/archive/permanent", archiveHandler.PermanentDelete)
 		protected.POST("/archive/restore-bulk", archiveHandler.BulkRestore)
 		protected.DELETE("/archive/permanent-bulk", archiveHandler.BulkPermanentDelete)
+
+		// 9. OTP & Device Verification (رموز التحقق وتوثيق الأجهزة)
+		protected.GET("/otp-requests", otpHandler.GetOTPList)
+		protected.POST("/otp-requests/:id/cancel", otpHandler.CancelOTP)
 	}
 
 	// Create HTTP server with timeouts

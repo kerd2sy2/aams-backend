@@ -2615,3 +2615,103 @@ func (r *gormArchiveRepository) BulkPermanentDelete(ctx context.Context, itemTyp
 	}
 }
 
+// ------------------------------------------------------------------
+// 9. OTP Repository Implementation
+// ------------------------------------------------------------------
+type gormOTPRepository struct {
+	db *gorm.DB
+}
+
+func NewOTPRepository(db *gorm.DB) OTPRepository {
+	return &gormOTPRepository{db: db}
+}
+
+func (r *gormOTPRepository) Create(ctx context.Context, otp *domain.OTPRequest) error {
+	return r.db.WithContext(ctx).Create(otp).Error
+}
+
+func (r *gormOTPRepository) FindActiveByNationalID(ctx context.Context, nationalID string) (*domain.OTPRequest, error) {
+	var otp domain.OTPRequest
+	err := r.db.WithContext(ctx).
+		Preload("Employee").
+		Where("national_id = ? AND status = 'PENDING' AND expires_at > ?", nationalID, time.Now()).
+		Order("created_at DESC").
+		First(&otp).Error
+	if err != nil {
+		return nil, err
+	}
+	return &otp, nil
+}
+
+func (r *gormOTPRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.OTPRequest, error) {
+	var otp domain.OTPRequest
+	err := r.db.WithContext(ctx).
+		Preload("Employee").
+		First(&otp, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &otp, nil
+}
+
+func (r *gormOTPRepository) FindAll(ctx context.Context, query dto.OTPListQuery) ([]domain.OTPRequest, int64, error) {
+	var list []domain.OTPRequest
+	var total int64
+
+	q := r.db.WithContext(ctx).Model(&domain.OTPRequest{}).Preload("Employee")
+
+	if query.Status != "" {
+		q = q.Where("status = ?", query.Status)
+	}
+	if query.Search != "" {
+		searchTerm := "%" + query.Search + "%"
+		q = q.Where("national_id LIKE ? OR employee_name LIKE ? OR otp_code LIKE ?", searchTerm, searchTerm, searchTerm)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	limit := query.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	offset := query.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	err := q.Order("created_at DESC").Limit(limit).Offset(offset).Find(&list).Error
+	return list, total, err
+}
+
+func (r *gormOTPRepository) MarkVerified(ctx context.Context, id uuid.UUID) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).Model(&domain.OTPRequest{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":      "VERIFIED",
+			"verified_at": &now,
+			"updated_at":  now,
+		}).Error
+}
+
+func (r *gormOTPRepository) Cancel(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Model(&domain.OTPRequest{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":     "CANCELLED",
+			"updated_at": time.Now(),
+		}).Error
+}
+
+func (r *gormOTPRepository) InvalidatePreviousPending(ctx context.Context, nationalID string) error {
+	return r.db.WithContext(ctx).Model(&domain.OTPRequest{}).
+		Where("national_id = ? AND status = 'PENDING'", nationalID).
+		Updates(map[string]interface{}{
+			"status":     "EXPIRED",
+			"updated_at": time.Now(),
+		}).Error
+}
+
+

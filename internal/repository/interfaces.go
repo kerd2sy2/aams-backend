@@ -270,3 +270,16 @@ type ArchiveRepository interface {
 	BulkPermanentDelete(ctx context.Context, itemType string, ids []uuid.UUID) error
 }
 
+// ------------------------------------------------------------------
+// 9. OTPRepository (رموز التحقق OTP وتوثيق الأجهزة)
+// ------------------------------------------------------------------
+type OTPRepository interface {
+	Create(ctx context.Context, otp *domain.OTPRequest) error
+	FindActiveByNationalID(ctx context.Context, nationalID string) (*domain.OTPRequest, error)
+	FindByID(ctx context.Context, id uuid.UUID) (*domain.OTPRequest, error)
+	FindAll(ctx context.Context, query dto.OTPListQuery) ([]domain.OTPRequest, int64, error)
+	MarkVerified(ctx context.Context, id uuid.UUID) error
+	Cancel(ctx context.Context, id uuid.UUID) error
+	InvalidatePreviousPending(ctx context.Context, nationalID string) error
+}
+
