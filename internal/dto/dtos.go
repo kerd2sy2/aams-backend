@@ -631,28 +631,30 @@ type CustodyLogFilter struct {
 
 // Vehicle DTOs (الدبابات والمركبات)
 type CreateVehicleRequest struct {
-	PlateNumber     string     `json:"plate_number" binding:"required"`
-	VehicleType     string     `json:"vehicle_type"`
-	Brand           string     `json:"brand"`
-	ModelYear       string     `json:"model_year"`
-	KeyNumber       string     `json:"key_number"`
-	CurrentKM       float64    `json:"current_km"`
-	LastOilChangeKM float64    `json:"last_oil_change_km"`
-	BranchID        *uuid.UUID `json:"branch_id"`
-	Notes           string     `json:"notes"`
+	PlateNumber      string     `json:"plate_number" binding:"required"`
+	VehicleType      string     `json:"vehicle_type"`
+	Brand            string     `json:"brand"`
+	ModelYear        string     `json:"model_year"`
+	KeyNumber        string     `json:"key_number"`
+	CurrentKM        float64    `json:"current_km"`
+	LastOilChangeKM  float64    `json:"last_oil_change_km"`
+	IsOdometerBroken bool       `json:"is_odometer_broken"`
+	BranchID         *uuid.UUID `json:"branch_id"`
+	Notes            string     `json:"notes"`
 }
 
 type UpdateVehicleRequest struct {
-	PlateNumber     *string    `json:"plate_number"`
-	VehicleType     *string    `json:"vehicle_type"`
-	Brand           *string    `json:"brand"`
-	ModelYear       *string    `json:"model_year"`
-	KeyNumber       *string    `json:"key_number"`
-	CurrentKM       *float64   `json:"current_km"`
-	LastOilChangeKM *float64   `json:"last_oil_change_km"`
-	Status          *string    `json:"status"`
-	BranchID        *uuid.UUID `json:"branch_id"`
-	Notes           *string    `json:"notes"`
+	PlateNumber      *string    `json:"plate_number"`
+	VehicleType      *string    `json:"vehicle_type"`
+	Brand            *string    `json:"brand"`
+	ModelYear        *string    `json:"model_year"`
+	KeyNumber        *string    `json:"key_number"`
+	CurrentKM        *float64   `json:"current_km"`
+	LastOilChangeKM  *float64   `json:"last_oil_change_km"`
+	IsOdometerBroken *bool      `json:"is_odometer_broken"`
+	Status           *string    `json:"status"`
+	BranchID         *uuid.UUID `json:"branch_id"`
+	Notes            *string    `json:"notes"`
 }
 
 type VehicleFilter struct {

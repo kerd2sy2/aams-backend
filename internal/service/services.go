@@ -1131,7 +1131,7 @@ type WorkService interface {
 	ReviewSession(ctx context.Context, sessionID uuid.UUID, req dto.ReviewWorkSessionRequest, reviewerID *uuid.UUID, reviewerName string) (*domain.WorkSession, error)
 	GetActiveSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	GetLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
-	GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, error)
+	GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, error)
 	CountTodaySessions(ctx context.Context, empID uuid.UUID) (int64, error)
 	CheckOilChange(ctx context.Context, empID uuid.UUID) (*dto.OilChangeCheckResponse, error)
 	GetSessionByID(ctx context.Context, sessionID uuid.UUID) (*domain.WorkSession, error)
@@ -1318,12 +1318,25 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest) (*dom
 		return nil, errors.New("لا يوجد شفت عمل قائم لهذا الموظف لبدء إنهائه (يجب بدء العمل أولاً)")
 	}
 
-	if req.EndKM <= activeSession.StartKM {
+	isOdometerBroken := false
+	if activeSession.MotorcycleNumber != "" && s.vehicleRepo != nil {
+		if v, _ := s.vehicleRepo.FindByPlateNumber(ctx, activeSession.MotorcycleNumber); v != nil && v.IsOdometerBroken {
+			isOdometerBroken = true
+		}
+	}
+	if activeSession.StartKM == 0 && req.EndKM == 0 {
+		isOdometerBroken = true
+	}
+
+	if !isOdometerBroken && req.EndKM <= activeSession.StartKM {
 		return nil, fmt.Errorf("قراءة عداد النهاية (%.2f) يجب أن تكون أكبر من قراءة البداية (%.2f)", req.EndKM, activeSession.StartKM)
 	}
 
 	now := time.Now()
-	distance := req.EndKM - activeSession.StartKM
+	distance := float64(0)
+	if req.EndKM > activeSession.StartKM {
+		distance = req.EndKM - activeSession.StartKM
+	}
 
 	activeSession.EndTime = &now
 	activeSession.EndKM = req.EndKM
@@ -1387,12 +1400,16 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest) (*dom
 	return activeSession, nil
 }
 
-func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, error) {
-	// If motorcycle number is specified, prioritize vehicle's latest odometer
+func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, error) {
+	// If motorcycle number is specified, prioritize vehicle's latest odometer and broken status
 	if motorcycleNumber != "" && s.vehicleRepo != nil {
+		v, _ := s.vehicleRepo.FindByPlateNumber(ctx, motorcycleNumber)
+		if v != nil && v.IsOdometerBroken {
+			return 0, 0, true, nil
+		}
 		latestKM, err := s.vehicleRepo.FindLatestVehicleKM(ctx, motorcycleNumber)
 		if err == nil && latestKM > 0 {
-			return latestKM, 0, nil
+			return latestKM, 0, false, nil
 		}
 	}
 
@@ -1400,11 +1417,11 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 	if empID != uuid.Nil {
 		session, err := s.workRepo.FindLastCompletedSession(ctx, empID)
 		if err == nil && session != nil {
-			return session.EndKM, session.StartKM, nil
+			return session.EndKM, session.StartKM, false, nil
 		}
 	}
 
-	return 0, 0, errors.New("لا توجد قراءة سابقة")
+	return 0, 0, false, errors.New("لا توجد قراءة سابقة")
 }
 
 func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest) (*domain.WorkSession, error) {
@@ -3230,18 +3247,19 @@ func (s *vehicleService) Create(ctx context.Context, req dto.CreateVehicleReques
 	}
 
 	vehicle := &domain.Vehicle{
-		ID:              uuid.New(),
-		PlateNumber:     plate,
-		VehicleType:     vType,
-		Brand:           req.Brand,
-		ModelYear:       req.ModelYear,
-		KeyNumber:       req.KeyNumber,
-		CurrentKM:       req.CurrentKM,
-		LastOilChangeKM: req.LastOilChangeKM,
-		TotalDistance:   0,
-		Status:          domain.VehicleStatusAvailable,
-		BranchID:        req.BranchID,
-		Notes:           req.Notes,
+		ID:               uuid.New(),
+		PlateNumber:      plate,
+		VehicleType:      vType,
+		Brand:            req.Brand,
+		ModelYear:        req.ModelYear,
+		KeyNumber:        req.KeyNumber,
+		CurrentKM:        req.CurrentKM,
+		LastOilChangeKM:  req.LastOilChangeKM,
+		IsOdometerBroken: req.IsOdometerBroken,
+		TotalDistance:    0,
+		Status:           domain.VehicleStatusAvailable,
+		BranchID:         req.BranchID,
+		Notes:            req.Notes,
 	}
 
 	if err := s.vehicleRepo.Create(ctx, vehicle); err != nil {
@@ -3277,6 +3295,9 @@ func (s *vehicleService) Update(ctx context.Context, id uuid.UUID, req dto.Updat
 	}
 	if req.LastOilChangeKM != nil {
 		vehicle.LastOilChangeKM = *req.LastOilChangeKM
+	}
+	if req.IsOdometerBroken != nil {
+		vehicle.IsOdometerBroken = *req.IsOdometerBroken
 	}
 	if req.Status != nil {
 		vehicle.Status = *req.Status

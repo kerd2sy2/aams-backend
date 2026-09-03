@@ -902,15 +902,16 @@ func (h *WorkHandler) GetLastKM(c *gin.Context) {
 		}
 	}
 
-	lastEndKM, lastStartKM, err := h.workService.GetLastSessionOrVehicleKM(c.Request.Context(), empID, motorcycleNumber)
-	if err != nil {
+	lastEndKM, lastStartKM, isOdometerBroken, err := h.workService.GetLastSessionOrVehicleKM(c.Request.Context(), empID, motorcycleNumber)
+	if err != nil && !isOdometerBroken {
 		c.JSON(http.StatusNotFound, gin.H{"error": "لا توجد قراءة سابقة مسجلة"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"last_end_km":   lastEndKM,
-		"last_start_km": lastStartKM,
+		"last_end_km":        lastEndKM,
+		"last_start_km":      lastStartKM,
+		"is_odometer_broken": isOdometerBroken,
 	})
 }
 
@@ -2492,15 +2493,23 @@ func (h *VehicleHandler) CheckKM(c *gin.Context) {
 		return
 	}
 
-	latestKM, err := h.vehicleService.GetLatestKM(c.Request.Context(), plate)
-	if err != nil || latestKM == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "لا يوجد عداد مسجل لهذه المركبة"})
+	vehicle, err := h.vehicleService.GetByPlateNumber(c.Request.Context(), plate)
+	if err == nil && vehicle != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"plate_number":       plate,
+			"current_km":         vehicle.CurrentKM,
+			"is_odometer_broken": vehicle.IsOdometerBroken,
+			"vehicle_type":       vehicle.VehicleType,
+			"status":             vehicle.Status,
+		})
 		return
 	}
 
+	latestKM, _ := h.vehicleService.GetLatestKM(c.Request.Context(), plate)
 	c.JSON(http.StatusOK, gin.H{
-		"plate_number": plate,
-		"current_km":   latestKM,
+		"plate_number":       plate,
+		"current_km":         latestKM,
+		"is_odometer_broken": false,
 	})
 }
 

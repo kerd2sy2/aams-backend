@@ -467,6 +467,7 @@ type Vehicle struct {
 	LastOilChangeKM       float64        `gorm:"default:0" json:"last_oil_change_km"`                      // ظ‚ط±ط§ط،ط© ط§ظ„ط¹ط¯ط§ط¯ ط¹ظ†ط¯ ط¢ط®ط± طھط؛ظٹظٹط± ط²ظٹطھ
 	TotalDistance         float64        `gorm:"default:0" json:"total_distance"`                          // ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ظƒظٹظ„ظˆظ…طھط±ط§طھ ط§ظ„ظ…ظ‚ط·ظˆط¹ط©
 	Status                string         `gorm:"type:varchar(20);default:'AVAILABLE';index" json:"status"` // "AVAILABLE", "IN_USE", "MAINTENANCE"
+	IsOdometerBroken      bool           `gorm:"default:false;index" json:"is_odometer_broken"`             // عداد المسافات تالف / معطل
 	BranchID              *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
 	Branch                *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
 	Notes                 string         `gorm:"type:text" json:"notes"`
