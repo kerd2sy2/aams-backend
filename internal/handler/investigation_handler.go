@@ -2,7 +2,9 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
+	"delivery-backend/internal/domain"
 	"delivery-backend/internal/dto"
 	"delivery-backend/internal/repository"
 	"delivery-backend/internal/service"
@@ -172,8 +174,24 @@ func (h *InvestigationHandler) handleApproval(c *gin.Context, approve bool) {
 		return
 	}
 
-	if c.GetString("admin_role") != "ADMIN" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "هذه العملية متاحة للمدير (الأدمن) فقط"})
+	roleUpper := strings.ToUpper(c.GetString("admin_role"))
+	isAllowed := roleUpper == "ADMIN" || roleUpper == "SUPER_ADMIN"
+	if !isAllowed {
+		if adminVal, exists := c.Get("admin"); exists {
+			if admin, ok := adminVal.(*domain.Admin); ok && admin != nil {
+				perms := service.ResolveAdminPermissions(admin)
+				for _, p := range perms {
+					if p == "*" || p == "investigations.approve" {
+						isAllowed = true
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if !isAllowed {
+		c.JSON(http.StatusForbidden, gin.H{"error": "هذه العملية متاحة للمدير أو من يمتلك صلاحية اعتماد الموافقات فقط"})
 		return
 	}
 

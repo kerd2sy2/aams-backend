@@ -92,11 +92,11 @@ var SystemPermissionsCatalog = []dto.PermissionGroupDTO{
 	},
 	{
 		Group: "investigations",
-		Label: "الاستجوابات والتحقيقات",
+		Label: "الاستجوابات والتحقيقات والموافقات",
 		Permissions: []dto.PermissionItemDTO{
-			{Key: "investigations.view", Label: "عرض التحقيقات", Description: "الاطلاع على التحقيقات والاستجوابات والسلف والغياب"},
+			{Key: "investigations.view", Label: "عرض التحقيقات والمحاضر", Description: "الاطلاع على التحقيقات والاستجوابات والسلف والغياب"},
 			{Key: "investigations.create", Label: "إنشاء طلب / استجواب", Description: "إنشاء استجواب جديد أو طلب سلفة أو إثبات غياب"},
-			{Key: "investigations.approve", Label: "اعتماد وقبول التحقيقات", Description: "الموافقة على أو رفض الإجراءات والخصومات"},
+			{Key: "investigations.approve", Label: "إدارة واعتماد الموافقات", Description: "الاطلاع على صفحة الموافقات واعتماد أو رفض طلبات السلف ومحاضر الموظفين"},
 		},
 	},
 	{
