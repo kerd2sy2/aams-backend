@@ -235,7 +235,7 @@ type PaginatedEmployeeResponse struct {
 // Work Session DTOs
 type StartWorkRequest struct {
 	EmployeeID       string  `json:"employee_id" binding:"required,uuid"`
-	StartKM          float64 `json:"start_km" binding:"required,gte=0"`
+	StartKM          float64 `json:"start_km" binding:"gte=0"`             // not required — 0 is valid when odometer is broken
 	StartKMImage     string  `json:"start_km_image"`    // صورة عداد البداية
 	ApplicationID    string  `json:"application_id"`
 	ApplicationType  string  `json:"application_type"`
@@ -246,7 +246,7 @@ type StartWorkRequest struct {
 
 type EndWorkRequest struct {
 	EmployeeID      string  `json:"employee_id" binding:"required,uuid"`
-	EndKM           float64 `json:"end_km" binding:"required,gte=0"`
+	EndKM           float64 `json:"end_km" binding:"gte=0"`               // not required — 0 is valid when odometer is broken
 	EndKMImage      string  `json:"end_km_image"`      // صورة عداد النهاية
 	OrdersCount     int     `json:"orders_count"`
 	FuelCost        float64 `json:"fuel_cost"`
