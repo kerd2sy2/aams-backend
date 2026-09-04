@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -567,6 +568,115 @@ func (h *EmployeeHandler) ChangeMyPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "تم تغيير كلمة المرور بنجاح",
+	})
+}
+
+func (h *EmployeeHandler) SetMyPhone(c *gin.Context) {
+	empIDVal, exists := c.Get("employee_id")
+	if !exists || empIDVal == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "جلسة المندوب غير صالحة"})
+		return
+	}
+
+	empID, ok := empIDVal.(uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "معرف المندوب غير صالح"})
+		return
+	}
+
+	var req dto.SetPhoneRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "يرجى كتابة رقم الهاتف"})
+		return
+	}
+
+	phone := strings.TrimSpace(req.Phone)
+	phone = strings.ReplaceAll(phone, " ", "")
+	phone = strings.ReplaceAll(phone, "-", "")
+
+	if strings.HasPrefix(phone, "+966") {
+		phone = "0" + strings.TrimPrefix(phone, "+966")
+	} else if strings.HasPrefix(phone, "00966") {
+		phone = "0" + strings.TrimPrefix(phone, "00966")
+	} else if strings.HasPrefix(phone, "966") {
+		phone = "0" + strings.TrimPrefix(phone, "966")
+	} else if len(phone) == 9 && strings.HasPrefix(phone, "5") {
+		phone = "0" + phone
+	}
+
+	matched, _ := regexp.MatchString(`^05[0-9]{8}$`, phone)
+	if !matched {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "يرجى إدخال رقم هاتف سعودي صحيح يبدأ بـ 05 ويتكون من 10 أرقام (مثال: 05XXXXXXXX)"})
+		return
+	}
+
+	emp, err := h.empService.SetPhone(c.Request.Context(), empID, phone)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	_ = h.auditService.LogAction(c.Request.Context(), emp.Name, "إضافة رقم هاتف المندوب", "تم تسجيل وتثبيت رقم الهاتف: "+phone, c.ClientIP(), emp.BranchID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"message":  "تم حفظ رقم الهاتف بنجاح",
+		"phone":    emp.Phone,
+		"employee": emp,
+	})
+}
+
+func (h *EmployeeHandler) SetPhone(c *gin.Context) {
+	idStr := c.Param("id")
+	empID, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
+		return
+	}
+
+	var req dto.SetPhoneRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "يرجى كتابة رقم الهاتف"})
+		return
+	}
+
+	phone := strings.TrimSpace(req.Phone)
+	phone = strings.ReplaceAll(phone, " ", "")
+	phone = strings.ReplaceAll(phone, "-", "")
+
+	if strings.HasPrefix(phone, "+966") {
+		phone = "0" + strings.TrimPrefix(phone, "+966")
+	} else if strings.HasPrefix(phone, "00966") {
+		phone = "0" + strings.TrimPrefix(phone, "00966")
+	} else if strings.HasPrefix(phone, "966") {
+		phone = "0" + strings.TrimPrefix(phone, "966")
+	} else if len(phone) == 9 && strings.HasPrefix(phone, "5") {
+		phone = "0" + phone
+	}
+
+	matched, _ := regexp.MatchString(`^05[0-9]{8}$`, phone)
+	if !matched {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "يرجى إدخال رقم هاتف سعودي صحيح يبدأ بـ 05 ويتكون من 10 أرقام (مثال: 05XXXXXXXX)"})
+		return
+	}
+
+	emp, err := h.empService.SetPhone(c.Request.Context(), empID, phone)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	adminName := c.GetString("admin_name")
+	if adminName == "" {
+		adminName = emp.Name
+	}
+	_ = h.auditService.LogAction(c.Request.Context(), adminName, "إضافة رقم هاتف المندوب", "تم تسجيل وتثبيت رقم الهاتف: "+phone, c.ClientIP(), emp.BranchID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"message":  "تم حفظ رقم الهاتف بنجاح",
+		"phone":    emp.Phone,
+		"employee": emp,
 	})
 }
 

@@ -853,6 +853,7 @@ type EmployeeService interface {
 	BatchSetOilChange(ctx context.Context, entries []dto.OilSetupEntry) error
 	ChangePassword(ctx context.Context, id uuid.UUID, oldPass, newPass string) error
 	ResetPassword(ctx context.Context, id uuid.UUID, newPass string) error
+	SetPhone(ctx context.Context, id uuid.UUID, phone string) (*domain.Employee, error)
 }
 
 type employeeService struct {
@@ -887,6 +888,7 @@ func (s *employeeService) Create(ctx context.Context, req dto.CreateEmployeeRequ
 		Name:                req.Name,
 		JobRole:             req.JobRole,
 		EmployeeNumber:      req.EmployeeNumber,
+		Phone:               req.Phone,
 		PersonalImage:       req.PersonalImage,
 		NationalID:          req.NationalID,
 		IqamaExpirationDate: req.IqamaExpirationDate,
@@ -935,6 +937,9 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req dto.Upda
 	if req.EmployeeNumber != "" {
 		emp.EmployeeNumber = req.EmployeeNumber
 	}
+	if req.Phone != "" {
+		emp.Phone = req.Phone
+	}
 	if req.PersonalImage != "" {
 		emp.PersonalImage = req.PersonalImage
 	}
@@ -978,6 +983,24 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req dto.Upda
 		emp.BranchID = req.BranchID
 	}
 
+	if err := s.empRepo.Update(ctx, emp); err != nil {
+		return nil, err
+	}
+
+	return emp, nil
+}
+
+func (s *employeeService) SetPhone(ctx context.Context, id uuid.UUID, phone string) (*domain.Employee, error) {
+	emp, err := s.empRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, errors.New("الموظف غير موجود")
+	}
+
+	if strings.TrimSpace(emp.Phone) != "" {
+		return nil, errors.New("رقم الهاتف مسجل مسبقاً ولا يمكن تعديله أو حذفه بواسطة الموظف")
+	}
+
+	emp.Phone = phone
 	if err := s.empRepo.Update(ctx, emp); err != nil {
 		return nil, err
 	}

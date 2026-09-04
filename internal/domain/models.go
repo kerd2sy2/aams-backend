@@ -79,6 +79,7 @@ type Employee struct {
 	Name                  string         `gorm:"type:varchar(150);not null;index" json:"name"`
 	JobRole               string         `gorm:"type:varchar(50);default:'DRIVER';index" json:"job_role"`
 	EmployeeNumber        string         `gorm:"type:varchar(50);index" json:"employee_number"`
+	Phone                 string         `gorm:"type:varchar(20);index" json:"phone"`
 	PersonalImage         string         `gorm:"type:text" json:"personal_image"`
 	NationalID            string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"national_id"`
 	PasswordHash          string         `gorm:"type:varchar(255)" json:"-"`

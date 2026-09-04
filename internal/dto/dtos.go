@@ -177,6 +177,7 @@ type CreateEmployeeRequest struct {
 	Name                string     `json:"name" binding:"required"`
 	JobRole             string     `json:"job_role"`
 	EmployeeNumber      string     `json:"employee_number"`
+	Phone               string     `json:"phone"`
 	PersonalImage       string     `json:"personal_image"`
 	NationalID          string     `json:"national_id" binding:"required"`
 	IqamaExpirationDate *string    `json:"iqama_expiration_date"`
@@ -197,6 +198,7 @@ type UpdateEmployeeRequest struct {
 	Name                     string     `json:"name"`
 	JobRole                  string     `json:"job_role"`
 	EmployeeNumber           string     `json:"employee_number"`
+	Phone                    string     `json:"phone"`
 	PersonalImage            string     `json:"personal_image"`
 	NationalID               string     `json:"national_id"`
 	IqamaExpirationDate      *string    `json:"iqama_expiration_date"`
@@ -211,6 +213,10 @@ type UpdateEmployeeRequest struct {
 	VehicleType              string     `json:"vehicle_type"`
 	Shift                    string     `json:"shift"`
 	BranchID                 *uuid.UUID `json:"branch_id"`
+}
+
+type SetPhoneRequest struct {
+	Phone string `json:"phone" binding:"required"`
 }
 
 type EmployeeFilter struct {
