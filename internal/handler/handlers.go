@@ -1005,6 +1005,12 @@ func (h *ReportHandler) GetReports(c *gin.Context) {
 	filter.EmployeeID = c.Query("employee_id")
 	filter.ApplicationID = c.Query("application_id")
 
+	if isRevStr := c.Query("is_reviewed"); isRevStr != "" {
+		if val, err := strconv.ParseBool(isRevStr); err == nil {
+			filter.IsReviewed = &val
+		}
+	}
+
 	// If caller is an employee (delegate mobile app), strictly query their own sessions
 	if isEmp, _ := c.Get("is_employee"); isEmp == true {
 		if empID, exists := c.Get("employee_id"); exists && empID != nil {
@@ -1054,6 +1060,12 @@ func (h *ReportHandler) ExportReports(c *gin.Context) {
 	filter.EndDate = c.Query("end_date")
 	filter.EmployeeID = c.Query("employee_id")
 	filter.ApplicationID = c.Query("application_id")
+
+	if isRevStr := c.Query("is_reviewed"); isRevStr != "" {
+		if val, err := strconv.ParseBool(isRevStr); err == nil {
+			filter.IsReviewed = &val
+		}
+	}
 
 	if branchID, exists := c.Get("branch_id"); exists && branchID != nil {
 		if b, ok := branchID.(*uuid.UUID); ok {
