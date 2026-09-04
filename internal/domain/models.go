@@ -100,6 +100,9 @@ type Employee struct {
 	QRCode                string         `gorm:"type:text" json:"qr_code"`
 	TotalDistance         float64        `gorm:"default:0" json:"total_distance"`
 	LastOilChangeDistance float64        `gorm:"default:0" json:"last_oil_change_distance"`
+	Latitude              *float64       `gorm:"type:decimal(10,8)" json:"latitude"`
+	Longitude             *float64       `gorm:"type:decimal(11,8)" json:"longitude"`
+	LastLocationAt        *time.Time     `json:"last_location_at"`
 	CreatedAt             time.Time      `json:"created_at"`
 	UpdatedAt             time.Time      `json:"updated_at"`
 	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`

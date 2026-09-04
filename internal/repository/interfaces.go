@@ -104,6 +104,8 @@ type EmployeeRepository interface {
 	FindBySearchTerm(ctx context.Context, term string, branchID *uuid.UUID) ([]domain.Employee, error)
 	FindAll(ctx context.Context, filter dto.EmployeeFilter) ([]domain.Employee, int64, error)
 	CountAll(ctx context.Context, branchID *uuid.UUID) (int64, error)
+	UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64) error
+	GetLocations(ctx context.Context, branchID *uuid.UUID) ([]domain.Employee, error)
 }
 
 // InvestigationRepository interface

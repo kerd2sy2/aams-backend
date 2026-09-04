@@ -249,6 +249,25 @@ func (r *gormEmployeeRepository) CountAll(ctx context.Context, branchID *uuid.UU
 	return count, err
 }
 
+func (r *gormEmployeeRepository) UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).Model(&domain.Employee{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"latitude":         lat,
+		"longitude":        lng,
+		"last_location_at": now,
+	}).Error
+}
+
+func (r *gormEmployeeRepository) GetLocations(ctx context.Context, branchID *uuid.UUID) ([]domain.Employee, error) {
+	var employees []domain.Employee
+	query := r.db.WithContext(ctx).Model(&domain.Employee{}).Preload("Branch")
+	if branchID != nil {
+		query = query.Where("branch_id = ?", *branchID)
+	}
+	err := query.Order("name ASC").Find(&employees).Error
+	return employees, err
+}
+
 func (r *gormEmployeeRepository) FindAll(ctx context.Context, filter dto.EmployeeFilter) ([]domain.Employee, int64, error) {
 	var employees []domain.Employee
 	var total int64

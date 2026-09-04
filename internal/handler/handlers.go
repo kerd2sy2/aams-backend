@@ -626,6 +626,69 @@ func (h *EmployeeHandler) SetMyPhone(c *gin.Context) {
 	})
 }
 
+func (h *EmployeeHandler) SetMyLocation(c *gin.Context) {
+	empIDVal, exists := c.Get("employee_id")
+	if !exists || empIDVal == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "جلسة المندوب غير صالحة"})
+		return
+	}
+
+	empID, ok := empIDVal.(uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "معرف المندوب غير صالح"})
+		return
+	}
+
+	var req dto.UpdateLocationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "إحداثيات الموقع غير صحيحة"})
+		return
+	}
+
+	if req.Latitude == 0 && req.Longitude == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "إحداثيات غير صالحة"})
+		return
+	}
+
+	if err := h.empService.UpdateLocation(c.Request.Context(), empID, req.Latitude, req.Longitude); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل تحديث موقع المندوب"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "تم تحديث الموقع بنجاح",
+	})
+}
+
+func (h *EmployeeHandler) GetLocations(c *gin.Context) {
+	var branchID *uuid.UUID
+	branchStr := c.Query("branch_id")
+	if branchStr != "" {
+		if bid, err := uuid.Parse(branchStr); err == nil {
+			branchID = &bid
+		}
+	} else {
+		if bVal, exists := c.Get("branch_id"); exists && bVal != nil {
+			if bid, ok := bVal.(uuid.UUID); ok {
+				branchID = &bid
+			}
+		}
+	}
+
+	locations, err := h.empService.GetLocations(c.Request.Context(), branchID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل جلب مواقع المناديب"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    locations,
+		"total":   len(locations),
+	})
+}
+
 func (h *EmployeeHandler) SetPhone(c *gin.Context) {
 	idStr := c.Param("id")
 	empID, err := uuid.Parse(idStr)

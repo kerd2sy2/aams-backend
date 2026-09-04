@@ -854,14 +854,17 @@ type EmployeeService interface {
 	ChangePassword(ctx context.Context, id uuid.UUID, oldPass, newPass string) error
 	ResetPassword(ctx context.Context, id uuid.UUID, newPass string) error
 	SetPhone(ctx context.Context, id uuid.UUID, phone string) (*domain.Employee, error)
+	UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64) error
+	GetLocations(ctx context.Context, branchID *uuid.UUID) ([]dto.EmployeeLocationDTO, error)
 }
 
 type employeeService struct {
-	empRepo repository.EmployeeRepository
+	empRepo  repository.EmployeeRepository
+	workRepo repository.WorkRepository
 }
 
-func NewEmployeeService(empRepo repository.EmployeeRepository) EmployeeService {
-	return &employeeService{empRepo: empRepo}
+func NewEmployeeService(empRepo repository.EmployeeRepository, workRepo repository.WorkRepository) EmployeeService {
+	return &employeeService{empRepo: empRepo, workRepo: workRepo}
 }
 
 func (s *employeeService) Create(ctx context.Context, req dto.CreateEmployeeRequest) (*domain.Employee, error) {
@@ -1006,6 +1009,71 @@ func (s *employeeService) SetPhone(ctx context.Context, id uuid.UUID, phone stri
 	}
 
 	return emp, nil
+}
+
+func (s *employeeService) UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64) error {
+	return s.empRepo.UpdateLocation(ctx, id, lat, lng)
+}
+
+func (s *employeeService) GetLocations(ctx context.Context, branchID *uuid.UUID) ([]dto.EmployeeLocationDTO, error) {
+	employees, err := s.empRepo.GetLocations(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+
+	var activeIDs []uuid.UUID
+	if s.workRepo != nil {
+		activeIDs, _ = s.workRepo.FindAllActiveEmployeeIDs(ctx)
+	}
+	activeMap := make(map[uuid.UUID]bool)
+	for _, aID := range activeIDs {
+		activeMap[aID] = true
+	}
+
+	var result []dto.EmployeeLocationDTO
+	for _, emp := range employees {
+		var branchIDStr *string
+		branchName := ""
+		if emp.BranchID != nil {
+			str := emp.BranchID.String()
+			branchIDStr = &str
+			if emp.Branch != nil {
+				branchName = emp.Branch.Name
+			}
+		}
+
+		var lastLocStr *string
+		if emp.LastLocationAt != nil {
+			str := emp.LastLocationAt.Format(time.RFC3339)
+			lastLocStr = &str
+		}
+
+		isActive := activeMap[emp.ID]
+
+		dtoItem := dto.EmployeeLocationDTO{
+			ID:               emp.ID.String(),
+			Name:             emp.Name,
+			JobRole:          emp.JobRole,
+			EmployeeNumber:   emp.EmployeeNumber,
+			Phone:            emp.Phone,
+			PersonalImage:    emp.PersonalImage,
+			NationalID:       emp.NationalID,
+			KeyNumber:        emp.KeyNumber,
+			MotorcycleNumber: emp.MotorcycleNumber,
+			ApplicationType:  emp.ApplicationType,
+			Shift:            emp.Shift,
+			BranchID:         branchIDStr,
+			BranchName:       branchName,
+			Latitude:         emp.Latitude,
+			Longitude:        emp.Longitude,
+			LastLocationAt:   lastLocStr,
+			IsShiftActive:    isActive,
+		}
+
+		result = append(result, dtoItem)
+	}
+
+	return result, nil
 }
 
 func (s *employeeService) Delete(ctx context.Context, id uuid.UUID) error {
