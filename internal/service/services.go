@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -854,7 +855,7 @@ type EmployeeService interface {
 	ChangePassword(ctx context.Context, id uuid.UUID, oldPass, newPass string) error
 	ResetPassword(ctx context.Context, id uuid.UUID, newPass string) error
 	SetPhone(ctx context.Context, id uuid.UUID, phone string) (*domain.Employee, error)
-	UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64) error
+	UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64, isVPN, isMock bool) error
 	GetLocations(ctx context.Context, branchID *uuid.UUID) ([]dto.EmployeeLocationDTO, error)
 }
 
@@ -1011,8 +1012,25 @@ func (s *employeeService) SetPhone(ctx context.Context, id uuid.UUID, phone stri
 	return emp, nil
 }
 
-func (s *employeeService) UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64) error {
-	return s.empRepo.UpdateLocation(ctx, id, lat, lng)
+func (s *employeeService) UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64, isVPN, isMock bool) error {
+	// Center of Taif: 21.2854, 40.4222
+	// Calculate distance using Haversine formula
+	distKm := calculateDistanceKm(21.2854, 40.4222, lat, lng)
+	outOfZone := distKm > 45.0 // Outside Taif radius if > 45 km
+
+	return s.empRepo.UpdateLocation(ctx, id, lat, lng, isVPN, isMock, outOfZone)
+}
+
+func calculateDistanceKm(lat1, lon1, lat2, lon2 float64) float64 {
+	const earthRadiusKm = 6371.0
+	dLat := (lat2 - lat1) * (3.141592653589793 / 180.0)
+	dLon := (lon2 - lon1) * (3.141592653589793 / 180.0)
+
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1*(3.141592653589793/180.0))*math.Cos(lat2*(3.141592653589793/180.0))*
+			math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return earthRadiusKm * c
 }
 
 func (s *employeeService) GetLocations(ctx context.Context, branchID *uuid.UUID) ([]dto.EmployeeLocationDTO, error) {
@@ -1050,24 +1068,39 @@ func (s *employeeService) GetLocations(ctx context.Context, branchID *uuid.UUID)
 
 		isActive := activeMap[emp.ID]
 
+		var distKm *float64
+		outOfZone := emp.OutOfZone
+		if emp.Latitude != nil && emp.Longitude != nil {
+			d := calculateDistanceKm(21.2854, 40.4222, *emp.Latitude, *emp.Longitude)
+			rounded := math.Round(d*10) / 10
+			distKm = &rounded
+			if rounded > 45.0 {
+				outOfZone = true
+			}
+		}
+
 		dtoItem := dto.EmployeeLocationDTO{
-			ID:               emp.ID.String(),
-			Name:             emp.Name,
-			JobRole:          emp.JobRole,
-			EmployeeNumber:   emp.EmployeeNumber,
-			Phone:            emp.Phone,
-			PersonalImage:    emp.PersonalImage,
-			NationalID:       emp.NationalID,
-			KeyNumber:        emp.KeyNumber,
-			MotorcycleNumber: emp.MotorcycleNumber,
-			ApplicationType:  emp.ApplicationType,
-			Shift:            emp.Shift,
-			BranchID:         branchIDStr,
-			BranchName:       branchName,
-			Latitude:         emp.Latitude,
-			Longitude:        emp.Longitude,
-			LastLocationAt:   lastLocStr,
-			IsShiftActive:    isActive,
+			ID:                 emp.ID.String(),
+			Name:               emp.Name,
+			JobRole:            emp.JobRole,
+			EmployeeNumber:     emp.EmployeeNumber,
+			Phone:              emp.Phone,
+			PersonalImage:      emp.PersonalImage,
+			NationalID:         emp.NationalID,
+			KeyNumber:          emp.KeyNumber,
+			MotorcycleNumber:   emp.MotorcycleNumber,
+			ApplicationType:    emp.ApplicationType,
+			Shift:              emp.Shift,
+			BranchID:           branchIDStr,
+			BranchName:         branchName,
+			Latitude:           emp.Latitude,
+			Longitude:          emp.Longitude,
+			LastLocationAt:     lastLocStr,
+			IsShiftActive:      isActive,
+			IsVPN:              emp.IsVPN,
+			IsMockLocation:     emp.IsMockLocation,
+			OutOfZone:          outOfZone,
+			DistanceFromTaifKm: distKm,
 		}
 
 		result = append(result, dtoItem)

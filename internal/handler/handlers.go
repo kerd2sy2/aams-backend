@@ -650,7 +650,17 @@ func (h *EmployeeHandler) SetMyLocation(c *gin.Context) {
 		return
 	}
 
-	if err := h.empService.UpdateLocation(c.Request.Context(), empID, req.Latitude, req.Longitude); err != nil {
+	isVPN := false
+	if req.IsVPN != nil && *req.IsVPN {
+		isVPN = true
+	}
+
+	isMock := false
+	if req.IsMockLocation != nil && *req.IsMockLocation {
+		isMock = true
+	}
+
+	if err := h.empService.UpdateLocation(c.Request.Context(), empID, req.Latitude, req.Longitude, isVPN, isMock); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل تحديث موقع المندوب"})
 		return
 	}

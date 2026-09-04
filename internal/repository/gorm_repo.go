@@ -249,12 +249,15 @@ func (r *gormEmployeeRepository) CountAll(ctx context.Context, branchID *uuid.UU
 	return count, err
 }
 
-func (r *gormEmployeeRepository) UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64) error {
+func (r *gormEmployeeRepository) UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64, isVPN, isMock, outOfZone bool) error {
 	now := time.Now()
 	return r.db.WithContext(ctx).Model(&domain.Employee{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"latitude":         lat,
 		"longitude":        lng,
 		"last_location_at": now,
+		"is_vpn":           isVPN,
+		"is_mock_location": isMock,
+		"out_of_zone":      outOfZone,
 	}).Error
 }
 

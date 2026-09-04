@@ -103,6 +103,9 @@ type Employee struct {
 	Latitude              *float64       `gorm:"type:decimal(10,8)" json:"latitude"`
 	Longitude             *float64       `gorm:"type:decimal(11,8)" json:"longitude"`
 	LastLocationAt        *time.Time     `json:"last_location_at"`
+	IsVPN                 bool           `gorm:"default:false" json:"is_vpn"`
+	IsMockLocation        bool           `gorm:"default:false" json:"is_mock_location"`
+	OutOfZone             bool           `gorm:"default:false" json:"out_of_zone"`
 	CreatedAt             time.Time      `json:"created_at"`
 	UpdatedAt             time.Time      `json:"updated_at"`
 	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
