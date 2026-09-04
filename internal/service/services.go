@@ -1126,7 +1126,7 @@ func (s *employeeService) ResetPassword(ctx context.Context, id uuid.UUID, newPa
 // WorkService interface & impl
 type WorkService interface {
 	StartWork(ctx context.Context, req dto.StartWorkRequest) (*domain.WorkSession, error)
-	EndWork(ctx context.Context, req dto.EndWorkRequest) (*domain.WorkSession, error)
+	EndWork(ctx context.Context, req dto.EndWorkRequest, reviewerID *uuid.UUID, reviewerName string, isSupervisor bool) (*domain.WorkSession, error)
 	UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest) (*domain.WorkSession, error)
 	ReviewSession(ctx context.Context, sessionID uuid.UUID, req dto.ReviewWorkSessionRequest, reviewerID *uuid.UUID, reviewerName string) (*domain.WorkSession, error)
 	GetActiveSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
@@ -1307,7 +1307,7 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 	return session, nil
 }
 
-func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest) (*domain.WorkSession, error) {
+func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, reviewerID *uuid.UUID, reviewerName string, isSupervisor bool) (*domain.WorkSession, error) {
 	empID, err := uuid.Parse(req.EmployeeID)
 	if err != nil {
 		return nil, errors.New("معرف الموظف غير صالح")
@@ -1363,6 +1363,24 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest) (*dom
 	activeSession.Notes = req.Notes
 	activeSession.Status = domain.StatusCompleted
 
+	// إذا كان إنهاء الدوام من لوحة تحكم المشرف (Supervisor Dashboard)، يتم تصديق الجلسة مباشرة
+	// أما إذا كان من التطبيق (الموظف هو من يرسل البيانات)، فتبقى بانتظار مصادقة المشرف
+	if isSupervisor || (req.IsReviewed != nil && *req.IsReviewed) {
+		activeSession.IsReviewed = true
+		activeSession.ReviewedBy = reviewerID
+		if req.ReviewNotes != "" {
+			activeSession.ReviewNotes = req.ReviewNotes
+		} else if req.Notes != "" {
+			activeSession.ReviewNotes = req.Notes
+		} else {
+			activeSession.ReviewNotes = "تم التوثيق والمصادقة مباشرة من لوحة تحكم المشرف"
+		}
+	} else {
+		activeSession.IsReviewed = false
+		activeSession.ReviewedBy = nil
+		activeSession.ReviewNotes = ""
+	}
+
 	if err := s.workRepo.UpdateSession(ctx, activeSession); err != nil {
 		return nil, err
 	}
@@ -1378,18 +1396,37 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest) (*dom
 
 	// Notify supervisors when an employee ends work
 	if s.notifRepo != nil && emp != nil {
-		endNotifBody := fmt.Sprintf("🔴 أنهى المندوب %s (هوية: %s) شفت العمل — سجل [%d] طلبات، مسافة [%.1f كم] وبانتظار مصادقة المشرف",
-			emp.Name, emp.NationalID, req.OrdersCount, distance)
-		_ = s.notifRepo.Create(ctx, &domain.Notification{
-			ID:         uuid.New(),
-			Title:      "إنهاء شفت عمل وبانتظار المصادقة",
-			Body:       endNotifBody,
-			Type:       "WORK_END",
-			Status:     "unread",
-			EmployeeID: &empID,
-			BranchID:   emp.BranchID,
-			CreatedAt:  time.Now(),
-		})
+		if activeSession.IsReviewed {
+			supervisorLabel := "المشرف"
+			if reviewerName != "" {
+				supervisorLabel = reviewerName
+			}
+			notifBody := fmt.Sprintf("✅ تم إنهاء ومصادقة شفت العمل مباشرة بواسطة المشرف (%s) للمندوب %s (هوية: %s) — [%d] طلبات، مسافة [%.1f كم]",
+				supervisorLabel, emp.Name, emp.NationalID, req.OrdersCount, distance)
+			_ = s.notifRepo.Create(ctx, &domain.Notification{
+				ID:         uuid.New(),
+				Title:      "إنهاء ومصادقة شفت عمل",
+				Body:       notifBody,
+				Type:       "WORK_END_APPROVED",
+				Status:     "unread",
+				EmployeeID: &empID,
+				BranchID:   emp.BranchID,
+				CreatedAt:  time.Now(),
+			})
+		} else {
+			endNotifBody := fmt.Sprintf("🔴 أنهى المندوب %s (هوية: %s) شفت العمل — سجل [%d] طلبات، مسافة [%.1f كم] وبانتظار مصادقة المشرف",
+				emp.Name, emp.NationalID, req.OrdersCount, distance)
+			_ = s.notifRepo.Create(ctx, &domain.Notification{
+				ID:         uuid.New(),
+				Title:      "إنهاء شفت عمل وبانتظار المصادقة",
+				Body:       endNotifBody,
+				Type:       "WORK_END",
+				Status:     "unread",
+				EmployeeID: &empID,
+				BranchID:   emp.BranchID,
+				CreatedAt:  time.Now(),
+			})
+		}
 	}
 
 	// Update vehicle odometer and return status to available

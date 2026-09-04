@@ -250,9 +250,11 @@ type EndWorkRequest struct {
 	EndKMImage      string  `json:"end_km_image"`      // صورة عداد النهاية
 	OrdersCount     int     `json:"orders_count"`
 	FuelCost        float64 `json:"fuel_cost"`
-	ApplicationID   string  `json:"application_id"`
-	ApplicationType string  `json:"application_type"`
-	Notes           string  `json:"notes"`
+	ApplicationID   string   `json:"application_id"`
+	ApplicationType string   `json:"application_type"`
+	Notes           string   `json:"notes"`
+	IsReviewed      *bool    `json:"is_reviewed"`
+	ReviewNotes     string   `json:"review_notes"`
 }
 
 type ReviewWorkSessionRequest struct {

@@ -753,18 +753,44 @@ func (h *WorkHandler) EndWork(c *gin.Context) {
 		return
 	}
 
-	session, err := h.workService.EndWork(c.Request.Context(), req)
+	isEmployee := c.GetBool("is_employee")
+	isSupervisor := !isEmployee
+
+	var reviewerID *uuid.UUID
+	if val, exists := c.Get("admin_id"); exists {
+		if id, ok := val.(uuid.UUID); ok && id != uuid.Nil {
+			reviewerID = &id
+		} else if idStr, ok := val.(string); ok {
+			if parsed, err := uuid.Parse(idStr); err == nil && parsed != uuid.Nil {
+				reviewerID = &parsed
+			}
+		}
+	}
+	reviewerName := c.GetString("admin_name")
+
+	session, err := h.workService.EndWork(c.Request.Context(), req, reviewerID, reviewerName, isSupervisor)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	adminName := c.GetString("admin_name")
+	adminName := reviewerName
+	if adminName == "" {
+		if isEmployee {
+			adminName = "الموظف"
+		} else {
+			adminName = "المشرف"
+		}
+	}
 	empName := "الموظف"
 	if session.Employee != nil {
 		empName = session.Employee.Name
 	}
-	_ = h.auditService.LogAction(c.Request.Context(), adminName, "إنهاء شفت عمل", "تم إنهاء شفت العمل للموظف: "+empName+" - المسافة المقطوعة: "+strconv.FormatFloat(session.Distance, 'f', 2, 64)+" كم - عدد الطلبات: "+strconv.Itoa(session.OrdersCount), c.ClientIP(), getBranchID(c))
+	actionTitle := "إنهاء شفت عمل"
+	if session.IsReviewed {
+		actionTitle = "إنهاء ومصادقة شفت عمل"
+	}
+	_ = h.auditService.LogAction(c.Request.Context(), adminName, actionTitle, "تم إنهاء ومصادقة شفت العمل للموظف: "+empName+" - المسافة المقطوعة: "+strconv.FormatFloat(session.Distance, 'f', 2, 64)+" كم - عدد الطلبات: "+strconv.Itoa(session.OrdersCount), c.ClientIP(), getBranchID(c))
 
 	c.JSON(http.StatusOK, session)
 }
