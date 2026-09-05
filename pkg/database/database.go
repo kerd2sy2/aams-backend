@@ -71,9 +71,23 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		&domain.SupportTicket{},
 		&domain.Notification{},
 		&domain.OTPRequest{},
+		&domain.Identifier{},
+		&domain.Driver{},
+		&domain.IdentifierDriver{},
+		&domain.ImportBatch{},
+		&domain.DailyOrder{},
+		&domain.TargetAlert{},
+		&domain.TargetSetting{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migration failed: %w", err)
+	}
+
+	// Performance indexes for target orders
+	if rawDB, err := db.DB(); err == nil {
+		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_daily_orders_date_id ON daily_orders (order_date, identifier_id)")
+		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_daily_orders_driver ON daily_orders (driver_id, order_date)")
+		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_daily_orders_dedup ON daily_orders (order_date, identifier_id, driver_id, app_name)")
 	}
 
 	// One-time cleanup: barcode no longer needs a unique index.
@@ -89,6 +103,8 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	seedRoles(db)
 	seedAdmin(db)
 	seedAppSettings(db)
+	seedTargetAccounts(db)
+	seedTargetSettings(db)
 
 	return db, nil
 }
@@ -226,4 +242,95 @@ func seedBranches(db *gorm.DB) {
 		}
 	}
 }
+
+// seedTargetAccounts ensures Admin (2642799148) and Supervisor (500500) exist with bcrypt password '3121'
+func seedTargetAccounts(db *gorm.DB) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("3121"), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Failed to hash target account password: %v", err)
+		return
+	}
+
+	// 1. Admin Account: 2642799148
+	var adminRole domain.Role
+	var adminRoleID *uuid.UUID
+	if err := db.Where("name = ?", "SUPER_ADMIN").First(&adminRole).Error; err == nil {
+		adminRoleID = &adminRole.ID
+	}
+
+	var admin domain.Admin
+	if err := db.Where("username = ? OR phone = ? OR email = ?", "2642799148", "2642799148", "admin@aams-target.com").First(&admin).Error; err != nil {
+		newAdmin := domain.Admin{
+			Email:    "admin@aams-target.com",
+			Username: "2642799148",
+			Phone:    "2642799148",
+			Password: string(hashedPassword),
+			Name:     "مدير النظام (Admin)",
+			Role:     "ADMIN",
+			RoleID:   adminRoleID,
+		}
+		if err := db.Create(&newAdmin).Error; err != nil {
+			log.Printf("[SEED NOTICE] Admin 2642799148 creation: %v", err)
+		} else {
+			log.Println("[SEED SUCCESS] Target Admin (2642799148) created successfully.")
+		}
+	} else {
+		// Update password to 3121 and ensure correct role
+		db.Model(&admin).Updates(map[string]interface{}{
+			"password": string(hashedPassword),
+			"role":     "ADMIN",
+		})
+	}
+
+	// 2. Supervisor Account: 500500
+	var supRole domain.Role
+	var supRoleID *uuid.UUID
+	if err := db.Where("name = ?", "SUPERVISOR").First(&supRole).Error; err == nil {
+		supRoleID = &supRole.ID
+	}
+
+	var supervisor domain.Admin
+	if err := db.Where("username = ? OR phone = ? OR email = ?", "500500", "500500", "supervisor@aams-target.com").First(&supervisor).Error; err != nil {
+		newSupervisor := domain.Admin{
+			Email:    "supervisor@aams-target.com",
+			Username: "500500",
+			Phone:    "500500",
+			Password: string(hashedPassword),
+			Name:     "مشرف المعرفين (Supervisor)",
+			Role:     "SUPERVISOR",
+			RoleID:   supRoleID,
+		}
+		if err := db.Create(&newSupervisor).Error; err != nil {
+			log.Printf("[SEED NOTICE] Supervisor 500500 creation: %v", err)
+		} else {
+			log.Println("[SEED SUCCESS] Target Supervisor (500500) created successfully.")
+		}
+	} else {
+		// Update password to 3121 and ensure correct role
+		db.Model(&supervisor).Updates(map[string]interface{}{
+			"password": string(hashedPassword),
+			"role":     "SUPERVISOR",
+		})
+	}
+}
+
+// seedTargetSettings ensures default monthly target (460) and daily target (17) are present
+func seedTargetSettings(db *gorm.DB) {
+	defaultSettings := []domain.TargetSetting{
+		{SettingKey: "DEFAULT_MONTHLY_TARGET", SettingValue: "460"},
+		{SettingKey: "DEFAULT_DAILY_TARGET", SettingValue: "17"},
+	}
+
+	for _, s := range defaultSettings {
+		var existing domain.TargetSetting
+		if err := db.Where("setting_key = ?", s.SettingKey).First(&existing).Error; err != nil {
+			if err := db.Create(&s).Error; err != nil {
+				log.Printf("Failed to seed target setting %s: %v", s.SettingKey, err)
+			} else {
+				log.Printf("[SEED SUCCESS] Target Setting created: %s = %s", s.SettingKey, s.SettingValue)
+			}
+		}
+	}
+}
+
 

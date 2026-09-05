@@ -78,3 +78,35 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 		c.Abort()
 	}
 }
+
+// RequireRoles restricts endpoint access to specified roles (e.g. "ADMIN", "SUPERVISOR")
+func RequireRoles(allowedRoles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		roleVal, exists := c.Get("admin_role")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: لا توجد صلاحيات محددة"})
+			c.Abort()
+			return
+		}
+
+		userRole, _ := roleVal.(string)
+		// SUPER_ADMIN has access to everything
+		if userRole == "SUPER_ADMIN" {
+			c.Next()
+			return
+		}
+
+		for _, r := range allowedRoles {
+			if strings.EqualFold(userRole, r) {
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "غير مصرح: هذه العملية تتطلب صلاحية (" + strings.Join(allowedRoles, " أو ") + ")",
+		})
+		c.Abort()
+	}
+}
+

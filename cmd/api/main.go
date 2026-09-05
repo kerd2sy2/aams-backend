@@ -77,6 +77,7 @@ func main() {
 	notifRepo := repository.NewNotificationRepository(db)
 	archiveRepo := repository.NewArchiveRepository(db)
 	otpRepo := repository.NewOTPRepository(db)
+	targetRepo := repository.NewTargetRepository(db)
 
 	// Initialize Services (Business Layer)
 	storageService := service.NewStorageService(cfg)
@@ -106,6 +107,8 @@ func main() {
 	ticketService := service.NewSupportTicketService(ticketRepo)
 	notifService := service.NewNotificationService(notifRepo, adminRepo)
 	archiveService := service.NewArchiveService(archiveRepo)
+	excelImportService := service.NewExcelImportService(targetRepo)
+	targetService := service.NewTargetService(targetRepo)
 
 	// Initialize Handlers (Presentation Layer)
 	authHandler := handler.NewAuthHandler(authService, auditService)
@@ -135,6 +138,7 @@ func main() {
 	ticketHandler := handler.NewSupportTicketHandler(ticketService, auditService)
 	notifHandler := handler.NewNotificationHandler(notifService)
 	archiveHandler := handler.NewArchiveHandler(archiveService, auditService)
+	targetHandler := handler.NewTargetHandler(targetService, excelImportService)
 
 	// Set Gin to release mode in production
 	ginMode := os.Getenv("GIN_MODE")
@@ -428,6 +432,39 @@ func main() {
 		// 9. OTP & Device Verification (رموز التحقق وتوثيق الأجهزة)
 		protected.GET("/otp-requests", otpHandler.GetOTPList)
 		protected.POST("/otp-requests/:id/cancel", otpHandler.CancelOTP)
+
+		// 10. Identifier Target & Excel Import System (نظام إدارة ومتابعة تارچت المعرفين)
+		targetRoutes := protected.Group("/target")
+		{
+			// Read & Dashboard access for Admin and Supervisor
+			targetRoutes.GET("/dashboard", targetHandler.GetDashboardSummary)
+			targetRoutes.GET("/identifiers", targetHandler.ListIdentifiers)
+			targetRoutes.GET("/identifiers/:id", targetHandler.GetIdentifierDetails)
+			targetRoutes.GET("/drivers", targetHandler.ListDrivers)
+			targetRoutes.GET("/alerts", targetHandler.ListAlerts)
+			targetRoutes.PATCH("/alerts/:id/resolve", targetHandler.ResolveAlert)
+			targetRoutes.GET("/settings", targetHandler.GetTargetSettings)
+
+			// Admin-only management routes
+			adminTarget := targetRoutes.Group("")
+			adminTarget.Use(middleware.RequireRoles("ADMIN", "SUPER_ADMIN"))
+			{
+				adminTarget.POST("/import/preview", targetHandler.PreviewExcelImport)
+				adminTarget.POST("/import/confirm", targetHandler.ConfirmExcelImport)
+				adminTarget.POST("/identifiers", targetHandler.CreateIdentifier)
+				adminTarget.PUT("/identifiers/:id", targetHandler.UpdateIdentifier)
+				adminTarget.DELETE("/identifiers/:id", targetHandler.DeleteIdentifier)
+				adminTarget.PUT("/settings", targetHandler.UpdateTargetSettings)
+			}
+		}
+
+		// Alias for /api/v1/admin/import/excel and target imports
+		adminImport := protected.Group("/admin/target/import")
+		adminImport.Use(middleware.RequireRoles("ADMIN", "SUPER_ADMIN"))
+		{
+			adminImport.POST("/preview", targetHandler.PreviewExcelImport)
+			adminImport.POST("/confirm", targetHandler.ConfirmExcelImport)
+		}
 	}
 
 	// Create HTTP server with timeouts
