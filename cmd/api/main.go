@@ -212,6 +212,15 @@ func main() {
 			"version": "1.0.0",
 		})
 	})
+	r.GET("/api/v1", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "running",
+			"app":       "AAMS Delivery & Target Tracking System API (v1)",
+			"version":   "1.0.0",
+			"timestamp": time.Now().Format(time.RFC3339),
+			"health":    "/api/v1/health",
+		})
+	})
 	r.GET("/api/v1/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":    "healthy",
