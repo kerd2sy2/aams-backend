@@ -461,7 +461,6 @@ func main() {
 			{
 				adminTarget.POST("/import/preview", targetHandler.PreviewExcelImport)
 				adminTarget.POST("/import/confirm", targetHandler.ConfirmExcelImport)
-				adminTarget.GET("/batches", targetHandler.ListImportBatches)
 				adminTarget.DELETE("/batches/:id", targetHandler.DeleteImportBatch)
 				adminTarget.DELETE("/batches/date/:orderDate", targetHandler.DeleteSheetByDate)
 				adminTarget.POST("/identifiers", targetHandler.CreateIdentifier)
