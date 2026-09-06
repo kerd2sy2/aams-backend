@@ -263,3 +263,44 @@ func (h *TargetHandler) UpdateTargetSettings(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "تم تحديث إعدادات التارچت بنجاح"})
 }
+
+// ListImportBatches returns recent imported batches (daily sheets)
+func (h *TargetHandler) ListImportBatches(c *gin.Context) {
+	batches, err := h.targetService.ListImportBatches(c.Request.Context(), 50)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, batches)
+}
+
+// DeleteImportBatch deletes a specific batch and its associated daily orders
+func (h *TargetHandler) DeleteImportBatch(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الرفعة غير صالح"})
+		return
+	}
+
+	if err := h.targetService.DeleteImportBatch(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل في حذف الشيت: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "تم حذف تقرير الشيت وجميع طلباته المرتبطة بنجاح"})
+}
+
+// DeleteSheetByDate deletes all imported orders and batches for a specific order date
+func (h *TargetHandler) DeleteSheetByDate(c *gin.Context) {
+	orderDate := strings.TrimSpace(c.Param("orderDate"))
+	if orderDate == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "تاريخ الشيت مطلوب"})
+		return
+	}
+
+	if err := h.targetService.DeleteSheetByDate(c.Request.Context(), orderDate); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل في حذف شيت التاريخ: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "تم حذف شيت وجميع طلبات تاريخ " + orderDate + " بنجاح"})
+}

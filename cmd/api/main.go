@@ -453,6 +453,7 @@ func main() {
 			targetRoutes.GET("/alerts", targetHandler.ListAlerts)
 			targetRoutes.PATCH("/alerts/:id/resolve", targetHandler.ResolveAlert)
 			targetRoutes.GET("/settings", targetHandler.GetTargetSettings)
+			targetRoutes.GET("/batches", targetHandler.ListImportBatches)
 
 			// Admin-only management routes
 			adminTarget := targetRoutes.Group("")
@@ -460,6 +461,9 @@ func main() {
 			{
 				adminTarget.POST("/import/preview", targetHandler.PreviewExcelImport)
 				adminTarget.POST("/import/confirm", targetHandler.ConfirmExcelImport)
+				adminTarget.GET("/batches", targetHandler.ListImportBatches)
+				adminTarget.DELETE("/batches/:id", targetHandler.DeleteImportBatch)
+				adminTarget.DELETE("/batches/date/:orderDate", targetHandler.DeleteSheetByDate)
 				adminTarget.POST("/identifiers", targetHandler.CreateIdentifier)
 				adminTarget.PUT("/identifiers/:id", targetHandler.UpdateIdentifier)
 				adminTarget.DELETE("/identifiers/:id", targetHandler.DeleteIdentifier)
@@ -473,6 +477,9 @@ func main() {
 		{
 			adminImport.POST("/preview", targetHandler.PreviewExcelImport)
 			adminImport.POST("/confirm", targetHandler.ConfirmExcelImport)
+			adminImport.GET("/batches", targetHandler.ListImportBatches)
+			adminImport.DELETE("/batches/:id", targetHandler.DeleteImportBatch)
+			adminImport.DELETE("/batches/date/:orderDate", targetHandler.DeleteSheetByDate)
 		}
 	}
 

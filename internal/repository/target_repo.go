@@ -45,6 +45,7 @@ type TargetRepository interface {
 	ListImportBatches(ctx context.Context, limit int) ([]domain.ImportBatch, error)
 	FindImportBatchByID(ctx context.Context, id uuid.UUID) (*domain.ImportBatch, error)
 	DeleteImportBatch(ctx context.Context, id uuid.UUID) error
+	DeleteOrdersByDate(ctx context.Context, orderDate string) error
 
 	// Alerts
 	CreateTargetAlert(ctx context.Context, alert *domain.TargetAlert) error
@@ -290,10 +291,24 @@ func (r *gormTargetRepository) FindImportBatchByID(ctx context.Context, id uuid.
 
 func (r *gormTargetRepository) DeleteImportBatch(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var b domain.ImportBatch
+		if err := tx.First(&b, "id = ?", id).Error; err == nil && b.OrderDate != "" {
+			_ = tx.Where("alert_date = ?", b.OrderDate).Delete(&domain.TargetAlert{}).Error
+		}
 		if err := tx.Where("import_batch_id = ?", id).Delete(&domain.DailyOrder{}).Error; err != nil {
 			return err
 		}
 		return tx.Delete(&domain.ImportBatch{}, "id = ?", id).Error
+	})
+}
+
+func (r *gormTargetRepository) DeleteOrdersByDate(ctx context.Context, orderDate string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("order_date = ?", orderDate).Delete(&domain.DailyOrder{}).Error; err != nil {
+			return err
+		}
+		_ = tx.Where("alert_date = ?", orderDate).Delete(&domain.TargetAlert{}).Error
+		return tx.Where("order_date = ?", orderDate).Delete(&domain.ImportBatch{}).Error
 	})
 }
 

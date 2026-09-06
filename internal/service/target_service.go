@@ -29,6 +29,10 @@ type TargetService interface {
 
 	GetTargetSettings(ctx context.Context) (*dto.TargetSettingsDTO, error)
 	UpdateTargetSettings(ctx context.Context, monthlyTarget, dailyTarget int) error
+
+	ListImportBatches(ctx context.Context, limit int) ([]domain.ImportBatch, error)
+	DeleteImportBatch(ctx context.Context, id uuid.UUID) error
+	DeleteSheetByDate(ctx context.Context, orderDate string) error
 }
 
 type targetService struct {
@@ -572,6 +576,18 @@ func (s *targetService) UpdateTargetSettings(ctx context.Context, monthlyTarget,
 		_ = s.targetRepo.SetTargetSetting(ctx, "DEFAULT_DAILY_TARGET", strconv.Itoa(dailyTarget))
 	}
 	return nil
+}
+
+func (s *targetService) ListImportBatches(ctx context.Context, limit int) ([]domain.ImportBatch, error) {
+	return s.targetRepo.ListImportBatches(ctx, limit)
+}
+
+func (s *targetService) DeleteImportBatch(ctx context.Context, id uuid.UUID) error {
+	return s.targetRepo.DeleteImportBatch(ctx, id)
+}
+
+func (s *targetService) DeleteSheetByDate(ctx context.Context, orderDate string) error {
+	return s.targetRepo.DeleteOrdersByDate(ctx, orderDate)
 }
 
 // Helper: days in month
