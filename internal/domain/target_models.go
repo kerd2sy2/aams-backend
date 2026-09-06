@@ -13,7 +13,7 @@ type Identifier struct {
 	Name          string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"name"`
 	Code          string         `gorm:"type:varchar(50);index" json:"code,omitempty"`
 	MonthlyTarget int            `gorm:"default:460" json:"monthly_target"`
-	DailyTarget   int            `gorm:"default:17" json:"daily_target"`
+	DailyTarget   int            `gorm:"default:15" json:"daily_target"`
 	IsActive      bool           `gorm:"default:true" json:"is_active"`
 	Drivers       []Driver       `gorm:"many2many:identifier_drivers;" json:"drivers,omitempty"`
 	CreatedAt     time.Time      `json:"created_at"`
@@ -29,7 +29,7 @@ func (i *Identifier) BeforeCreate(tx *gorm.DB) error {
 		i.MonthlyTarget = 460
 	}
 	if i.DailyTarget <= 0 {
-		i.DailyTarget = 17
+		i.DailyTarget = 15
 	}
 	return nil
 }

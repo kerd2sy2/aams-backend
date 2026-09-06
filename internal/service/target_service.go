@@ -99,7 +99,7 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string) (
 			Date:   dateStr,
 			Day:    d,
 			Orders: ordersByDay[d],
-			Target: 17,
+			Target: 15,
 		})
 	}
 
@@ -384,7 +384,7 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 			Date:   fmt.Sprintf("%s-%02d", month, d),
 			Day:    d,
 			Orders: dayOrdersMap[d],
-			Target: 17,
+			Target: 15,
 		})
 	}
 
@@ -412,7 +412,7 @@ func (s *targetService) CreateIdentifier(ctx context.Context, name, code string,
 		monthlyTarget = 460
 	}
 	if dailyTarget <= 0 {
-		dailyTarget = 17
+		dailyTarget = 15
 	}
 
 	ident := domain.Identifier{
@@ -559,7 +559,7 @@ func (s *targetService) GetTargetSettings(ctx context.Context) (*dto.TargetSetti
 	}
 	dTarget, _ := strconv.Atoi(dVal)
 	if dTarget <= 0 {
-		dTarget = 17
+		dTarget = 15
 	}
 
 	return &dto.TargetSettingsDTO{
