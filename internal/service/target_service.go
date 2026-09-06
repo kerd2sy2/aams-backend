@@ -44,6 +44,11 @@ func NewTargetService(targetRepo repository.TargetRepository) TargetService {
 }
 
 func (s *targetService) GetDashboardSummary(ctx context.Context, month string) (*dto.TargetDashboardSummaryDTO, error) {
+	targetDay := ""
+	if len(month) >= 10 {
+		targetDay = month[:10]
+		month = month[:7]
+	}
 	if month == "" {
 		month = time.Now().Format("2006-01")
 	}
@@ -75,6 +80,9 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string) (
 	}
 
 	todayDate := now.Format("2006-01-02")
+	if targetDay != "" {
+		todayDate = targetDay
+	}
 	totalMonthOrders := 0
 	todayTotalOrders := 0
 	ordersByDay := make(map[int]int)
@@ -158,6 +166,11 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string) (
 }
 
 func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilter, month string) ([]dto.IdentifierPerformanceDTO, error) {
+	targetDay := ""
+	if len(month) >= 10 {
+		targetDay = month[:10]
+		month = month[:7]
+	}
 	if month == "" {
 		month = time.Now().Format("2006-01")
 	}
@@ -195,6 +208,9 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 
 	// Map orders by identifier
 	todayDate := now.Format("2006-01-02")
+	if targetDay != "" {
+		todayDate = targetDay
+	}
 	weekStartDate := now.AddDate(0, 0, -7).Format("2006-01-02")
 
 	ordersByIdent := make(map[uuid.UUID][]domain.DailyOrder)
@@ -310,6 +326,9 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 }
 
 func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, month string) (*dto.IdentifierDetailsDTO, error) {
+	if len(month) >= 10 {
+		month = month[:7]
+	}
 	if month == "" {
 		month = time.Now().Format("2006-01")
 	}
@@ -415,26 +434,27 @@ func (s *targetService) CreateIdentifier(ctx context.Context, name, code string,
 		dailyTarget = 15
 	}
 
-	ident := domain.Identifier{
+	ident := &domain.Identifier{
 		Name:          name,
-		Code:          code,
+		Code:          strings.TrimSpace(code),
 		MonthlyTarget: monthlyTarget,
 		DailyTarget:   dailyTarget,
 		IsActive:      true,
 	}
-	if err := s.targetRepo.CreateIdentifier(ctx, &ident); err != nil {
-		return nil, err
+
+	if err := s.targetRepo.CreateIdentifier(ctx, ident); err != nil {
+		return nil, fmt.Errorf("فشل في إنشاء المعرف: %w", err)
 	}
-	return &ident, nil
+	return ident, nil
 }
 
 func (s *targetService) UpdateIdentifier(ctx context.Context, id uuid.UUID, name, code string, monthlyTarget, dailyTarget int, isActive bool) error {
 	ident, err := s.targetRepo.FindIdentifierByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("المعرف غير موجود")
+		return fmt.Errorf("المعرف غير موجود: %w", err)
 	}
 
-	if name != "" {
+	if strings.TrimSpace(name) != "" {
 		ident.Name = strings.TrimSpace(name)
 	}
 	ident.Code = strings.TrimSpace(code)
@@ -454,6 +474,11 @@ func (s *targetService) DeleteIdentifier(ctx context.Context, id uuid.UUID) erro
 }
 
 func (s *targetService) ListDrivers(ctx context.Context, search, month string) ([]dto.DriverPerformanceDTO, error) {
+	targetDay := ""
+	if len(month) >= 10 {
+		targetDay = month[:10]
+		month = month[:7]
+	}
 	if month == "" {
 		month = time.Now().Format("2006-01")
 	}
@@ -469,6 +494,9 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 	}
 
 	todayDate := time.Now().Format("2006-01-02")
+	if targetDay != "" {
+		todayDate = targetDay
+	}
 	driverMonthOrders := make(map[uuid.UUID]int)
 	driverTodayOrders := make(map[uuid.UUID]int)
 	driverIdentsMap := make(map[uuid.UUID]map[string]bool)
