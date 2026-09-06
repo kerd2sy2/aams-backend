@@ -357,7 +357,7 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 	}
 
 	// Drivers breakdown with percentages
-	var driversBreakdown []dto.DriverContributionDTO
+	driversBreakdown := make([]dto.DriverContributionDTO, 0)
 	for dID, count := range driverOrdersMap {
 		pct := 0.0
 		if totalOrders > 0 {
@@ -378,7 +378,7 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 	// Daily timeline
 	tMonth, _ := time.Parse("2006-01", month)
 	daysInMonth := daysIn(tMonth.Month(), tMonth.Year())
-	var dailyTimeline []dto.DayTrendDTO
+	dailyTimeline := make([]dto.DayTrendDTO, 0, daysInMonth)
 	for d := 1; d <= daysInMonth; d++ {
 		dailyTimeline = append(dailyTimeline, dto.DayTrendDTO{
 			Date:   fmt.Sprintf("%s-%02d", month, d),
