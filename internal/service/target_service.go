@@ -198,7 +198,7 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 		ordersByIdent[ord.IdentifierID] = append(ordersByIdent[ord.IdentifierID], ord)
 	}
 
-	var result []dto.IdentifierPerformanceDTO
+	result := make([]dto.IdentifierPerformanceDTO, 0)
 
 	for _, ident := range idents {
 		orders := ordersByIdent[ident.ID]
@@ -489,7 +489,7 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 		}
 	}
 
-	var result []dto.DriverPerformanceDTO
+	result := make([]dto.DriverPerformanceDTO, 0)
 	for _, d := range drivers {
 		var idents []string
 		for idName := range driverIdentsMap[d.ID] {
@@ -520,7 +520,7 @@ func (s *targetService) ListAlerts(ctx context.Context, date string, unresolvedO
 		return nil, err
 	}
 
-	var result []dto.TargetAlertDTO
+	result := make([]dto.TargetAlertDTO, 0)
 	for _, a := range alerts {
 		identName := "معرف"
 		if a.Identifier != nil {
