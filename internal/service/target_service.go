@@ -215,7 +215,9 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 
 	ordersByIdent := make(map[uuid.UUID][]domain.DailyOrder)
 	for _, ord := range allMonthOrders {
-		ordersByIdent[ord.IdentifierID] = append(ordersByIdent[ord.IdentifierID], ord)
+		if ord.IdentifierID != nil {
+			ordersByIdent[*ord.IdentifierID] = append(ordersByIdent[*ord.IdentifierID], ord)
+		}
 	}
 
 	result := make([]dto.IdentifierPerformanceDTO, 0)

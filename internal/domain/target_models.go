@@ -101,7 +101,7 @@ type DailyOrder struct {
 	ID            uuid.UUID   `gorm:"type:char(36);primary_key" json:"id"`
 	ImportBatchID uuid.UUID   `gorm:"type:char(36);index" json:"import_batch_id"`
 	OrderDate     string      `gorm:"type:varchar(10);index;not null" json:"order_date"` // YYYY-MM-DD
-	IdentifierID  uuid.UUID   `gorm:"type:char(36);index;not null" json:"identifier_id"`
+	IdentifierID  *uuid.UUID  `gorm:"type:char(36);index" json:"identifier_id,omitempty"`
 	DriverID      uuid.UUID   `gorm:"type:char(36);index;not null" json:"driver_id"`
 	AppName       string      `gorm:"type:varchar(50);index" json:"app_name"` // نينجا، كيتا، تويو، إلخ
 	OrdersCount   int         `gorm:"not null" json:"orders_count"`

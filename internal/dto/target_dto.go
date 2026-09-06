@@ -20,17 +20,19 @@ type ParsedExcelRow struct {
 
 // ExcelImportPreviewResponse returns preview data before database commit
 type ExcelImportPreviewResponse struct {
-	FileName         string           `json:"file_name"`
-	OrderDate        string           `json:"order_date"` // YYYY-MM-DD
-	TotalRows        int              `json:"total_rows"`
-	TotalOrders      int              `json:"total_orders"`
-	IdentifiersCount int              `json:"identifiers_count"`
-	Identifiers      []string         `json:"identifiers"`
-	DriversCount     int              `json:"drivers_count"`
-	Drivers          []string         `json:"drivers"`
-	DuplicatesCount  int              `json:"duplicates_count"`
-	HasDuplicates    bool             `json:"has_duplicates"`
-	Rows             []ParsedExcelRow `json:"rows"`
+	FileName              string           `json:"file_name"`
+	OrderDate             string           `json:"order_date"` // YYYY-MM-DD
+	TotalRows             int              `json:"total_rows"`
+	TotalOrders           int              `json:"total_orders"`
+	IdentifiersCount      int              `json:"identifiers_count"`
+	Identifiers           []string         `json:"identifiers"`
+	DriversCount          int              `json:"drivers_count"`
+	Drivers               []string         `json:"drivers"`
+	DuplicatesCount       int              `json:"duplicates_count"`
+	HasDuplicates         bool             `json:"has_duplicates"`
+	EmptyIdentifiersCount int              `json:"empty_identifiers_count"`
+	Warnings              []string         `json:"warnings,omitempty"`
+	Rows                  []ParsedExcelRow `json:"rows"`
 }
 
 // ConfirmImportRequest is sent by Admin to save previewed rows

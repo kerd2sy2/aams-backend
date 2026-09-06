@@ -124,6 +124,7 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 	driverMap := make(map[string]bool)
 	totalOrders := 0
 	duplicatesCount := 0
+	emptyIdentCount := 0
 
 	for i := headerRowIndex + 1; i < len(rows); i++ {
 		r := rows[i]
@@ -135,25 +136,33 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 		driverName := getCell(r, colDriver)
 		appName := getCell(r, colApp)
 
-		// Must have at least an identifier or driver name
+		// Must have at least a driver name to process row
 		if identName == "" && driverName == "" {
 			continue
 		}
+
+		// If identifier is empty, leave it empty (track for warning)
 		if identName == "" {
-			identName = driverName
+			emptyIdentCount++
 		}
+		// If driver name is empty, use identifier as fallback
 		if driverName == "" {
 			driverName = identName
+		}
+
+		// Normalize app name first (authoritative source is the app column)
+		if appName == "كينتا" {
+			appName = "كيتا"
 		}
 
 		ninjaCount := parseInt(getCell(r, colNinja))
 		keetaCount := parseInt(getCell(r, colKeeta))
 		toyoCount := parseInt(getCell(r, colToyo))
+		// Total orders is sum of ALL count columns regardless of app name
 		rowTotal := ninjaCount + keetaCount + toyoCount
 
 		// Fallback: If no app columns but app cell has orders count or general column
 		if rowTotal == 0 {
-			// check if colApp has a number
 			if n := parseInt(appName); n > 0 {
 				rowTotal = n
 				appName = "عام"
@@ -167,29 +176,31 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 			serial = strconv.Itoa(len(parsedRows) + 1)
 		}
 
-		// Normalize app name
-		if appName == "كينتا" {
-			appName = "كيتا"
-		}
+		// If app column is empty, try to infer from count columns
 		if appName == "" {
-			if keetaCount > 0 {
-				appName = "كيتا"
-			} else if ninjaCount > 0 {
+			if ninjaCount > 0 && keetaCount == 0 && toyoCount == 0 {
 				appName = "نينجا"
-			} else if toyoCount > 0 {
+			} else if keetaCount > 0 && ninjaCount == 0 && toyoCount == 0 {
+				appName = "كيتا"
+			} else if toyoCount > 0 && ninjaCount == 0 && keetaCount == 0 {
 				appName = "تويو"
 			} else {
-				appName = "كيتا"
+				appName = "كيتا" // default fallback
 			}
 		}
 
 		// Check for duplicate in database for this date, identifier, driver, and app
 		isDup := false
 		existingCount := 0
-		identObj, _ := s.targetRepo.FindIdentifierByNameAndApp(ctx, identName, appName)
+		var identID *uuid.UUID
+		if identName != "" {
+			if identObj, _ := s.targetRepo.FindIdentifierByNameAndApp(ctx, identName, appName); identObj != nil {
+				identID = &identObj.ID
+			}
+		}
 		driverObj, _ := s.targetRepo.FindDriverByName(ctx, driverName)
-		if identObj != nil && driverObj != nil {
-			dup, _ := s.targetRepo.CheckDuplicates(ctx, orderDate, identObj.ID, driverObj.ID, appName)
+		if driverObj != nil {
+			dup, _ := s.targetRepo.CheckDuplicates(ctx, orderDate, identID, driverObj.ID, appName)
 			if dup {
 				isDup = true
 				duplicatesCount++
@@ -213,12 +224,16 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 		}
 
 		parsedRows = append(parsedRows, parsedRow)
-		identKey := identName
-		if appName != "" {
-			identKey = fmt.Sprintf("%s (%s)", identName, appName)
+		if identName != "" {
+			identKey := identName
+			if appName != "" {
+				identKey = fmt.Sprintf("%s (%s)", identName, appName)
+			}
+			identMap[identKey] = true
 		}
-		identMap[identKey] = true
-		driverMap[driverName] = true
+		if driverName != "" {
+			driverMap[driverName] = true
+		}
 		totalOrders += rowTotal
 	}
 
@@ -231,18 +246,26 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 		driversList = append(driversList, k)
 	}
 
+	// Build warnings
+	var warnings []string
+	if emptyIdentCount > 0 {
+		warnings = append(warnings, fmt.Sprintf("⚠️ يوجد %d صف بدون معرف (المعرف فارغ)", emptyIdentCount))
+	}
+
 	return &dto.ExcelImportPreviewResponse{
-		FileName:         filename,
-		OrderDate:        orderDate,
-		TotalRows:        len(parsedRows),
-		TotalOrders:      totalOrders,
-		IdentifiersCount: len(identifiersList),
-		Identifiers:      identifiersList,
-		DriversCount:     len(driversList),
-		Drivers:          driversList,
-		DuplicatesCount:  duplicatesCount,
-		HasDuplicates:    duplicatesCount > 0,
-		Rows:             parsedRows,
+		FileName:              filename,
+		OrderDate:             orderDate,
+		TotalRows:             len(parsedRows),
+		TotalOrders:           totalOrders,
+		IdentifiersCount:      len(identifiersList),
+		Identifiers:           identifiersList,
+		DriversCount:          len(driversList),
+		Drivers:               driversList,
+		DuplicatesCount:       duplicatesCount,
+		HasDuplicates:         duplicatesCount > 0,
+		EmptyIdentifiersCount: emptyIdentCount,
+		Warnings:              warnings,
+		Rows:                  parsedRows,
 	}, nil
 }
 
@@ -290,18 +313,26 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 			}
 		}
 
-		// Find or Create Identifier (Differentiated by Name and App)
-		identCacheKey := fmt.Sprintf("%s___%s", row.Identifier, row.App)
-		ident, ok := identCache[identCacheKey]
-		if !ok {
-			var err error
-			ident, err = s.targetRepo.FindOrCreateIdentifier(ctx, row.Identifier, row.App)
-			if err != nil {
-				return nil, fmt.Errorf("فشل في تسجيل المعرف %s (%s): %w", row.Identifier, row.App, err)
+		var identID *uuid.UUID
+		var ident *domain.Identifier
+
+		// Find or Create Identifier ONLY IF row.Identifier is NOT empty!
+		identName := strings.TrimSpace(row.Identifier)
+		if identName != "" {
+			identCacheKey := fmt.Sprintf("%s___%s", identName, row.App)
+			var ok bool
+			ident, ok = identCache[identCacheKey]
+			if !ok {
+				var err error
+				ident, err = s.targetRepo.FindOrCreateIdentifier(ctx, identName, row.App)
+				if err != nil {
+					return nil, fmt.Errorf("فشل في تسجيل المعرف %s (%s): %w", identName, row.App, err)
+				}
+				identCache[identCacheKey] = ident
 			}
-			identCache[identCacheKey] = ident
+			identID = &ident.ID
+			activeIdentifiersForAlerts[ident.ID] = ident
 		}
-		activeIdentifiersForAlerts[ident.ID] = ident
 
 		// Find or Create Driver
 		driver, ok := driverCache[row.DriverName]
@@ -314,12 +345,14 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 			driverCache[row.DriverName] = driver
 		}
 
-		// Link Driver to Identifier (1 to Many)
-		_ = s.targetRepo.LinkDriverToIdentifier(ctx, ident.ID, driver.ID, req.OrderDate)
+		// Link Driver to Identifier ONLY if identifier exists
+		if identID != nil {
+			_ = s.targetRepo.LinkDriverToIdentifier(ctx, *identID, driver.ID, req.OrderDate)
+		}
 
 		// If Replace Duplicates: delete previous matching record
 		if row.IsDuplicate && req.DeduplicationAction == "REPLACE_DUPLICATES" {
-			_ = s.targetRepo.DeleteOrdersByDateAndApp(ctx, req.OrderDate, row.App, ident.ID, driver.ID)
+			_ = s.targetRepo.DeleteOrdersByDateAndApp(ctx, req.OrderDate, row.App, identID, driver.ID)
 			replacedCount++
 		}
 
@@ -327,7 +360,7 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 		dailyOrder := domain.DailyOrder{
 			ImportBatchID: batch.ID,
 			OrderDate:     req.OrderDate,
-			IdentifierID:  ident.ID,
+			IdentifierID:  identID,
 			DriverID:      driver.ID,
 			AppName:       row.App,
 			OrdersCount:   row.TotalOrders,

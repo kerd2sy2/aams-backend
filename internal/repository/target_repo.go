@@ -34,8 +34,8 @@ type TargetRepository interface {
 
 	// Daily Orders
 	CreateDailyOrdersBatch(ctx context.Context, orders []domain.DailyOrder) error
-	DeleteOrdersByDateAndApp(ctx context.Context, orderDate, appName string, identifierID, driverID uuid.UUID) error
-	CheckDuplicates(ctx context.Context, orderDate string, identifierID, driverID uuid.UUID, appName string) (bool, error)
+	DeleteOrdersByDateAndApp(ctx context.Context, orderDate, appName string, identifierID *uuid.UUID, driverID uuid.UUID) error
+	CheckDuplicates(ctx context.Context, orderDate string, identifierID *uuid.UUID, driverID uuid.UUID, appName string) (bool, error)
 	GetDailyOrders(ctx context.Context, orderDate string, identifierID *uuid.UUID) ([]domain.DailyOrder, error)
 	GetOrdersForMonth(ctx context.Context, monthPrefix string) ([]domain.DailyOrder, error)
 	GetOrdersForIdentifierMonth(ctx context.Context, identifierID uuid.UUID, monthPrefix string) ([]domain.DailyOrder, error)
@@ -234,17 +234,26 @@ func (r *gormTargetRepository) CreateDailyOrdersBatch(ctx context.Context, order
 	return r.db.WithContext(ctx).CreateInBatches(orders, 100).Error
 }
 
-func (r *gormTargetRepository) DeleteOrdersByDateAndApp(ctx context.Context, orderDate, appName string, identifierID, driverID uuid.UUID) error {
-	return r.db.WithContext(ctx).
-		Where("order_date = ? AND identifier_id = ? AND driver_id = ? AND app_name = ?", orderDate, identifierID, driverID, appName).
-		Delete(&domain.DailyOrder{}).Error
+func (r *gormTargetRepository) DeleteOrdersByDateAndApp(ctx context.Context, orderDate, appName string, identifierID *uuid.UUID, driverID uuid.UUID) error {
+	q := r.db.WithContext(ctx).Where("order_date = ? AND driver_id = ? AND app_name = ?", orderDate, driverID, appName)
+	if identifierID != nil {
+		q = q.Where("identifier_id = ?", *identifierID)
+	} else {
+		q = q.Where("identifier_id IS NULL")
+	}
+	return q.Delete(&domain.DailyOrder{}).Error
 }
 
-func (r *gormTargetRepository) CheckDuplicates(ctx context.Context, orderDate string, identifierID, driverID uuid.UUID, appName string) (bool, error) {
+func (r *gormTargetRepository) CheckDuplicates(ctx context.Context, orderDate string, identifierID *uuid.UUID, driverID uuid.UUID, appName string) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&domain.DailyOrder{}).
-		Where("order_date = ? AND identifier_id = ? AND driver_id = ? AND app_name = ?", orderDate, identifierID, driverID, appName).
-		Count(&count).Error
+	q := r.db.WithContext(ctx).Model(&domain.DailyOrder{}).
+		Where("order_date = ? AND driver_id = ? AND app_name = ?", orderDate, driverID, appName)
+	if identifierID != nil {
+		q = q.Where("identifier_id = ?", *identifierID)
+	} else {
+		q = q.Where("identifier_id IS NULL")
+	}
+	err := q.Count(&count).Error
 	return count > 0, err
 }
 
