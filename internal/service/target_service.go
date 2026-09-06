@@ -17,15 +17,15 @@ import (
 )
 
 type TargetService interface {
-	GetDashboardSummary(ctx context.Context, month string) (*dto.TargetDashboardSummaryDTO, error)
-	ListIdentifiers(ctx context.Context, search, status, month string) ([]dto.IdentifierPerformanceDTO, error)
+	GetDashboardSummary(ctx context.Context, month string, branch string) (*dto.TargetDashboardSummaryDTO, error)
+	ListIdentifiers(ctx context.Context, search, status, month string, branch string) ([]dto.IdentifierPerformanceDTO, error)
 	GetIdentifierDetails(ctx context.Context, id uuid.UUID, month string) (*dto.IdentifierDetailsDTO, error)
 	CreateIdentifier(ctx context.Context, name, appName, code string, monthlyTarget, dailyTarget int) (*domain.Identifier, error)
 	UpdateIdentifier(ctx context.Context, id uuid.UUID, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool) error
 	DeleteIdentifier(ctx context.Context, id uuid.UUID) error
 
-	ListDrivers(ctx context.Context, search, month string) ([]dto.DriverPerformanceDTO, error)
-	ListAlerts(ctx context.Context, date string, unresolvedOnly bool) ([]dto.TargetAlertDTO, error)
+	ListDrivers(ctx context.Context, search, month string, branch string) ([]dto.DriverPerformanceDTO, error)
+	ListAlerts(ctx context.Context, date string, unresolvedOnly bool, branch string) ([]dto.TargetAlertDTO, error)
 	ResolveAlert(ctx context.Context, id uuid.UUID) error
 
 	GetTargetSettings(ctx context.Context) (*dto.TargetSettingsDTO, error)
@@ -44,7 +44,7 @@ func NewTargetService(targetRepo repository.TargetRepository) TargetService {
 	return &targetService{targetRepo: targetRepo}
 }
 
-func (s *targetService) GetDashboardSummary(ctx context.Context, month string) (*dto.TargetDashboardSummaryDTO, error) {
+func (s *targetService) GetDashboardSummary(ctx context.Context, month string, branch string) (*dto.TargetDashboardSummaryDTO, error) {
 	targetDay := ""
 	if len(month) >= 10 {
 		targetDay = month[:10]
@@ -80,6 +80,18 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string) (
 		return nil, fmt.Errorf("فشل في جلب طلبات الشهر: %w", err)
 	}
 
+	// Filter by branch if specified
+	branch = strings.TrimSpace(branch)
+	if branch != "" && branch != "all" && branch != "الكل" {
+		var filteredOrders []domain.DailyOrder
+		for _, ord := range orders {
+			if ord.Branch == branch || (ord.Identifier != nil && ord.Identifier.Branch == branch) {
+				filteredOrders = append(filteredOrders, ord)
+			}
+		}
+		orders = filteredOrders
+	}
+
 	todayDate := now.Format("2006-01-02")
 	if targetDay != "" {
 		todayDate = targetDay
@@ -113,7 +125,7 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string) (
 	}
 
 	// 3. Evaluate Identifiers
-	allIdents, err := s.ListIdentifiers(ctx, "", "", month)
+	allIdents, err := s.ListIdentifiers(ctx, "", "", month, branch)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +149,7 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string) (
 	}
 
 	// 4. Fetch recent alerts
-	alerts, _ := s.ListAlerts(ctx, "", false)
+	alerts, _ := s.ListAlerts(ctx, "", false, branch)
 	if len(alerts) > 10 {
 		alerts = alerts[:10]
 	}
@@ -166,7 +178,7 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string) (
 	}, nil
 }
 
-func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilter, month string) ([]dto.IdentifierPerformanceDTO, error) {
+func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilter, month string, branch string) ([]dto.IdentifierPerformanceDTO, error) {
 	targetDay := ""
 	if len(month) >= 10 {
 		targetDay = month[:10]
@@ -207,6 +219,8 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 		return nil, err
 	}
 
+	branch = strings.TrimSpace(branch)
+
 	// Map orders by identifier
 	todayDate := now.Format("2006-01-02")
 	if targetDay != "" {
@@ -217,6 +231,11 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 	ordersByIdent := make(map[uuid.UUID][]domain.DailyOrder)
 	for _, ord := range allMonthOrders {
 		if ord.IdentifierID != nil {
+			if branch != "" && branch != "all" && branch != "الكل" {
+				if ord.Branch != "" && ord.Branch != branch {
+					continue
+				}
+			}
 			ordersByIdent[*ord.IdentifierID] = append(ordersByIdent[*ord.IdentifierID], ord)
 		}
 	}
@@ -224,6 +243,15 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 	result := make([]dto.IdentifierPerformanceDTO, 0)
 
 	for _, ident := range idents {
+		if branch != "" && branch != "all" && branch != "الكل" {
+			if ident.Branch != "" && ident.Branch != branch {
+				continue
+			}
+			if ident.Branch == "" && len(ordersByIdent[ident.ID]) == 0 {
+				continue
+			}
+		}
+
 		orders := ordersByIdent[ident.ID]
 
 		monthOrders := 0
@@ -311,6 +339,7 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 			ID:                       ident.ID,
 			Name:                     ident.Name,
 			AppName:                  appName,
+			Branch:                   ident.Branch,
 			Code:                     ident.Code,
 			TodayOrders:              todayOrders,
 			WeekOrders:               weekOrders,
@@ -347,7 +376,7 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 	}
 
 	// Performance calculation
-	identsPerf, err := s.ListIdentifiers(ctx, ident.Name, "", month)
+	identsPerf, err := s.ListIdentifiers(ctx, ident.Name, "", month, "")
 	if err != nil || len(identsPerf) == 0 {
 		return nil, fmt.Errorf("فشل في احتساب أداء المعرف")
 	}
@@ -500,7 +529,7 @@ func (s *targetService) DeleteIdentifier(ctx context.Context, id uuid.UUID) erro
 	return s.targetRepo.DeleteIdentifier(ctx, id)
 }
 
-func (s *targetService) ListDrivers(ctx context.Context, search, month string) ([]dto.DriverPerformanceDTO, error) {
+func (s *targetService) ListDrivers(ctx context.Context, search, month string, branch string) ([]dto.DriverPerformanceDTO, error) {
 	targetDay := ""
 	if len(month) >= 10 {
 		targetDay = month[:10]
@@ -520,6 +549,8 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 		return nil, err
 	}
 
+	branch = strings.TrimSpace(branch)
+
 	todayDate := time.Now().Format("2006-01-02")
 	if targetDay != "" {
 		todayDate = targetDay
@@ -528,13 +559,23 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 	driverTodayOrders := make(map[uuid.UUID]int)
 	driverIdentsMap := make(map[uuid.UUID]map[string]bool)
 	driverAppsMap := make(map[uuid.UUID]map[string]bool)
+	driverBranchMap := make(map[uuid.UUID]string)
 
 	// Preserve the exact sequence of drivers as they appear in the uploaded Excel sheet
 	driverSheetOrder := make(map[uuid.UUID]int)
 	sheetIndex := 0
 
 	for _, ord := range orders {
+		if branch != "" && branch != "all" && branch != "الكل" {
+			if ord.Branch != "" && ord.Branch != branch {
+				continue
+			}
+		}
+
 		driverMonthOrders[ord.DriverID] += ord.OrdersCount
+		if ord.Branch != "" {
+			driverBranchMap[ord.DriverID] = ord.Branch
+		}
 		if ord.OrderDate == todayDate {
 			driverTodayOrders[ord.DriverID] += ord.OrdersCount
 			if _, exists := driverSheetOrder[ord.DriverID]; !exists {
@@ -558,6 +599,11 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 
 	// For drivers who have orders this month but not on today's date, continue sequence
 	for _, ord := range orders {
+		if branch != "" && branch != "all" && branch != "الكل" {
+			if ord.Branch != "" && ord.Branch != branch {
+				continue
+			}
+		}
 		if _, exists := driverSheetOrder[ord.DriverID]; !exists {
 			driverSheetOrder[ord.DriverID] = sheetIndex
 			sheetIndex++
@@ -566,6 +612,13 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 
 	result := make([]dto.DriverPerformanceDTO, 0)
 	for _, d := range drivers {
+		// If branch filter is active, only include drivers who have orders in this branch
+		if branch != "" && branch != "all" && branch != "الكل" {
+			if driverMonthOrders[d.ID] == 0 && driverTodayOrders[d.ID] == 0 {
+				continue
+			}
+		}
+
 		var idents []string
 		for idName := range driverIdentsMap[d.ID] {
 			idents = append(idents, idName)
@@ -579,6 +632,7 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 			ID:          d.ID,
 			Name:        d.Name,
 			Phone:       d.Phone,
+			Branch:      driverBranchMap[d.ID],
 			MonthOrders: driverMonthOrders[d.ID],
 			TodayOrders: driverTodayOrders[d.ID],
 			Identifiers: idents,
@@ -605,14 +659,22 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 	return result, nil
 }
 
-func (s *targetService) ListAlerts(ctx context.Context, date string, unresolvedOnly bool) ([]dto.TargetAlertDTO, error) {
+func (s *targetService) ListAlerts(ctx context.Context, date string, unresolvedOnly bool, branch string) ([]dto.TargetAlertDTO, error) {
 	alerts, err := s.targetRepo.ListTargetAlerts(ctx, date, unresolvedOnly)
 	if err != nil {
 		return nil, err
 	}
 
+	branch = strings.TrimSpace(branch)
+
 	result := make([]dto.TargetAlertDTO, 0)
 	for _, a := range alerts {
+		if branch != "" && branch != "all" && branch != "الكل" {
+			if a.Identifier != nil && a.Identifier.Branch != "" && a.Identifier.Branch != branch {
+				continue
+			}
+		}
+
 		identName := "معرف"
 		if a.Identifier != nil {
 			identName = a.Identifier.Name

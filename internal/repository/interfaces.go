@@ -36,7 +36,6 @@ type AdminRepository interface {
 	FindAll(ctx context.Context) ([]domain.Admin, error)
 }
 
-
 type WorkRepository interface {
 	CreateSession(ctx context.Context, session *domain.WorkSession) error
 	UpdateSession(ctx context.Context, session *domain.WorkSession) error
@@ -248,10 +247,6 @@ type SupportTicketRepository interface {
 	FindAll(ctx context.Context, filter dto.SupportTicketFilter) ([]domain.SupportTicket, int64, error)
 }
 
-
-
-
-
 type NotificationRepository interface {
 	FindUnreadByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID) ([]domain.Notification, error)
 	FindAllByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string) ([]domain.Notification, error)
@@ -284,4 +279,3 @@ type OTPRepository interface {
 	Cancel(ctx context.Context, id uuid.UUID) error
 	InvalidatePreviousPending(ctx context.Context, nationalID string) error
 }
-

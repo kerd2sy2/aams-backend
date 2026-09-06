@@ -410,4 +410,3 @@ func (r *gormTargetRepository) UpdateAllIdentifiersTargets(ctx context.Context, 
 	updates["updated_at"] = time.Now()
 	return r.db.WithContext(ctx).Model(&domain.Identifier{}).Where("is_active = ?", true).Updates(updates).Error
 }
-

@@ -4,18 +4,19 @@ import "github.com/google/uuid"
 
 // ParsedExcelRow represents a validated row from Excel
 type ParsedExcelRow struct {
-	Serial       string `json:"serial"`
-	Identifier   string `json:"identifier"`
-	App          string `json:"app"`
-	DriverName   string `json:"driver_name"`
-	NinjaOrders  int    `json:"ninja_orders"`
-	KeetaOrders  int    `json:"keeta_orders"`
-	ToyoOrders   int    `json:"toyo_orders"`
-	TotalOrders  int    `json:"total_orders"`
-	PlateNumber  string `json:"plate_number"`
-	Notes        string `json:"notes"`
-	IsDuplicate  bool   `json:"is_duplicate"`
-	ExistingCount int   `json:"existing_count,omitempty"`
+	Serial        string `json:"serial"`
+	Identifier    string `json:"identifier"`
+	App           string `json:"app"`
+	Branch        string `json:"branch,omitempty"` // "1", "2", إلخ
+	DriverName    string `json:"driver_name"`
+	NinjaOrders   int    `json:"ninja_orders"`
+	KeetaOrders   int    `json:"keeta_orders"`
+	ToyoOrders    int    `json:"toyo_orders"`
+	TotalOrders   int    `json:"total_orders"`
+	PlateNumber   string `json:"plate_number"`
+	Notes         string `json:"notes"`
+	IsDuplicate   bool   `json:"is_duplicate"`
+	ExistingCount int    `json:"existing_count,omitempty"`
 }
 
 // ExcelImportPreviewResponse returns preview data before database commit
@@ -58,6 +59,7 @@ type IdentifierPerformanceDTO struct {
 	ID                       uuid.UUID `json:"id"`
 	Name                     string    `json:"name"`
 	AppName                  string    `json:"app_name"`
+	Branch                   string    `json:"branch,omitempty"` // "1", "2", إلخ
 	Code                     string    `json:"code,omitempty"`
 	TodayOrders              int       `json:"today_orders"`
 	WeekOrders               int       `json:"week_orders"`
@@ -104,6 +106,7 @@ type DriverPerformanceDTO struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
 	Phone       string    `json:"phone,omitempty"`
+	Branch      string    `json:"branch,omitempty"`
 	MonthOrders int       `json:"month_orders"`
 	TodayOrders int       `json:"today_orders"`
 	Identifiers []string  `json:"identifiers"`
@@ -112,20 +115,20 @@ type DriverPerformanceDTO struct {
 
 // TargetDashboardSummaryDTO top-level stats and charts for dashboard
 type TargetDashboardSummaryDTO struct {
-	TotalIdentifiers   int                        `json:"total_identifiers"`
-	TargetAchieved     int                        `json:"target_achieved"`
-	OnTrack            int                        `json:"on_track"`
-	AtRisk             int                        `json:"at_risk"`
-	BehindTarget       int                        `json:"behind_target"`
-	TotalMonthOrders   int                        `json:"total_month_orders"`
-	TodayTotalOrders   int                        `json:"today_total_orders"`
-	DailyTrend         []DayTrendDTO              `json:"daily_trend"`
-	TopIdentifiers     []IdentifierPerformanceDTO `json:"top_identifiers"`
-	RecentAlerts       []TargetAlertDTO           `json:"recent_alerts"`
-	CurrentMonth       string                     `json:"current_month"` // YYYY-MM
-	DaysElapsed        int                        `json:"days_elapsed"`
-	TotalDaysInMonth   int                        `json:"total_days_in_month"`
-	RemainingDays      int                        `json:"remaining_days"`
+	TotalIdentifiers int                        `json:"total_identifiers"`
+	TargetAchieved   int                        `json:"target_achieved"`
+	OnTrack          int                        `json:"on_track"`
+	AtRisk           int                        `json:"at_risk"`
+	BehindTarget     int                        `json:"behind_target"`
+	TotalMonthOrders int                        `json:"total_month_orders"`
+	TodayTotalOrders int                        `json:"today_total_orders"`
+	DailyTrend       []DayTrendDTO              `json:"daily_trend"`
+	TopIdentifiers   []IdentifierPerformanceDTO `json:"top_identifiers"`
+	RecentAlerts     []TargetAlertDTO           `json:"recent_alerts"`
+	CurrentMonth     string                     `json:"current_month"` // YYYY-MM
+	DaysElapsed      int                        `json:"days_elapsed"`
+	TotalDaysInMonth int                        `json:"total_days_in_month"`
+	RemainingDays    int                        `json:"remaining_days"`
 }
 
 // TargetAlertDTO alert item

@@ -169,7 +169,6 @@ func (r *gormAdminRepository) FindAll(ctx context.Context) ([]domain.Admin, erro
 	return admins, nil
 }
 
-
 // GORM Employee Repository
 type gormEmployeeRepository struct {
 	db *gorm.DB
@@ -1390,20 +1389,19 @@ func (r *gormVehicleRepository) FindByPlateNumberUnscoped(ctx context.Context, p
 // RestoreVehicle restores a soft-deleted vehicle and updates its fields
 func (r *gormVehicleRepository) RestoreVehicle(ctx context.Context, vehicle *domain.Vehicle) error {
 	return r.db.WithContext(ctx).Unscoped().Model(vehicle).Updates(map[string]interface{}{
-		"deleted_at":        nil,
-		"brand":             vehicle.Brand,
-		"model_year":        vehicle.ModelYear,
-		"key_number":        vehicle.KeyNumber,
-		"current_km":        vehicle.CurrentKM,
+		"deleted_at":         nil,
+		"brand":              vehicle.Brand,
+		"model_year":         vehicle.ModelYear,
+		"key_number":         vehicle.KeyNumber,
+		"current_km":         vehicle.CurrentKM,
 		"last_oil_change_km": vehicle.LastOilChangeKM,
-		"status":            vehicle.Status,
+		"status":             vehicle.Status,
 		"is_odometer_broken": vehicle.IsOdometerBroken,
-		"branch_id":         vehicle.BranchID,
-		"notes":             vehicle.Notes,
-		"vehicle_type":      vehicle.VehicleType,
+		"branch_id":          vehicle.BranchID,
+		"notes":              vehicle.Notes,
+		"vehicle_type":       vehicle.VehicleType,
 	}).Error
 }
-
 
 func (r *gormVehicleRepository) FindAll(ctx context.Context, filter dto.VehicleFilter) ([]domain.Vehicle, int64, error) {
 	var vehicles []domain.Vehicle
@@ -2044,8 +2042,6 @@ func (r *gormSupportTicketRepository) FindAll(ctx context.Context, filter dto.Su
 	err := q.Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
 	return list, total, err
 }
-
-
 
 type gormNotificationRepository struct {
 	db *gorm.DB
@@ -2740,5 +2736,3 @@ func (r *gormOTPRepository) InvalidatePreviousPending(ctx context.Context, natio
 			"updated_at": time.Now(),
 		}).Error
 }
-
-

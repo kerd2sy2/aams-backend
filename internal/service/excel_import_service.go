@@ -69,15 +69,16 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 	headerRowIndex := 2
 	headerRow := rows[headerRowIndex]
 
-	colSerial := 0      // A: م
-	colIdent := 1       // B: المعرف
-	colApp := 2         // C: التطبيق
-	colDriver := 3      // D: الاسم / المندوب
-	colNinja := 4       // E: نينجا
-	colKeeta := 5       // F: كيتا
-	colToyo := 6        // G: تويو
-	colPlate := 7       // H: رقم اللوحة
-	colNotes := 8       // I: ملاحظات
+	colSerial := 0 // A: م
+	colIdent := 1  // B: المعرف
+	colApp := 2    // C: التطبيق
+	colBranch := -1 // الفرع
+	colDriver := 3 // D: الاسم / المندوب
+	colNinja := 4  // E: نينجا
+	colKeeta := 5  // F: كيتا
+	colToyo := 6   // G: تويو
+	colPlate := 7  // H: رقم اللوحة
+	colNotes := 8  // I: ملاحظات
 
 	// Dynamic detection of header row & columns if headers are slightly shifted
 	for rIdx := 0; rIdx < len(rows) && rIdx < 5; rIdx++ {
@@ -91,6 +92,9 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 			}
 			if strings.Contains(trimCell, "التطبيق") {
 				colApp = cIdx
+			}
+			if strings.Contains(trimCell, "الفرع") {
+				colBranch = cIdx
 			}
 			if strings.Contains(trimCell, "الاسم") || strings.Contains(trimCell, "المندوب") {
 				colDriver = cIdx
@@ -208,10 +212,16 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 			}
 		}
 
+		branchVal := ""
+		if colBranch >= 0 {
+			branchVal = getCell(r, colBranch)
+		}
+
 		parsedRow := dto.ParsedExcelRow{
 			Serial:        serial,
 			Identifier:    identName,
 			App:           appName,
+			Branch:        branchVal,
 			DriverName:    driverName,
 			NinjaOrders:   ninjaCount,
 			KeetaOrders:   keetaCount,
@@ -332,6 +342,10 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 			}
 			identID = &ident.ID
 			activeIdentifiersForAlerts[ident.ID] = ident
+			if row.Branch != "" && ident.Branch != row.Branch {
+				ident.Branch = row.Branch
+				_ = s.targetRepo.UpdateIdentifier(ctx, ident)
+			}
 		}
 
 		// Find or Create Driver
@@ -363,6 +377,7 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 			IdentifierID:  identID,
 			DriverID:      driver.ID,
 			AppName:       row.App,
+			Branch:        row.Branch,
 			OrdersCount:   row.TotalOrders,
 			PlateNumber:   row.PlateNumber,
 			Notes:         row.Notes,

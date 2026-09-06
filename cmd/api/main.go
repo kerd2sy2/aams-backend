@@ -436,14 +436,13 @@ func main() {
 		protected.DELETE("/users/:id", adminHandler.Delete)
 		protected.POST("/users/change-password", adminHandler.ChangePassword)
 
-		// Roles & Permissions Management 
+		// Roles & Permissions Management
 		protected.GET("/roles", roleHandler.GetAll)
 		protected.POST("/roles", roleHandler.Create)
 		protected.GET("/roles/:id", roleHandler.GetByID)
 		protected.PUT("/roles/:id", roleHandler.Update)
 		protected.DELETE("/roles/:id", roleHandler.Delete)
 		protected.GET("/permissions", roleHandler.GetPermissions)
-
 
 		// Branch Management
 		protected.GET("/branches", branchHandler.GetAll)
@@ -613,7 +612,7 @@ func checkIqamaExpirations(db *gorm.DB) {
 	// Find all employees whose iqama expires in <= 60 days
 	var emps []domain.Employee
 	threshold := time.Now().AddDate(0, 0, 60)
-	
+
 	if err := db.Where("iqama_expiration_date IS NOT NULL AND iqama_expiration_date <= ?", threshold).Find(&emps).Error; err != nil {
 		log.Printf("[Cron] Error checking iqama expirations: %v", err)
 		return
@@ -621,7 +620,7 @@ func checkIqamaExpirations(db *gorm.DB) {
 
 	todayStr := time.Now().Format("2006-01-02")
 	count := 0
-	
+
 	for _, emp := range emps {
 		// Check if a notification already exists for today
 		var existing domain.Notification
@@ -640,7 +639,7 @@ func checkIqamaExpirations(db *gorm.DB) {
 				expTime = time.Now()
 			}
 			daysLeft := int(time.Until(expTime).Hours() / 24)
-			
+
 			title := "تنبيه اقتراب انتهاء إقامة"
 			body := "إقامة الموظف " + emp.Name + " تنتهي بعد " + fmt.Sprintf("%d", daysLeft) + " يوم."
 			if daysLeft <= 0 {
@@ -660,9 +659,8 @@ func checkIqamaExpirations(db *gorm.DB) {
 			count++
 		}
 	}
-	
+
 	if count > 0 {
 		log.Printf("[Cron] Generated %d iqama expiration notifications", count)
 	}
 }
-

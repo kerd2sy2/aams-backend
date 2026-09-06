@@ -12,6 +12,7 @@ type Identifier struct {
 	ID            uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
 	Name          string         `gorm:"type:varchar(100);index;not null" json:"name"`
 	AppName       string         `gorm:"type:varchar(50);index;default:''" json:"app_name"`
+	Branch        string         `gorm:"type:varchar(50);index;default:''" json:"branch,omitempty"`
 	Code          string         `gorm:"type:varchar(50);index" json:"code,omitempty"`
 	MonthlyTarget int            `gorm:"default:460" json:"monthly_target"`
 	DailyTarget   int            `gorm:"default:15" json:"daily_target"`
@@ -37,14 +38,14 @@ func (i *Identifier) BeforeCreate(tx *gorm.DB) error {
 
 // Driver model represents a driver who works under identifiers (e.g. "لابون شندر", "مومن جمان")
 type Driver struct {
-	ID          uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
-	Name        string         `gorm:"type:varchar(150);uniqueIndex;not null" json:"name"`
-	EmployeeID  *uuid.UUID     `gorm:"type:char(36);index" json:"employee_id,omitempty"`
-	Phone       string         `gorm:"type:varchar(20)" json:"phone,omitempty"`
-	IsActive    bool           `gorm:"default:true" json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID         uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
+	Name       string         `gorm:"type:varchar(150);uniqueIndex;not null" json:"name"`
+	EmployeeID *uuid.UUID     `gorm:"type:char(36);index" json:"employee_id,omitempty"`
+	Phone      string         `gorm:"type:varchar(20)" json:"phone,omitempty"`
+	IsActive   bool           `gorm:"default:true" json:"is_active"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 func (d *Driver) BeforeCreate(tx *gorm.DB) error {
@@ -75,18 +76,18 @@ func (id *IdentifierDriver) BeforeCreate(tx *gorm.DB) error {
 
 // ImportBatch tracks each Excel upload action
 type ImportBatch struct {
-	ID                uuid.UUID `gorm:"type:char(36);primary_key" json:"id"`
-	FileName          string    `gorm:"type:varchar(255);not null" json:"file_name"`
-	OrderDate         string    `gorm:"type:varchar(10);index;not null" json:"order_date"` // YYYY-MM-DD
-	UploadedBy        uuid.UUID `gorm:"type:char(36);index" json:"uploaded_by"`
-	UploadedByName    string    `gorm:"type:varchar(100)" json:"uploaded_by_name"`
-	TotalRows         int       `gorm:"default:0" json:"total_rows"`
-	TotalOrders       int       `gorm:"default:0" json:"total_orders"`
-	IdentifiersCount  int       `gorm:"default:0" json:"identifiers_count"`
-	DriversCount      int       `gorm:"default:0" json:"drivers_count"`
-	Status            string    `gorm:"type:varchar(20);default:'COMPLETED'" json:"status"` // PREVIEW, COMPLETED, CANCELLED
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID               uuid.UUID `gorm:"type:char(36);primary_key" json:"id"`
+	FileName         string    `gorm:"type:varchar(255);not null" json:"file_name"`
+	OrderDate        string    `gorm:"type:varchar(10);index;not null" json:"order_date"` // YYYY-MM-DD
+	UploadedBy       uuid.UUID `gorm:"type:char(36);index" json:"uploaded_by"`
+	UploadedByName   string    `gorm:"type:varchar(100)" json:"uploaded_by_name"`
+	TotalRows        int       `gorm:"default:0" json:"total_rows"`
+	TotalOrders      int       `gorm:"default:0" json:"total_orders"`
+	IdentifiersCount int       `gorm:"default:0" json:"identifiers_count"`
+	DriversCount     int       `gorm:"default:0" json:"drivers_count"`
+	Status           string    `gorm:"type:varchar(20);default:'COMPLETED'" json:"status"` // PREVIEW, COMPLETED, CANCELLED
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 func (b *ImportBatch) BeforeCreate(tx *gorm.DB) error {
@@ -104,6 +105,7 @@ type DailyOrder struct {
 	IdentifierID  *uuid.UUID  `gorm:"type:char(36);index" json:"identifier_id,omitempty"`
 	DriverID      uuid.UUID   `gorm:"type:char(36);index;not null" json:"driver_id"`
 	AppName       string      `gorm:"type:varchar(50);index" json:"app_name"` // نينجا، كيتا، تويو، إلخ
+	Branch        string      `gorm:"type:varchar(50);index;default:''" json:"branch,omitempty"` // الفرع 1، الفرع 2، إلخ
 	OrdersCount   int         `gorm:"not null" json:"orders_count"`
 	PlateNumber   string      `gorm:"type:varchar(50)" json:"plate_number,omitempty"`
 	Notes         string      `gorm:"type:text" json:"notes,omitempty"`

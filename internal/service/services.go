@@ -790,7 +790,6 @@ func (s *adminService) UpdateAdmin(ctx context.Context, id uuid.UUID, req dto.Up
 	return admin, nil
 }
 
-
 func (s *adminService) DeleteAdmin(ctx context.Context, id uuid.UUID) error {
 	_, err := s.adminRepo.FindByID(ctx, id)
 	if err != nil {
@@ -888,14 +887,14 @@ func (s *employeeService) Create(ctx context.Context, req dto.CreateEmployeeRequ
 	}
 
 	emp := &domain.Employee{
-		ID:                  employeeID,
-		Name:                req.Name,
-		JobRole:             req.JobRole,
-		EmployeeNumber:      req.EmployeeNumber,
-		Phone:               req.Phone,
-		PersonalImage:       req.PersonalImage,
-		NationalID:          req.NationalID,
-		IqamaExpirationDate: req.IqamaExpirationDate,
+		ID:                       employeeID,
+		Name:                     req.Name,
+		JobRole:                  req.JobRole,
+		EmployeeNumber:           req.EmployeeNumber,
+		Phone:                    req.Phone,
+		PersonalImage:            req.PersonalImage,
+		NationalID:               req.NationalID,
+		IqamaExpirationDate:      req.IqamaExpirationDate,
 		NationalIDImage:          req.NationalIDImage,
 		DrivingLicenseImage:      req.DrivingLicenseImage,
 		PassportImage:            req.PassportImage,
@@ -3429,7 +3428,6 @@ func (s *vehicleService) Create(ctx context.Context, req dto.CreateVehicleReques
 	return vehicle, nil
 }
 
-
 func (s *vehicleService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateVehicleRequest) (*domain.Vehicle, error) {
 	vehicle, err := s.vehicleRepo.FindByID(ctx, id)
 	if err != nil {
@@ -4245,8 +4243,6 @@ func (s *supportTicketService) GetAll(ctx context.Context, filter dto.SupportTic
 	return s.repo.FindAll(ctx, filter)
 }
 
-
-
 type NotificationService interface {
 	GetMyNotifications(ctx context.Context, adminID uuid.UUID, status string) ([]dto.NotificationResponse, error)
 	MarkAsRead(ctx context.Context, id uuid.UUID, adminID uuid.UUID) error
@@ -4511,5 +4507,3 @@ func (s *otpService) GetOTPList(ctx context.Context, query dto.OTPListQuery) ([]
 func (s *otpService) CancelOTP(ctx context.Context, id uuid.UUID) error {
 	return s.otpRepo.Cancel(ctx, id)
 }
-
-

@@ -45,24 +45,24 @@ func (r *Role) BeforeCreate(tx *gorm.DB) error {
 
 // Admin model for JWT Authentication
 type Admin struct {
-	ID          uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
-	Email       string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"email"`
-	Username    string         `gorm:"type:varchar(50);uniqueIndex" json:"username"`
-	Phone       string         `gorm:"type:varchar(20);uniqueIndex" json:"phone"`
-	Password    string         `gorm:"type:varchar(255);not null" json:"-"`
-	Name        string         `gorm:"type:varchar(100);not null" json:"name"`
-	Role        string         `gorm:"type:varchar(50);default:ADMIN" json:"role"`
-	RoleID      *uuid.UUID     `gorm:"type:char(36);index" json:"role_id"`
-	RoleObj     *Role          `gorm:"foreignKey:RoleID" json:"role_obj,omitempty"`
-	Permissions string         `gorm:"type:text" json:"permissions"` // Optional user-specific permissions
-	GoogleID    string         `gorm:"type:varchar(100);index" json:"google_id,omitempty"`
-	GoogleEmail string         `gorm:"type:varchar(150);index" json:"google_email,omitempty"`
-	GoogleAvatar string        `gorm:"type:varchar(255)" json:"google_avatar,omitempty"`
-	BranchID    *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
-	Branch      *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID           uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
+	Email        string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"email"`
+	Username     string         `gorm:"type:varchar(50);uniqueIndex" json:"username"`
+	Phone        string         `gorm:"type:varchar(20);uniqueIndex" json:"phone"`
+	Password     string         `gorm:"type:varchar(255);not null" json:"-"`
+	Name         string         `gorm:"type:varchar(100);not null" json:"name"`
+	Role         string         `gorm:"type:varchar(50);default:ADMIN" json:"role"`
+	RoleID       *uuid.UUID     `gorm:"type:char(36);index" json:"role_id"`
+	RoleObj      *Role          `gorm:"foreignKey:RoleID" json:"role_obj,omitempty"`
+	Permissions  string         `gorm:"type:text" json:"permissions"` // Optional user-specific permissions
+	GoogleID     string         `gorm:"type:varchar(100);index" json:"google_id,omitempty"`
+	GoogleEmail  string         `gorm:"type:varchar(150);index" json:"google_email,omitempty"`
+	GoogleAvatar string         `gorm:"type:varchar(255)" json:"google_avatar,omitempty"`
+	BranchID     *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
+	Branch       *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 func (a *Admin) BeforeCreate(tx *gorm.DB) error {
@@ -72,43 +72,42 @@ func (a *Admin) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-
 // Employee model
 type Employee struct {
-	ID                    uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
-	Name                  string         `gorm:"type:varchar(150);not null;index" json:"name"`
-	JobRole               string         `gorm:"type:varchar(50);default:'DRIVER';index" json:"job_role"`
-	EmployeeNumber        string         `gorm:"type:varchar(50);index" json:"employee_number"`
-	Phone                 string         `gorm:"type:varchar(20);index" json:"phone"`
-	PersonalImage         string         `gorm:"type:text" json:"personal_image"`
-	NationalID            string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"national_id"`
-	PasswordHash          string         `gorm:"type:varchar(255)" json:"-"`
-	IqamaExpirationDate   *string        `gorm:"type:varchar(20)" json:"iqama_expiration_date"` // YYYY-MM-DD
-	NationalIDImage           string         `gorm:"type:text" json:"national_id_image"`
-	DrivingLicenseImage       string         `gorm:"type:text" json:"driving_license_image"`
-	PassportImage             string         `gorm:"type:text" json:"passport_image"`
-	VehicleRegistrationImage  string         `gorm:"type:text" json:"vehicle_registration_image"`
-	KeyNumber             string         `gorm:"type:varchar(50)" json:"key_number"`
-	MotorcycleNumber      string         `gorm:"type:varchar(50)" json:"motorcycle_number"`
-	ApplicationID         string         `gorm:"type:varchar(50);index" json:"application_id"`
-	ApplicationType       string         `gorm:"type:varchar(50);index" json:"application_type"`
-	VehicleType           string         `gorm:"type:varchar(20);default:'motorcycle'" json:"vehicle_type"` // "car" or "motorcycle"
-	Shift                 string         `gorm:"type:varchar(20);default:'morning'" json:"shift"`           // "morning" or "evening"
-	BranchID              *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
-	Branch                *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
-	Barcode               string         `gorm:"type:text" json:"barcode"`
-	QRCode                string         `gorm:"type:text" json:"qr_code"`
-	TotalDistance         float64        `gorm:"default:0" json:"total_distance"`
-	LastOilChangeDistance float64        `gorm:"default:0" json:"last_oil_change_distance"`
-	Latitude              *float64       `gorm:"type:decimal(10,8)" json:"latitude"`
-	Longitude             *float64       `gorm:"type:decimal(11,8)" json:"longitude"`
-	LastLocationAt        *time.Time     `json:"last_location_at"`
-	IsVPN                 bool           `gorm:"default:false" json:"is_vpn"`
-	IsMockLocation        bool           `gorm:"default:false" json:"is_mock_location"`
-	OutOfZone             bool           `gorm:"default:false" json:"out_of_zone"`
-	CreatedAt             time.Time      `json:"created_at"`
-	UpdatedAt             time.Time      `json:"updated_at"`
-	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                       uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
+	Name                     string         `gorm:"type:varchar(150);not null;index" json:"name"`
+	JobRole                  string         `gorm:"type:varchar(50);default:'DRIVER';index" json:"job_role"`
+	EmployeeNumber           string         `gorm:"type:varchar(50);index" json:"employee_number"`
+	Phone                    string         `gorm:"type:varchar(20);index" json:"phone"`
+	PersonalImage            string         `gorm:"type:text" json:"personal_image"`
+	NationalID               string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"national_id"`
+	PasswordHash             string         `gorm:"type:varchar(255)" json:"-"`
+	IqamaExpirationDate      *string        `gorm:"type:varchar(20)" json:"iqama_expiration_date"` // YYYY-MM-DD
+	NationalIDImage          string         `gorm:"type:text" json:"national_id_image"`
+	DrivingLicenseImage      string         `gorm:"type:text" json:"driving_license_image"`
+	PassportImage            string         `gorm:"type:text" json:"passport_image"`
+	VehicleRegistrationImage string         `gorm:"type:text" json:"vehicle_registration_image"`
+	KeyNumber                string         `gorm:"type:varchar(50)" json:"key_number"`
+	MotorcycleNumber         string         `gorm:"type:varchar(50)" json:"motorcycle_number"`
+	ApplicationID            string         `gorm:"type:varchar(50);index" json:"application_id"`
+	ApplicationType          string         `gorm:"type:varchar(50);index" json:"application_type"`
+	VehicleType              string         `gorm:"type:varchar(20);default:'motorcycle'" json:"vehicle_type"` // "car" or "motorcycle"
+	Shift                    string         `gorm:"type:varchar(20);default:'morning'" json:"shift"`           // "morning" or "evening"
+	BranchID                 *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
+	Branch                   *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
+	Barcode                  string         `gorm:"type:text" json:"barcode"`
+	QRCode                   string         `gorm:"type:text" json:"qr_code"`
+	TotalDistance            float64        `gorm:"default:0" json:"total_distance"`
+	LastOilChangeDistance    float64        `gorm:"default:0" json:"last_oil_change_distance"`
+	Latitude                 *float64       `gorm:"type:decimal(10,8)" json:"latitude"`
+	Longitude                *float64       `gorm:"type:decimal(11,8)" json:"longitude"`
+	LastLocationAt           *time.Time     `json:"last_location_at"`
+	IsVPN                    bool           `gorm:"default:false" json:"is_vpn"`
+	IsMockLocation           bool           `gorm:"default:false" json:"is_mock_location"`
+	OutOfZone                bool           `gorm:"default:false" json:"out_of_zone"`
+	CreatedAt                time.Time      `json:"created_at"`
+	UpdatedAt                time.Time      `json:"updated_at"`
+	DeletedAt                gorm.DeletedAt `gorm:"index" json:"-"`
 
 	WorkSessions []WorkSession `gorm:"foreignKey:EmployeeID;constraint:OnDelete:SET NULL" json:"work_sessions,omitempty"`
 }
@@ -128,30 +127,30 @@ const (
 
 // WorkSession model
 type WorkSession struct {
-	ID               uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
-	EmployeeID       *uuid.UUID     `gorm:"type:char(36);index" json:"employee_id"`
-	Employee         *Employee      `gorm:"foreignKey:EmployeeID;constraint:OnDelete:SET NULL" json:"employee,omitempty"`
-	StartTime        time.Time      `gorm:"not null" json:"start_time"`
-	EndTime          *time.Time     `json:"end_time"`
-	StartKM          float64        `gorm:"not null" json:"start_km"`
-	EndKM            float64        `gorm:"default:0" json:"end_km"`
-	Distance         float64        `gorm:"default:0" json:"distance"`
-	OrdersCount      int            `gorm:"default:0" json:"orders_count"`
-	FuelCost         float64        `gorm:"default:0" json:"fuel_cost"`
-	ApplicationID    string         `gorm:"type:varchar(50)" json:"application_id"`
-	ApplicationType  string         `gorm:"type:varchar(50)" json:"application_type"`
-	VehicleType      string         `gorm:"type:varchar(20)" json:"vehicle_type"`      // override for this shift: "car" or "motorcycle"
-	MotorcycleNumber string         `gorm:"type:varchar(50)" json:"motorcycle_number"` // رقم الدباب لهذا الشفت (قد يختلف عن المسجل)
-	StartKMImage     string         `gorm:"type:text" json:"start_km_image"`           // صورة عداد البداية
-	EndKMImage       string         `gorm:"type:text" json:"end_km_image"`             // صورة عداد النهاية
-	IsReviewed           bool           `gorm:"default:false;index" json:"is_reviewed"`                      // حالة مراجعة وتصديق المشرف
-	ReviewNotes          string         `gorm:"type:text" json:"review_notes"`                               // ملاحظات المشرف
-	ReviewedBy           *uuid.UUID     `gorm:"type:char(36)" json:"reviewed_by"`                            // المشرف المراجع
-	IsEditedBySupervisor bool           `gorm:"default:false;index" json:"is_edited_by_supervisor"`           // هل تم تعديل البيانات بواسطة المشرف
-	EditedByName         string         `gorm:"type:varchar(100)" json:"edited_by_name"`                     // اسم المشرف الذي قام بالتعديل
-	OriginalOrdersCount  int            `gorm:"default:0" json:"original_orders_count"`                      // عدد الطلبات الأصلي المدخل من المندوب
-	OriginalEndKM        float64        `gorm:"default:0" json:"original_end_km"`                            // عداد النهاية الأصلي المدخل من المندوب
-	OriginalStartKM      float64        `gorm:"default:0" json:"original_start_km"`                          // عداد البداية الأصلي المدخل من المندوب
+	ID                   uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
+	EmployeeID           *uuid.UUID     `gorm:"type:char(36);index" json:"employee_id"`
+	Employee             *Employee      `gorm:"foreignKey:EmployeeID;constraint:OnDelete:SET NULL" json:"employee,omitempty"`
+	StartTime            time.Time      `gorm:"not null" json:"start_time"`
+	EndTime              *time.Time     `json:"end_time"`
+	StartKM              float64        `gorm:"not null" json:"start_km"`
+	EndKM                float64        `gorm:"default:0" json:"end_km"`
+	Distance             float64        `gorm:"default:0" json:"distance"`
+	OrdersCount          int            `gorm:"default:0" json:"orders_count"`
+	FuelCost             float64        `gorm:"default:0" json:"fuel_cost"`
+	ApplicationID        string         `gorm:"type:varchar(50)" json:"application_id"`
+	ApplicationType      string         `gorm:"type:varchar(50)" json:"application_type"`
+	VehicleType          string         `gorm:"type:varchar(20)" json:"vehicle_type"`               // override for this shift: "car" or "motorcycle"
+	MotorcycleNumber     string         `gorm:"type:varchar(50)" json:"motorcycle_number"`          // رقم الدباب لهذا الشفت (قد يختلف عن المسجل)
+	StartKMImage         string         `gorm:"type:text" json:"start_km_image"`                    // صورة عداد البداية
+	EndKMImage           string         `gorm:"type:text" json:"end_km_image"`                      // صورة عداد النهاية
+	IsReviewed           bool           `gorm:"default:false;index" json:"is_reviewed"`             // حالة مراجعة وتصديق المشرف
+	ReviewNotes          string         `gorm:"type:text" json:"review_notes"`                      // ملاحظات المشرف
+	ReviewedBy           *uuid.UUID     `gorm:"type:char(36)" json:"reviewed_by"`                   // المشرف المراجع
+	IsEditedBySupervisor bool           `gorm:"default:false;index" json:"is_edited_by_supervisor"` // هل تم تعديل البيانات بواسطة المشرف
+	EditedByName         string         `gorm:"type:varchar(100)" json:"edited_by_name"`            // اسم المشرف الذي قام بالتعديل
+	OriginalOrdersCount  int            `gorm:"default:0" json:"original_orders_count"`             // عدد الطلبات الأصلي المدخل من المندوب
+	OriginalEndKM        float64        `gorm:"default:0" json:"original_end_km"`                   // عداد النهاية الأصلي المدخل من المندوب
+	OriginalStartKM      float64        `gorm:"default:0" json:"original_start_km"`                 // عداد البداية الأصلي المدخل من المندوب
 	Notes                string         `gorm:"type:text" json:"notes"`
 	Status               string         `gorm:"type:varchar(20);default:ACTIVE;index" json:"status"`
 	CreatedAt            time.Time      `json:"created_at"`
@@ -464,23 +463,23 @@ const (
 
 // Vehicle model for motorcycle & car assets (ط§ظ„ط«ظˆط§ط¨طھ / ط§ظ„ط¯ط¨ط§ط¨ط§طھ)
 type Vehicle struct {
-	ID                    uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
-	PlateNumber           string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"plate_number"` // ط±ظ‚ظ… ط§ظ„ظ„ظˆط­ط© / ط§ظ„ط¯ط¨ط§ط¨
-	VehicleType           string         `gorm:"type:varchar(20);default:'motorcycle'" json:"vehicle_type"` // "motorcycle" or "car"
-	Brand                 string         `gorm:"type:varchar(100)" json:"brand"`                           // ظ…ط§ط±ظƒط© ط§ظ„ط¯ط¨ط§ط¨ (ظ‡ظˆظ†ط¯ط§طŒ ط³ظˆط²ظˆظƒظٹ...)
-	ModelYear             string         `gorm:"type:varchar(20)" json:"model_year"`                       // ط³ظ†ط© ط§ظ„طµظ†ط¹
-	KeyNumber             string         `gorm:"type:varchar(50)" json:"key_number"`                       // ط±ظ‚ظ… ط§ظ„ظ…ظپطھط§ط­ ط§ظ„ظ…ط±طھط¨ط·
-	CurrentKM             float64        `gorm:"default:0" json:"current_km"`                              // ط§ظ„ط¹ط¯ط§ط¯ ط§ظ„ط­ط§ظ„ظٹ ط§ظ„ظ…ط³ط¬ظ„
-	LastOilChangeKM       float64        `gorm:"default:0" json:"last_oil_change_km"`                      // ظ‚ط±ط§ط،ط© ط§ظ„ط¹ط¯ط§ط¯ ط¹ظ†ط¯ ط¢ط®ط± طھط؛ظٹظٹط± ط²ظٹطھ
-	TotalDistance         float64        `gorm:"default:0" json:"total_distance"`                          // ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ظƒظٹظ„ظˆظ…طھط±ط§طھ ط§ظ„ظ…ظ‚ط·ظˆط¹ط©
-	Status                string         `gorm:"type:varchar(20);default:'AVAILABLE';index" json:"status"` // "AVAILABLE", "IN_USE", "MAINTENANCE"
-	IsOdometerBroken      bool           `gorm:"default:false;index" json:"is_odometer_broken"`             // عداد المسافات تالف / معطل
-	BranchID              *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
-	Branch                *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
-	Notes                 string         `gorm:"type:text" json:"notes"`
-	CreatedAt             time.Time      `json:"created_at"`
-	UpdatedAt             time.Time      `json:"updated_at"`
-	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
+	ID               uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
+	PlateNumber      string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"plate_number"` // ط±ظ‚ظ… ط§ظ„ظ„ظˆط­ط© / ط§ظ„ط¯ط¨ط§ط¨
+	VehicleType      string         `gorm:"type:varchar(20);default:'motorcycle'" json:"vehicle_type"` // "motorcycle" or "car"
+	Brand            string         `gorm:"type:varchar(100)" json:"brand"`                            // ظ…ط§ط±ظƒط© ط§ظ„ط¯ط¨ط§ط¨ (ظ‡ظˆظ†ط¯ط§طŒ ط³ظˆط²ظˆظƒظٹ...)
+	ModelYear        string         `gorm:"type:varchar(20)" json:"model_year"`                        // ط³ظ†ط© ط§ظ„طµظ†ط¹
+	KeyNumber        string         `gorm:"type:varchar(50)" json:"key_number"`                        // ط±ظ‚ظ… ط§ظ„ظ…ظپطھط§ط­ ط§ظ„ظ…ط±طھط¨ط·
+	CurrentKM        float64        `gorm:"default:0" json:"current_km"`                               // ط§ظ„ط¹ط¯ط§ط¯ ط§ظ„ط­ط§ظ„ظٹ ط§ظ„ظ…ط³ط¬ظ„
+	LastOilChangeKM  float64        `gorm:"default:0" json:"last_oil_change_km"`                       // ظ‚ط±ط§ط،ط© ط§ظ„ط¹ط¯ط§ط¯ ط¹ظ†ط¯ ط¢ط®ط± طھط؛ظٹظٹط± ط²ظٹطھ
+	TotalDistance    float64        `gorm:"default:0" json:"total_distance"`                           // ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ظƒظٹظ„ظˆظ…طھط±ط§طھ ط§ظ„ظ…ظ‚ط·ظˆط¹ط©
+	Status           string         `gorm:"type:varchar(20);default:'AVAILABLE';index" json:"status"`  // "AVAILABLE", "IN_USE", "MAINTENANCE"
+	IsOdometerBroken bool           `gorm:"default:false;index" json:"is_odometer_broken"`             // عداد المسافات تالف / معطل
+	BranchID         *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
+	Branch           *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
+	Notes            string         `gorm:"type:text" json:"notes"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 func (v *Vehicle) BeforeCreate(tx *gorm.DB) error {
@@ -681,8 +680,6 @@ func (t *SupportTicket) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-
-
 type Notification struct {
 	ID         uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	BranchID   *uuid.UUID `gorm:"type:uuid;index" json:"branch_id"`
@@ -706,4 +703,3 @@ func (n *Notification) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
-

@@ -180,7 +180,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
-
 type EmployeeHandler struct {
 	empService     service.EmployeeService
 	storageService service.StorageService
@@ -1807,7 +1806,6 @@ func (h *AdminHandler) GetAll(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-
 func (h *AdminHandler) ChangePassword(c *gin.Context) {
 	var req dto.ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1905,7 +1903,6 @@ func (h *AuditHandler) ClearLogs(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "تم تفريغ وحذف سجل العمليات بالكامل من قاعدة البيانات"})
 }
-
 
 // --- Attendance Handler ---
 
@@ -3656,7 +3653,3 @@ func (h *OTPHandler) CancelOTP(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "تم إلغاء رمز التحقق بنجاح"})
 }
-
-
-
-

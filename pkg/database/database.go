@@ -9,12 +9,11 @@ import (
 	"delivery-backend/internal/domain"
 	"delivery-backend/pkg/config"
 
-	"golang.org/x/crypto/bcrypt"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-
 )
 
 func InitDB(cfg *config.Config) (*gorm.DB, error) {
@@ -391,5 +390,3 @@ func seedTargetSettings(db *gorm.DB) {
 		}
 	}
 }
-
-

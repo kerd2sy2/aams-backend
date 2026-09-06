@@ -84,7 +84,8 @@ func (h *TargetHandler) ConfirmExcelImport(c *gin.Context) {
 // GetDashboardSummary returns top metrics, charts, and alert counts
 func (h *TargetHandler) GetDashboardSummary(c *gin.Context) {
 	month := strings.TrimSpace(c.Query("month"))
-	summary, err := h.targetService.GetDashboardSummary(c.Request.Context(), month)
+	branch := strings.TrimSpace(c.Query("branch"))
+	summary, err := h.targetService.GetDashboardSummary(c.Request.Context(), month, branch)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -97,8 +98,9 @@ func (h *TargetHandler) ListIdentifiers(c *gin.Context) {
 	search := strings.TrimSpace(c.Query("search"))
 	status := strings.TrimSpace(c.Query("status"))
 	month := strings.TrimSpace(c.Query("month"))
+	branch := strings.TrimSpace(c.Query("branch"))
 
-	list, err := h.targetService.ListIdentifiers(c.Request.Context(), search, status, month)
+	list, err := h.targetService.ListIdentifiers(c.Request.Context(), search, status, month, branch)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -200,8 +202,9 @@ func (h *TargetHandler) DeleteIdentifier(c *gin.Context) {
 func (h *TargetHandler) ListDrivers(c *gin.Context) {
 	search := strings.TrimSpace(c.Query("search"))
 	month := strings.TrimSpace(c.Query("month"))
+	branch := strings.TrimSpace(c.Query("branch"))
 
-	list, err := h.targetService.ListDrivers(c.Request.Context(), search, month)
+	list, err := h.targetService.ListDrivers(c.Request.Context(), search, month, branch)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -212,9 +215,10 @@ func (h *TargetHandler) ListDrivers(c *gin.Context) {
 // ListAlerts returns underperformance alerts
 func (h *TargetHandler) ListAlerts(c *gin.Context) {
 	date := strings.TrimSpace(c.Query("date"))
+	branch := strings.TrimSpace(c.Query("branch"))
 	unresolved := c.Query("unresolved_only") == "true"
 
-	list, err := h.targetService.ListAlerts(c.Request.Context(), date, unresolved)
+	list, err := h.targetService.ListAlerts(c.Request.Context(), date, unresolved, branch)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -171,16 +171,15 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
 
-
 // Employee DTOs
 type CreateEmployeeRequest struct {
-	Name                string     `json:"name" binding:"required"`
-	JobRole             string     `json:"job_role"`
-	EmployeeNumber      string     `json:"employee_number"`
-	Phone               string     `json:"phone"`
-	PersonalImage       string     `json:"personal_image"`
-	NationalID          string     `json:"national_id" binding:"required"`
-	IqamaExpirationDate *string    `json:"iqama_expiration_date"`
+	Name                     string     `json:"name" binding:"required"`
+	JobRole                  string     `json:"job_role"`
+	EmployeeNumber           string     `json:"employee_number"`
+	Phone                    string     `json:"phone"`
+	PersonalImage            string     `json:"personal_image"`
+	NationalID               string     `json:"national_id" binding:"required"`
+	IqamaExpirationDate      *string    `json:"iqama_expiration_date"`
 	NationalIDImage          string     `json:"national_id_image"`
 	DrivingLicenseImage      string     `json:"driving_license_image"`
 	PassportImage            string     `json:"passport_image"`
@@ -275,8 +274,8 @@ type PaginatedEmployeeResponse struct {
 // Work Session DTOs
 type StartWorkRequest struct {
 	EmployeeID       string  `json:"employee_id" binding:"required,uuid"`
-	StartKM          float64 `json:"start_km" binding:"gte=0"`             // not required — 0 is valid when odometer is broken
-	StartKMImage     string  `json:"start_km_image"`    // صورة عداد البداية
+	StartKM          float64 `json:"start_km" binding:"gte=0"` // not required — 0 is valid when odometer is broken
+	StartKMImage     string  `json:"start_km_image"`           // صورة عداد البداية
 	ApplicationID    string  `json:"application_id"`
 	ApplicationType  string  `json:"application_type"`
 	VehicleType      string  `json:"vehicle_type"`      // override for this shift
@@ -286,15 +285,15 @@ type StartWorkRequest struct {
 
 type EndWorkRequest struct {
 	EmployeeID      string  `json:"employee_id" binding:"required,uuid"`
-	EndKM           float64 `json:"end_km" binding:"gte=0"`               // not required — 0 is valid when odometer is broken
-	EndKMImage      string  `json:"end_km_image"`      // صورة عداد النهاية
+	EndKM           float64 `json:"end_km" binding:"gte=0"` // not required — 0 is valid when odometer is broken
+	EndKMImage      string  `json:"end_km_image"`           // صورة عداد النهاية
 	OrdersCount     int     `json:"orders_count"`
 	FuelCost        float64 `json:"fuel_cost"`
-	ApplicationID   string   `json:"application_id"`
-	ApplicationType string   `json:"application_type"`
-	Notes           string   `json:"notes"`
-	IsReviewed      *bool    `json:"is_reviewed"`
-	ReviewNotes     string   `json:"review_notes"`
+	ApplicationID   string  `json:"application_id"`
+	ApplicationType string  `json:"application_type"`
+	Notes           string  `json:"notes"`
+	IsReviewed      *bool   `json:"is_reviewed"`
+	ReviewNotes     string  `json:"review_notes"`
 }
 
 type ReviewWorkSessionRequest struct {
@@ -1009,6 +1008,3 @@ type BulkArchiveRequest struct {
 	Type string      `json:"type" binding:"required"`
 	IDs  []uuid.UUID `json:"ids" binding:"required"`
 }
-
-
-

@@ -109,4 +109,3 @@ func RequireRoles(allowedRoles ...string) gin.HandlerFunc {
 		c.Abort()
 	}
 }
-
