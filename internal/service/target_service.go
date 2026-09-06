@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -528,10 +529,18 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 	driverIdentsMap := make(map[uuid.UUID]map[string]bool)
 	driverAppsMap := make(map[uuid.UUID]map[string]bool)
 
+	// Preserve the exact sequence of drivers as they appear in the uploaded Excel sheet
+	driverSheetOrder := make(map[uuid.UUID]int)
+	sheetIndex := 0
+
 	for _, ord := range orders {
 		driverMonthOrders[ord.DriverID] += ord.OrdersCount
 		if ord.OrderDate == todayDate {
 			driverTodayOrders[ord.DriverID] += ord.OrdersCount
+			if _, exists := driverSheetOrder[ord.DriverID]; !exists {
+				driverSheetOrder[ord.DriverID] = sheetIndex
+				sheetIndex++
+			}
 		}
 		if ord.Identifier != nil {
 			if driverIdentsMap[ord.DriverID] == nil {
@@ -544,6 +553,14 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 				driverAppsMap[ord.DriverID] = make(map[string]bool)
 			}
 			driverAppsMap[ord.DriverID][ord.AppName] = true
+		}
+	}
+
+	// For drivers who have orders this month but not on today's date, continue sequence
+	for _, ord := range orders {
+		if _, exists := driverSheetOrder[ord.DriverID]; !exists {
+			driverSheetOrder[ord.DriverID] = sheetIndex
+			sheetIndex++
 		}
 	}
 
@@ -568,6 +585,22 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string) (
 			Apps:        apps,
 		})
 	}
+
+	// Sort result so drivers appearing in the sheet are ordered exactly as in the sheet!
+	sort.SliceStable(result, func(i, j int) bool {
+		orderI, hasI := driverSheetOrder[result[i].ID]
+		orderJ, hasJ := driverSheetOrder[result[j].ID]
+		if hasI && hasJ {
+			return orderI < orderJ
+		}
+		if hasI {
+			return true
+		}
+		if hasJ {
+			return false
+		}
+		return result[i].Name < result[j].Name
+	})
 
 	return result, nil
 }

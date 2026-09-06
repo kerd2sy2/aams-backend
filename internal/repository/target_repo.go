@@ -273,7 +273,7 @@ func (r *gormTargetRepository) GetOrdersForMonth(ctx context.Context, monthPrefi
 	// monthPrefix format: "YYYY-MM"
 	err := r.db.WithContext(ctx).Preload("Identifier").Preload("Driver").
 		Where("order_date LIKE ?", monthPrefix+"%").
-		Order("order_date ASC").Find(&orders).Error
+		Order("order_date ASC, created_at ASC, id ASC").Find(&orders).Error
 	return orders, err
 }
 
