@@ -57,6 +57,7 @@ type TargetRepository interface {
 	// Settings
 	GetTargetSetting(ctx context.Context, key string) (string, error)
 	SetTargetSetting(ctx context.Context, key, val string) error
+	UpdateAllIdentifiersTargets(ctx context.Context, monthlyTarget, dailyTarget int) error
 }
 
 type gormTargetRepository struct {
@@ -394,3 +395,19 @@ func (r *gormTargetRepository) SetTargetSetting(ctx context.Context, key, val st
 	}
 	return r.db.WithContext(ctx).Create(&newSetting).Error
 }
+
+func (r *gormTargetRepository) UpdateAllIdentifiersTargets(ctx context.Context, monthlyTarget, dailyTarget int) error {
+	updates := map[string]interface{}{}
+	if monthlyTarget > 0 {
+		updates["monthly_target"] = monthlyTarget
+	}
+	if dailyTarget > 0 {
+		updates["daily_target"] = dailyTarget
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	updates["updated_at"] = time.Now()
+	return r.db.WithContext(ctx).Model(&domain.Identifier{}).Where("is_active = ?", true).Updates(updates).Error
+}
+

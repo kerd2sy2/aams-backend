@@ -268,8 +268,7 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 
 		dailyRequired := 0.0
 		if remainingDays > 0 {
-			dailyRequired = float64(remainingTarget) / float64(remainingDays)
-			dailyRequired = math.Round(dailyRequired*10) / 10
+			dailyRequired = math.Round(float64(remainingTarget) / float64(remainingDays))
 		}
 
 		// Projection calculation
@@ -629,6 +628,9 @@ func (s *targetService) UpdateTargetSettings(ctx context.Context, monthlyTarget,
 	}
 	if dailyTarget > 0 {
 		_ = s.targetRepo.SetTargetSetting(ctx, "DEFAULT_DAILY_TARGET", strconv.Itoa(dailyTarget))
+	}
+	if monthlyTarget > 0 || dailyTarget > 0 {
+		_ = s.targetRepo.UpdateAllIdentifiersTargets(ctx, monthlyTarget, dailyTarget)
 	}
 	return nil
 }
