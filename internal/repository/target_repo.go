@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"delivery-backend/internal/domain"
@@ -14,7 +15,8 @@ type TargetRepository interface {
 	// Identifiers
 	FindIdentifierByID(ctx context.Context, id uuid.UUID) (*domain.Identifier, error)
 	FindIdentifierByName(ctx context.Context, name string) (*domain.Identifier, error)
-	FindOrCreateIdentifier(ctx context.Context, name string) (*domain.Identifier, error)
+	FindIdentifierByNameAndApp(ctx context.Context, name, appName string) (*domain.Identifier, error)
+	FindOrCreateIdentifier(ctx context.Context, name, appName string) (*domain.Identifier, error)
 	ListIdentifiers(ctx context.Context, search string, isActive *bool) ([]domain.Identifier, error)
 	CreateIdentifier(ctx context.Context, ident *domain.Identifier) error
 	UpdateIdentifier(ctx context.Context, ident *domain.Identifier) error
@@ -81,21 +83,40 @@ func (r *gormTargetRepository) FindIdentifierByName(ctx context.Context, name st
 	return &ident, nil
 }
 
-func (r *gormTargetRepository) FindOrCreateIdentifier(ctx context.Context, name string) (*domain.Identifier, error) {
-	ident, err := r.FindIdentifierByName(ctx, name)
+func (r *gormTargetRepository) FindIdentifierByNameAndApp(ctx context.Context, name, appName string) (*domain.Identifier, error) {
+	var ident domain.Identifier
+	name = strings.TrimSpace(name)
+	appName = strings.TrimSpace(appName)
+	q := r.db.WithContext(ctx).Where("TRIM(LOWER(name)) = TRIM(LOWER(?))", name)
+	if appName != "" {
+		q = q.Where("TRIM(LOWER(COALESCE(app_name, ''))) = TRIM(LOWER(?))", appName)
+	} else {
+		q = q.Where("app_name = '' OR app_name IS NULL")
+	}
+	if err := q.First(&ident).Error; err != nil {
+		return nil, err
+	}
+	return &ident, nil
+}
+
+func (r *gormTargetRepository) FindOrCreateIdentifier(ctx context.Context, name, appName string) (*domain.Identifier, error) {
+	name = strings.TrimSpace(name)
+	appName = strings.TrimSpace(appName)
+	ident, err := r.FindIdentifierByNameAndApp(ctx, name, appName)
 	if err == nil && ident != nil {
 		return ident, nil
 	}
 
 	newIdent := domain.Identifier{
 		Name:          name,
+		AppName:       appName,
 		MonthlyTarget: 460,
-		DailyTarget:   17,
+		DailyTarget:   15,
 		IsActive:      true,
 	}
 	if err := r.db.WithContext(ctx).Create(&newIdent).Error; err != nil {
 		// Double check concurrency race
-		return r.FindIdentifierByName(ctx, name)
+		return r.FindIdentifierByNameAndApp(ctx, name, appName)
 	}
 	return &newIdent, nil
 }
@@ -105,12 +126,12 @@ func (r *gormTargetRepository) ListIdentifiers(ctx context.Context, search strin
 	q := r.db.WithContext(ctx).Model(&domain.Identifier{})
 	if search != "" {
 		like := "%" + search + "%"
-		q = q.Where("name ILIKE ? OR code ILIKE ?", like, like)
+		q = q.Where("name ILIKE ? OR code ILIKE ? OR app_name ILIKE ?", like, like, like)
 	}
 	if isActive != nil {
 		q = q.Where("is_active = ?", *isActive)
 	}
-	if err := q.Order("name ASC").Find(&list).Error; err != nil {
+	if err := q.Order("name ASC, app_name ASC").Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil

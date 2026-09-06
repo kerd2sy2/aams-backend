@@ -10,7 +10,8 @@ import (
 // Identifier model represents a company account/identifier (e.g. "فهد", "فردين", "هريدي")
 type Identifier struct {
 	ID            uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
-	Name          string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"name"`
+	Name          string         `gorm:"type:varchar(100);index;not null" json:"name"`
+	AppName       string         `gorm:"type:varchar(50);index;default:''" json:"app_name"`
 	Code          string         `gorm:"type:varchar(50);index" json:"code,omitempty"`
 	MonthlyTarget int            `gorm:"default:460" json:"monthly_target"`
 	DailyTarget   int            `gorm:"default:15" json:"daily_target"`

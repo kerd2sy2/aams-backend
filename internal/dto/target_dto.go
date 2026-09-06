@@ -55,6 +55,7 @@ type ConfirmImportResponse struct {
 type IdentifierPerformanceDTO struct {
 	ID                       uuid.UUID `json:"id"`
 	Name                     string    `json:"name"`
+	AppName                  string    `json:"app_name"`
 	Code                     string    `json:"code,omitempty"`
 	TodayOrders              int       `json:"today_orders"`
 	WeekOrders               int       `json:"week_orders"`

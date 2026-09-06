@@ -128,6 +128,7 @@ func (h *TargetHandler) GetIdentifierDetails(c *gin.Context) {
 func (h *TargetHandler) CreateIdentifier(c *gin.Context) {
 	var body struct {
 		Name          string `json:"name" binding:"required"`
+		AppName       string `json:"app_name"`
 		Code          string `json:"code"`
 		MonthlyTarget int    `json:"monthly_target"`
 		DailyTarget   int    `json:"daily_target"`
@@ -137,7 +138,7 @@ func (h *TargetHandler) CreateIdentifier(c *gin.Context) {
 		return
 	}
 
-	ident, err := h.targetService.CreateIdentifier(c.Request.Context(), body.Name, body.Code, body.MonthlyTarget, body.DailyTarget)
+	ident, err := h.targetService.CreateIdentifier(c.Request.Context(), body.Name, body.AppName, body.Code, body.MonthlyTarget, body.DailyTarget)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -156,6 +157,7 @@ func (h *TargetHandler) UpdateIdentifier(c *gin.Context) {
 
 	var body struct {
 		Name          string `json:"name"`
+		AppName       string `json:"app_name"`
 		Code          string `json:"code"`
 		MonthlyTarget int    `json:"monthly_target"`
 		DailyTarget   int    `json:"daily_target"`
@@ -171,7 +173,7 @@ func (h *TargetHandler) UpdateIdentifier(c *gin.Context) {
 		isActive = *body.IsActive
 	}
 
-	if err := h.targetService.UpdateIdentifier(c.Request.Context(), id, body.Name, body.Code, body.MonthlyTarget, body.DailyTarget, isActive); err != nil {
+	if err := h.targetService.UpdateIdentifier(c.Request.Context(), id, body.Name, body.AppName, body.Code, body.MonthlyTarget, body.DailyTarget, isActive); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

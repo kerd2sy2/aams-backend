@@ -88,6 +88,65 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_daily_orders_date_id ON daily_orders (order_date, identifier_id)")
 		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_daily_orders_driver ON daily_orders (driver_id, order_date)")
 		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_daily_orders_dedup ON daily_orders (order_date, identifier_id, driver_id, app_name)")
+
+		// Identifier per app migration:
+		// Drop old single name unique index if exists
+		rawDB.Exec("ALTER TABLE identifiers DROP CONSTRAINT IF EXISTS uni_identifiers_name")
+		rawDB.Exec("DROP INDEX IF EXISTS uni_identifiers_name")
+		rawDB.Exec("DROP INDEX IF EXISTS idx_identifiers_name")
+
+		// Backfill app_name for existing identifiers from their daily orders
+		rawDB.Exec(`
+			UPDATE identifiers i 
+			SET app_name = sub.app_name 
+			FROM (
+				SELECT DISTINCT ON (identifier_id) identifier_id, app_name 
+				FROM daily_orders 
+				WHERE app_name IS NOT NULL AND app_name != '' 
+				ORDER BY identifier_id, created_at DESC
+			) sub 
+			WHERE i.id = sub.identifier_id AND (i.app_name IS NULL OR i.app_name = '')
+		`)
+
+		// Split any daily orders that belonged to a different app than their identifier's assigned app
+		rawDB.Exec(`
+		DO $$
+		DECLARE
+			r RECORD;
+			target_ident_id CHAR(36);
+		BEGIN
+			FOR r IN 
+				SELECT DISTINCT i.name, d.app_name 
+				FROM daily_orders d 
+				JOIN identifiers i ON d.identifier_id = i.id 
+				WHERE d.app_name IS NOT NULL AND d.app_name != '' 
+				  AND LOWER(TRIM(COALESCE(i.app_name, ''))) != LOWER(TRIM(d.app_name))
+			LOOP
+				SELECT id::text INTO target_ident_id 
+				FROM identifiers 
+				WHERE LOWER(TRIM(name)) = LOWER(TRIM(r.name)) 
+				  AND LOWER(TRIM(COALESCE(app_name, ''))) = LOWER(TRIM(r.app_name)) 
+				LIMIT 1;
+
+				IF target_ident_id IS NULL THEN
+					target_ident_id := gen_random_uuid()::text;
+					INSERT INTO identifiers (id, name, app_name, monthly_target, daily_target, is_active, created_at, updated_at)
+					VALUES (target_ident_id::uuid, r.name, r.app_name, 460, 15, true, NOW(), NOW());
+				END IF;
+
+				UPDATE daily_orders 
+				SET identifier_id = target_ident_id::uuid 
+				WHERE app_name = r.app_name 
+				  AND identifier_id IN (
+					  SELECT id FROM identifiers 
+					  WHERE LOWER(TRIM(name)) = LOWER(TRIM(r.name)) 
+					    AND id != target_ident_id::uuid
+				  );
+			END LOOP;
+		END $$;
+		`)
+
+		rawDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_identifiers_name_app ON identifiers (LOWER(TRIM(name)), LOWER(TRIM(COALESCE(app_name, ''))))")
 	}
 
 	// One-time cleanup: barcode no longer needs a unique index.

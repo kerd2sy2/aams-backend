@@ -19,8 +19,8 @@ type TargetService interface {
 	GetDashboardSummary(ctx context.Context, month string) (*dto.TargetDashboardSummaryDTO, error)
 	ListIdentifiers(ctx context.Context, search, status, month string) ([]dto.IdentifierPerformanceDTO, error)
 	GetIdentifierDetails(ctx context.Context, id uuid.UUID, month string) (*dto.IdentifierDetailsDTO, error)
-	CreateIdentifier(ctx context.Context, name, code string, monthlyTarget, dailyTarget int) (*domain.Identifier, error)
-	UpdateIdentifier(ctx context.Context, id uuid.UUID, name, code string, monthlyTarget, dailyTarget int, isActive bool) error
+	CreateIdentifier(ctx context.Context, name, appName, code string, monthlyTarget, dailyTarget int) (*domain.Identifier, error)
+	UpdateIdentifier(ctx context.Context, id uuid.UUID, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool) error
 	DeleteIdentifier(ctx context.Context, id uuid.UUID) error
 
 	ListDrivers(ctx context.Context, search, month string) ([]dto.DriverPerformanceDTO, error)
@@ -300,9 +300,15 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 			continue
 		}
 
+		appName := ident.AppName
+		if appName == "" && len(orders) > 0 && orders[0].AppName != "" {
+			appName = orders[0].AppName
+		}
+
 		dtoItem := dto.IdentifierPerformanceDTO{
 			ID:                       ident.ID,
 			Name:                     ident.Name,
+			AppName:                  appName,
 			Code:                     ident.Code,
 			TodayOrders:              todayOrders,
 			WeekOrders:               weekOrders,
@@ -343,7 +349,18 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 	if err != nil || len(identsPerf) == 0 {
 		return nil, fmt.Errorf("فشل في احتساب أداء المعرف")
 	}
-	perf := identsPerf[0]
+	var perf dto.IdentifierPerformanceDTO
+	found := false
+	for _, p := range identsPerf {
+		if p.ID == ident.ID {
+			perf = p
+			found = true
+			break
+		}
+	}
+	if !found && len(identsPerf) > 0 {
+		perf = identsPerf[0]
+	}
 
 	// Orders breakdown for this identifier
 	orders, err := s.targetRepo.GetOrdersForIdentifierMonth(ctx, id, month)
@@ -416,14 +433,18 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 	}, nil
 }
 
-func (s *targetService) CreateIdentifier(ctx context.Context, name, code string, monthlyTarget, dailyTarget int) (*domain.Identifier, error) {
+func (s *targetService) CreateIdentifier(ctx context.Context, name, appName, code string, monthlyTarget, dailyTarget int) (*domain.Identifier, error) {
 	name = strings.TrimSpace(name)
+	appName = strings.TrimSpace(appName)
 	if name == "" {
 		return nil, fmt.Errorf("اسم المعرف مطلوب")
 	}
 
-	existing, _ := s.targetRepo.FindIdentifierByName(ctx, name)
+	existing, _ := s.targetRepo.FindIdentifierByNameAndApp(ctx, name, appName)
 	if existing != nil {
+		if appName != "" {
+			return nil, fmt.Errorf("اسم المعرف '%s' للتطبيق '%s' موجود مسبقاً", name, appName)
+		}
 		return nil, fmt.Errorf("اسم المعرف '%s' موجود مسبقاً", name)
 	}
 
@@ -436,6 +457,7 @@ func (s *targetService) CreateIdentifier(ctx context.Context, name, code string,
 
 	ident := &domain.Identifier{
 		Name:          name,
+		AppName:       appName,
 		Code:          strings.TrimSpace(code),
 		MonthlyTarget: monthlyTarget,
 		DailyTarget:   dailyTarget,
@@ -448,7 +470,7 @@ func (s *targetService) CreateIdentifier(ctx context.Context, name, code string,
 	return ident, nil
 }
 
-func (s *targetService) UpdateIdentifier(ctx context.Context, id uuid.UUID, name, code string, monthlyTarget, dailyTarget int, isActive bool) error {
+func (s *targetService) UpdateIdentifier(ctx context.Context, id uuid.UUID, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool) error {
 	ident, err := s.targetRepo.FindIdentifierByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("المعرف غير موجود: %w", err)
@@ -456,6 +478,9 @@ func (s *targetService) UpdateIdentifier(ctx context.Context, id uuid.UUID, name
 
 	if strings.TrimSpace(name) != "" {
 		ident.Name = strings.TrimSpace(name)
+	}
+	if strings.TrimSpace(appName) != "" {
+		ident.AppName = strings.TrimSpace(appName)
 	}
 	ident.Code = strings.TrimSpace(code)
 	if monthlyTarget > 0 {

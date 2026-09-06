@@ -186,7 +186,7 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 		// Check for duplicate in database for this date, identifier, driver, and app
 		isDup := false
 		existingCount := 0
-		identObj, _ := s.targetRepo.FindIdentifierByName(ctx, identName)
+		identObj, _ := s.targetRepo.FindIdentifierByNameAndApp(ctx, identName, appName)
 		driverObj, _ := s.targetRepo.FindDriverByName(ctx, driverName)
 		if identObj != nil && driverObj != nil {
 			dup, _ := s.targetRepo.CheckDuplicates(ctx, orderDate, identObj.ID, driverObj.ID, appName)
@@ -213,7 +213,11 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 		}
 
 		parsedRows = append(parsedRows, parsedRow)
-		identMap[identName] = true
+		identKey := identName
+		if appName != "" {
+			identKey = fmt.Sprintf("%s (%s)", identName, appName)
+		}
+		identMap[identKey] = true
 		driverMap[driverName] = true
 		totalOrders += rowTotal
 	}
@@ -286,15 +290,16 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 			}
 		}
 
-		// Find or Create Identifier
-		ident, ok := identCache[row.Identifier]
+		// Find or Create Identifier (Differentiated by Name and App)
+		identCacheKey := fmt.Sprintf("%s___%s", row.Identifier, row.App)
+		ident, ok := identCache[identCacheKey]
 		if !ok {
 			var err error
-			ident, err = s.targetRepo.FindOrCreateIdentifier(ctx, row.Identifier)
+			ident, err = s.targetRepo.FindOrCreateIdentifier(ctx, row.Identifier, row.App)
 			if err != nil {
-				return nil, fmt.Errorf("فشل في تسجيل المعرف %s: %w", row.Identifier, err)
+				return nil, fmt.Errorf("فشل في تسجيل المعرف %s (%s): %w", row.Identifier, row.App, err)
 			}
-			identCache[row.Identifier] = ident
+			identCache[identCacheKey] = ident
 		}
 		activeIdentifiersForAlerts[ident.ID] = ident
 
