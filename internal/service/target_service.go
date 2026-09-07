@@ -445,6 +445,7 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 
 	driverOrdersMap := make(map[uuid.UUID]int)
 	driverNamesMap := make(map[uuid.UUID]string)
+	driverDailyMap := make(map[uuid.UUID]map[string]int)
 	appsBreakdown := make(map[string]int)
 	dayOrdersMap := make(map[int]int)
 
@@ -455,6 +456,11 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 		if ord.Driver != nil {
 			driverNamesMap[ord.DriverID] = ord.Driver.Name
 		}
+		if driverDailyMap[ord.DriverID] == nil {
+			driverDailyMap[ord.DriverID] = make(map[string]int)
+		}
+		driverDailyMap[ord.DriverID][ord.OrderDate] += ord.OrdersCount
+
 		app := ord.AppName
 		if app == "" {
 			app = "أخرى"
@@ -467,7 +473,7 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 		}
 	}
 
-	// Drivers breakdown with percentages
+	// Drivers breakdown with percentages and daily orders breakdown
 	driversBreakdown := make([]dto.DriverContributionDTO, 0)
 	for dID, count := range driverOrdersMap {
 		pct := 0.0
@@ -478,11 +484,15 @@ func (s *targetService) GetIdentifierDetails(ctx context.Context, id uuid.UUID, 
 		if dName == "" {
 			dName = "مندوب"
 		}
+		dMap := driverDailyMap[dID]
+		daysActive := len(dMap)
 		driversBreakdown = append(driversBreakdown, dto.DriverContributionDTO{
-			DriverID:   dID,
-			DriverName: dName,
-			Orders:     count,
-			Percentage: pct,
+			DriverID:    dID,
+			DriverName:  dName,
+			Orders:      count,
+			Percentage:  pct,
+			DailyOrders: dMap,
+			DaysActive:  daysActive,
 		})
 	}
 

@@ -78,10 +78,12 @@ type IdentifierPerformanceDTO struct {
 
 // DriverContributionDTO breakdown of orders by driver within an identifier
 type DriverContributionDTO struct {
-	DriverID   uuid.UUID `json:"driver_id"`
-	DriverName string    `json:"driver_name"`
-	Orders     int       `json:"orders"`
-	Percentage float64   `json:"percentage"`
+	DriverID    uuid.UUID      `json:"driver_id"`
+	DriverName  string         `json:"driver_name"`
+	Orders      int            `json:"orders"`
+	Percentage  float64        `json:"percentage"`
+	DailyOrders map[string]int `json:"daily_orders,omitempty"` // map[YYYY-MM-DD]ordersCount
+	DaysActive  int            `json:"days_active,omitempty"`
 }
 
 // DayTrendDTO daily order counts for charts
