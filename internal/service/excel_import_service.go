@@ -409,7 +409,7 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 			}
 			targetReq := ident.DailyTarget
 			if targetReq <= 0 {
-				targetReq = 15
+				targetReq = 18
 			}
 			if dayTotal < targetReq {
 				alert := domain.TargetAlert{

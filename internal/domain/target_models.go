@@ -15,7 +15,7 @@ type Identifier struct {
 	Branch        string         `gorm:"type:varchar(50);index;default:''" json:"branch,omitempty"`
 	Code          string         `gorm:"type:varchar(50);index" json:"code,omitempty"`
 	MonthlyTarget int            `gorm:"default:460" json:"monthly_target"`
-	DailyTarget   int            `gorm:"default:15" json:"daily_target"`
+	DailyTarget   int            `gorm:"default:18" json:"daily_target"`
 	IsActive      bool           `gorm:"default:true" json:"is_active"`
 	Drivers       []Driver       `gorm:"many2many:identifier_drivers;" json:"drivers,omitempty"`
 	CreatedAt     time.Time      `json:"created_at"`

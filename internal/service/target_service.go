@@ -64,10 +64,17 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string, b
 	daysInMonth := daysIn(tMonth.Month(), tMonth.Year())
 	now := time.Now()
 	elapsedDays := now.Day()
-	if month < now.Format("2006-01") {
+	if targetDay != "" {
+		if tDay, err := time.Parse("2006-01-02", targetDay); err == nil {
+			elapsedDays = tDay.Day()
+		}
+	} else if month < now.Format("2006-01") {
 		elapsedDays = daysInMonth
 	} else if month > now.Format("2006-01") {
 		elapsedDays = 0
+	}
+	if elapsedDays > daysInMonth {
+		elapsedDays = daysInMonth
 	}
 	remainingDays := daysInMonth - elapsedDays
 	if remainingDays < 0 {
@@ -112,6 +119,12 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string, b
 		}
 	}
 
+	dVal, _ := s.targetRepo.GetTargetSetting(ctx, "DEFAULT_DAILY_TARGET")
+	defaultDTarget, _ := strconv.Atoi(dVal)
+	if defaultDTarget <= 0 {
+		defaultDTarget = 18
+	}
+
 	// Build daily trend chart data
 	var dailyTrend []dto.DayTrendDTO
 	for d := 1; d <= daysInMonth; d++ {
@@ -120,7 +133,7 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string, b
 			Date:   dateStr,
 			Day:    d,
 			Orders: ordersByDay[d],
-			Target: 15,
+			Target: defaultDTarget,
 		})
 	}
 
@@ -197,10 +210,17 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 	daysInMonth := daysIn(tMonth.Month(), tMonth.Year())
 	now := time.Now()
 	elapsedDays := now.Day()
-	if month < now.Format("2006-01") {
+	if targetDay != "" {
+		if tDay, err := time.Parse("2006-01-02", targetDay); err == nil {
+			elapsedDays = tDay.Day()
+		}
+	} else if month < now.Format("2006-01") {
 		elapsedDays = daysInMonth
 	} else if month > now.Format("2006-01") {
 		elapsedDays = 0
+	}
+	if elapsedDays > daysInMonth {
+		elapsedDays = daysInMonth
 	}
 	remainingDays := daysInMonth - elapsedDays
 	if remainingDays < 0 {
@@ -274,20 +294,24 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 		if mTarget <= 0 {
 			mTarget = 460
 		}
+		dTarget := ident.DailyTarget
+		if dTarget <= 0 {
+			dTarget = 18
+		}
 
 		achievedPercent := 0.0
 		if mTarget > 0 {
 			achievedPercent = math.Round((float64(monthOrders)/float64(mTarget))*1000) / 10
 		}
 
-		activeDaysCount := len(uniqueDays)
-		if activeDaysCount == 0 && elapsedDays > 0 {
-			activeDaysCount = 1
-		} else if activeDaysCount == 0 {
-			activeDaysCount = 1
+		// Effective elapsed days for rate calculation (at least 1 to prevent division by zero)
+		effectiveElapsedDays := elapsedDays
+		if effectiveElapsedDays <= 0 {
+			effectiveElapsedDays = 1
 		}
 
-		dailyAverage := float64(monthOrders) / float64(activeDaysCount)
+		// Daily average is total month orders divided by elapsed days in the month
+		dailyAverage := float64(monthOrders) / float64(effectiveElapsedDays)
 		dailyAverage = math.Round(dailyAverage*10) / 10
 
 		remainingTarget := mTarget - monthOrders
@@ -300,17 +324,36 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 			dailyRequired = math.Round(float64(remainingTarget) / float64(remainingDays))
 		}
 
-		// Projection calculation
-		projected := monthOrders + int(math.Round(dailyAverage*float64(remainingDays)))
+		// Projection calculation: based on actual daily run rate across total month days
+		projected := int(math.Round(dailyAverage * float64(daysInMonth)))
+		if monthOrders > projected {
+			projected = monthOrders
+		}
 		isQualified := projected >= mTarget
 
-		// Status categorization
+		// Pace comparison to date:
+		expectedToDate := float64(effectiveElapsedDays) * float64(dTarget)
+		paceRatio := 0.0
+		if expectedToDate > 0 {
+			paceRatio = float64(monthOrders) / expectedToDate
+		}
+
+		// Status categorization:
+		// 1. TARGET_ACHIEVED: achieved full monthly target (>= 460)
+		// 2. ON_TRACK: projected to achieve monthly target (projected >= 460) OR already at pace to date
+		// 3. AT_RISK: close to target (within 100 orders of target: projected >= 360, or paceRatio >= 0.78)
+		// 4. BEHIND_TARGET: behind by more than 100 orders (projected < 360)
+		atRiskThreshold := mTarget - 100
+		if atRiskThreshold <= 0 {
+			atRiskThreshold = int(float64(mTarget) * 0.75)
+		}
+
 		status := "ON_TRACK"
 		if monthOrders >= mTarget {
 			status = "TARGET_ACHIEVED"
-		} else if projected >= mTarget {
+		} else if projected >= mTarget || paceRatio >= 1.0 || dailyAverage >= float64(dTarget) {
 			status = "ON_TRACK"
-		} else if projected >= int(float64(mTarget)*0.8) {
+		} else if projected >= atRiskThreshold || paceRatio >= (float64(atRiskThreshold) / float64(mTarget)) {
 			status = "AT_RISK"
 		} else {
 			status = "BEHIND_TARGET"
@@ -483,7 +526,7 @@ func (s *targetService) CreateIdentifier(ctx context.Context, name, appName, cod
 		monthlyTarget = 460
 	}
 	if dailyTarget <= 0 {
-		dailyTarget = 15
+		dailyTarget = 18
 	}
 
 	ident := &domain.Identifier{
@@ -708,7 +751,7 @@ func (s *targetService) GetTargetSettings(ctx context.Context) (*dto.TargetSetti
 	}
 	dTarget, _ := strconv.Atoi(dVal)
 	if dTarget <= 0 {
-		dTarget = 15
+		dTarget = 18
 	}
 
 	return &dto.TargetSettingsDTO{

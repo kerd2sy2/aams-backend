@@ -376,7 +376,7 @@ func seedTargetAccounts(db *gorm.DB) {
 func seedTargetSettings(db *gorm.DB) {
 	defaultSettings := []domain.TargetSetting{
 		{SettingKey: "DEFAULT_MONTHLY_TARGET", SettingValue: "460"},
-		{SettingKey: "DEFAULT_DAILY_TARGET", SettingValue: "15"},
+		{SettingKey: "DEFAULT_DAILY_TARGET", SettingValue: "18"},
 	}
 
 	for _, s := range defaultSettings {
