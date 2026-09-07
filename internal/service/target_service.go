@@ -615,6 +615,7 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 	}
 	driverMonthOrders := make(map[uuid.UUID]int)
 	driverTodayOrders := make(map[uuid.UUID]int)
+	driverDailyMap := make(map[uuid.UUID]map[string]int)
 	driverIdentsMap := make(map[uuid.UUID]map[string]bool)
 	driverAppsMap := make(map[uuid.UUID]map[string]bool)
 	driverBranchMap := make(map[uuid.UUID]string)
@@ -631,6 +632,11 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 		}
 
 		driverMonthOrders[ord.DriverID] += ord.OrdersCount
+		if driverDailyMap[ord.DriverID] == nil {
+			driverDailyMap[ord.DriverID] = make(map[string]int)
+		}
+		driverDailyMap[ord.DriverID][ord.OrderDate] += ord.OrdersCount
+
 		if ord.Branch != "" {
 			driverBranchMap[ord.DriverID] = ord.Branch
 		}
@@ -686,6 +692,9 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 			apps = append(apps, appName)
 		}
 
+		dMap := driverDailyMap[d.ID]
+		daysActive := len(dMap)
+
 		result = append(result, dto.DriverPerformanceDTO{
 			ID:          d.ID,
 			Name:        d.Name,
@@ -695,6 +704,9 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 			TodayOrders: driverTodayOrders[d.ID],
 			Identifiers: idents,
 			Apps:        apps,
+			DailyOrders: dMap,
+			DailyTarget: 15,
+			DaysActive:  daysActive,
 		})
 	}
 
