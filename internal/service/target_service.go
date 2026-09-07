@@ -332,29 +332,17 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 		}
 		isQualified := projected >= mTarget
 
-		// Pace comparison to date:
-		expectedToDate := float64(effectiveElapsedDays) * float64(dTarget)
-		paceRatio := 0.0
-		if expectedToDate > 0 {
-			paceRatio = float64(monthOrders) / expectedToDate
-		}
-
-		// Status categorization:
-		// 1. TARGET_ACHIEVED: achieved full monthly target (>= 460)
-		// 2. ON_TRACK: projected to achieve monthly target (projected >= 460) OR already at pace to date
-		// 3. AT_RISK: close to target (within 100 orders of target: projected >= 360, or paceRatio >= 0.78)
-		// 4. BEHIND_TARGET: behind by more than 100 orders (projected < 360)
-		atRiskThreshold := mTarget - 100
-		if atRiskThreshold <= 0 {
-			atRiskThreshold = int(float64(mTarget) * 0.75)
-		}
-
+		// Status categorization based explicitly on projected orders:
+		// 1. TARGET_ACHIEVED: achieved full monthly target (monthOrders >= mTarget)
+		// 2. ON_TRACK: projected 460 or more (projected >= 460) -> يسير بالمعدل
+		// 3. AT_RISK: projected 310 to 459 (projected >= 310) -> على وشك المعدل
+		// 4. BEHIND_TARGET: projected less than 310 (projected < 310) -> متأخر
 		status := "ON_TRACK"
 		if monthOrders >= mTarget {
 			status = "TARGET_ACHIEVED"
-		} else if projected >= mTarget || paceRatio >= 1.0 || dailyAverage >= float64(dTarget) {
+		} else if projected >= 460 {
 			status = "ON_TRACK"
-		} else if projected >= atRiskThreshold || paceRatio >= (float64(atRiskThreshold) / float64(mTarget)) {
+		} else if projected >= 310 {
 			status = "AT_RISK"
 		} else {
 			status = "BEHIND_TARGET"
