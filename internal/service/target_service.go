@@ -61,26 +61,8 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string, b
 		tMonth = time.Now()
 		month = tMonth.Format("2006-01")
 	}
-
 	daysInMonth := daysIn(tMonth.Month(), tMonth.Year())
 	now := time.Now()
-	elapsedDays := now.Day()
-	if targetDay != "" {
-		if tDay, err := time.Parse("2006-01-02", targetDay); err == nil {
-			elapsedDays = tDay.Day()
-		}
-	} else if month < now.Format("2006-01") {
-		elapsedDays = daysInMonth
-	} else if month > now.Format("2006-01") {
-		elapsedDays = 0
-	}
-	if elapsedDays > daysInMonth {
-		elapsedDays = daysInMonth
-	}
-	remainingDays := daysInMonth - elapsedDays
-	if remainingDays < 0 {
-		remainingDays = 0
-	}
 
 	// 2. Fetch all orders for this month
 	orders, err := s.targetRepo.GetOrdersForMonth(ctx, month)
@@ -100,9 +82,55 @@ func (s *targetService) GetDashboardSummary(ctx context.Context, month string, b
 		orders = filteredOrders
 	}
 
+	// Find the latest day with uploaded orders in this month
+	maxOrderDay := 0
+	maxOrderDate := ""
+	for _, ord := range orders {
+		if ord.OrdersCount > 0 {
+			if ord.OrderDate > maxOrderDate {
+				maxOrderDate = ord.OrderDate
+			}
+			if len(ord.OrderDate) >= 10 {
+				if d, err := strconv.Atoi(ord.OrderDate[8:10]); err == nil && d > maxOrderDay {
+					maxOrderDay = d
+				}
+			}
+		}
+	}
+
+	elapsedDays := now.Day()
+	if targetDay != "" {
+		if tDay, err := time.Parse("2006-01-02", targetDay); err == nil {
+			elapsedDays = tDay.Day()
+		}
+	} else if month < now.Format("2006-01") {
+		elapsedDays = daysInMonth
+	} else if month > now.Format("2006-01") {
+		elapsedDays = 0
+	} else {
+		// In current month, shifts finish at 4 AM next day and sheets represent closed shift dates.
+		// Elapsed days must match the latest date with uploaded orders (maxOrderDay).
+		if maxOrderDay > 0 {
+			elapsedDays = maxOrderDay
+		} else if now.Day() > 1 {
+			elapsedDays = now.Day() - 1
+		} else {
+			elapsedDays = 1
+		}
+	}
+	if elapsedDays > daysInMonth {
+		elapsedDays = daysInMonth
+	}
+	remainingDays := daysInMonth - elapsedDays
+	if remainingDays < 0 {
+		remainingDays = 0
+	}
+
 	todayDate := now.Format("2006-01-02")
 	if targetDay != "" {
 		todayDate = targetDay
+	} else if maxOrderDate != "" {
+		todayDate = maxOrderDate
 	}
 	totalMonthOrders := 0
 	todayTotalOrders := 0
@@ -207,26 +235,8 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 		tMonth = time.Now()
 		month = tMonth.Format("2006-01")
 	}
-
 	daysInMonth := daysIn(tMonth.Month(), tMonth.Year())
 	now := time.Now()
-	elapsedDays := now.Day()
-	if targetDay != "" {
-		if tDay, err := time.Parse("2006-01-02", targetDay); err == nil {
-			elapsedDays = tDay.Day()
-		}
-	} else if month < now.Format("2006-01") {
-		elapsedDays = daysInMonth
-	} else if month > now.Format("2006-01") {
-		elapsedDays = 0
-	}
-	if elapsedDays > daysInMonth {
-		elapsedDays = daysInMonth
-	}
-	remainingDays := daysInMonth - elapsedDays
-	if remainingDays < 0 {
-		remainingDays = 0
-	}
 
 	// Fetch all identifiers from DB
 	idents, err := s.targetRepo.ListIdentifiers(ctx, search, nil)
@@ -242,10 +252,56 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 
 	branch = strings.TrimSpace(branch)
 
+	// Find latest day with uploaded orders in this month
+	maxOrderDay := 0
+	maxOrderDate := ""
+	for _, ord := range allMonthOrders {
+		if ord.OrdersCount > 0 {
+			if ord.OrderDate > maxOrderDate {
+				maxOrderDate = ord.OrderDate
+			}
+			if len(ord.OrderDate) >= 10 {
+				if d, err := strconv.Atoi(ord.OrderDate[8:10]); err == nil && d > maxOrderDay {
+					maxOrderDay = d
+				}
+			}
+		}
+	}
+
+	elapsedDays := now.Day()
+	if targetDay != "" {
+		if tDay, err := time.Parse("2006-01-02", targetDay); err == nil {
+			elapsedDays = tDay.Day()
+		}
+	} else if month < now.Format("2006-01") {
+		elapsedDays = daysInMonth
+	} else if month > now.Format("2006-01") {
+		elapsedDays = 0
+	} else {
+		// Shifts end at 4 AM and sheets reflect closed shift dates.
+		// Elapsed days must match the latest date with uploaded orders (maxOrderDay).
+		if maxOrderDay > 0 {
+			elapsedDays = maxOrderDay
+		} else if now.Day() > 1 {
+			elapsedDays = now.Day() - 1
+		} else {
+			elapsedDays = 1
+		}
+	}
+	if elapsedDays > daysInMonth {
+		elapsedDays = daysInMonth
+	}
+	remainingDays := daysInMonth - elapsedDays
+	if remainingDays < 0 {
+		remainingDays = 0
+	}
+
 	// Map orders by identifier
 	todayDate := now.Format("2006-01-02")
 	if targetDay != "" {
 		todayDate = targetDay
+	} else if maxOrderDate != "" {
+		todayDate = maxOrderDate
 	}
 	weekStartDate := now.AddDate(0, 0, -7).Format("2006-01-02")
 
@@ -597,9 +653,19 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 
 	branch = strings.TrimSpace(branch)
 
+	// Find the latest order date uploaded
+	maxOrderDate := ""
+	for _, ord := range orders {
+		if ord.OrdersCount > 0 && ord.OrderDate > maxOrderDate {
+			maxOrderDate = ord.OrderDate
+		}
+	}
+
 	todayDate := time.Now().Format("2006-01-02")
 	if targetDay != "" {
 		todayDate = targetDay
+	} else if maxOrderDate != "" {
+		todayDate = maxOrderDate
 	}
 	driverMonthOrders := make(map[uuid.UUID]int)
 	driverTodayOrders := make(map[uuid.UUID]int)
