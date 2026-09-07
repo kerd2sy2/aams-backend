@@ -21,6 +21,7 @@ type TargetRepository interface {
 	CreateIdentifier(ctx context.Context, ident *domain.Identifier) error
 	UpdateIdentifier(ctx context.Context, ident *domain.Identifier) error
 	DeleteIdentifier(ctx context.Context, id uuid.UUID) error
+	DeleteAllIdentifiers(ctx context.Context) error
 
 	// Drivers
 	FindDriverByID(ctx context.Context, id uuid.UUID) (*domain.Driver, error)
@@ -148,6 +149,16 @@ func (r *gormTargetRepository) UpdateIdentifier(ctx context.Context, ident *doma
 
 func (r *gormTargetRepository) DeleteIdentifier(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.Identifier{}, "id = ?", id).Error
+}
+
+func (r *gormTargetRepository) DeleteAllIdentifiers(ctx context.Context) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		_ = tx.Exec("DELETE FROM target_alerts").Error
+		_ = tx.Exec("DELETE FROM daily_orders").Error
+		_ = tx.Exec("DELETE FROM identifier_drivers").Error
+		_ = tx.Exec("DELETE FROM import_batches").Error
+		return tx.Unscoped().Where("1 = 1").Delete(&domain.Identifier{}).Error
+	})
 }
 
 func (r *gormTargetRepository) FindDriverByID(ctx context.Context, id uuid.UUID) (*domain.Driver, error) {

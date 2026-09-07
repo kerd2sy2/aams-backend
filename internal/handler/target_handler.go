@@ -198,6 +198,15 @@ func (h *TargetHandler) DeleteIdentifier(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "تم حذف المعرف بنجاح"})
 }
 
+// DeleteAllIdentifiers wipes all identifiers and related target data (Admin only)
+func (h *TargetHandler) DeleteAllIdentifiers(c *gin.Context) {
+	if err := h.targetService.DeleteAllIdentifiers(c.Request.Context()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل في مسح المعرفات: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "تم مسح جميع المعرفات والبيانات بنجاح"})
+}
+
 // ListDrivers returns all drivers with order summaries
 func (h *TargetHandler) ListDrivers(c *gin.Context) {
 	search := strings.TrimSpace(c.Query("search"))

@@ -23,6 +23,7 @@ type TargetService interface {
 	CreateIdentifier(ctx context.Context, name, appName, code string, monthlyTarget, dailyTarget int) (*domain.Identifier, error)
 	UpdateIdentifier(ctx context.Context, id uuid.UUID, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool) error
 	DeleteIdentifier(ctx context.Context, id uuid.UUID) error
+	DeleteAllIdentifiers(ctx context.Context) error
 
 	ListDrivers(ctx context.Context, search, month string, branch string) ([]dto.DriverPerformanceDTO, error)
 	ListAlerts(ctx context.Context, date string, unresolvedOnly bool, branch string) ([]dto.TargetAlertDTO, error)
@@ -570,6 +571,10 @@ func (s *targetService) UpdateIdentifier(ctx context.Context, id uuid.UUID, name
 
 func (s *targetService) DeleteIdentifier(ctx context.Context, id uuid.UUID) error {
 	return s.targetRepo.DeleteIdentifier(ctx, id)
+}
+
+func (s *targetService) DeleteAllIdentifiers(ctx context.Context) error {
+	return s.targetRepo.DeleteAllIdentifiers(ctx)
 }
 
 func (s *targetService) ListDrivers(ctx context.Context, search, month string, branch string) ([]dto.DriverPerformanceDTO, error) {

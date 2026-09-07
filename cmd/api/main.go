@@ -533,6 +533,8 @@ func main() {
 				adminTarget.DELETE("/batches/date/:orderDate", targetHandler.DeleteSheetByDate)
 				adminTarget.POST("/identifiers", targetHandler.CreateIdentifier)
 				adminTarget.PUT("/identifiers/:id", targetHandler.UpdateIdentifier)
+				adminTarget.DELETE("/identifiers", targetHandler.DeleteAllIdentifiers)
+				adminTarget.DELETE("/identifiers/wipe-all", targetHandler.DeleteAllIdentifiers)
 				adminTarget.DELETE("/identifiers/:id", targetHandler.DeleteIdentifier)
 				adminTarget.PUT("/settings", targetHandler.UpdateTargetSettings)
 			}
