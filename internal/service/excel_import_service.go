@@ -62,6 +62,9 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 		}
 	}
 	if orderDate == "" {
+		orderDate = extractDateFromRows(rows)
+	}
+	if orderDate == "" {
 		orderDate = time.Now().Format("2006-01-02")
 	}
 
@@ -69,16 +72,16 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 	headerRowIndex := 2
 	headerRow := rows[headerRowIndex]
 
-	colSerial := 0 // A: م
-	colIdent := 1  // B: المعرف
-	colApp := 2    // C: التطبيق
+	colSerial := 0  // A: م
+	colIdent := 1   // B: المعرف
+	colApp := 2     // C: التطبيق
 	colBranch := -1 // الفرع
-	colDriver := 3 // D: الاسم / المندوب
-	colNinja := 4  // E: نينجا
-	colKeeta := 5  // F: كيتا
-	colToyo := 6   // G: تويو
-	colPlate := 7  // H: رقم اللوحة
-	colNotes := 8  // I: ملاحظات
+	colDriver := -1 // D/E: الاسم / المندوب
+	colNinja := -1  // F: نينجا
+	colKeeta := -1  // G: كيتا
+	colToyo := -1   // تويو (مسحت / محذوفة)
+	colPlate := -1  // رقم اللوحة
+	colNotes := -1  // ملاحظات
 
 	// Dynamic detection of header row & columns if headers are slightly shifted
 	for rIdx := 0; rIdx < len(rows) && rIdx < 5; rIdx++ {
@@ -120,6 +123,19 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 			break
 		}
 	}
+
+	// Dynamic fallbacks
+	if colDriver < 0 {
+		if colBranch >= 0 && colBranch == 3 {
+			colDriver = 4
+		} else {
+			colDriver = 3
+		}
+	}
+	if colNinja < 0 && colKeeta < 0 && colToyo < 0 {
+		colNinja = 5 // F
+		colKeeta = 6 // G
+	}
 	_ = headerRow
 
 	// 3. Process Data Rows (starting from headerRowIndex + 1)
@@ -159,9 +175,18 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 			appName = "كيتا"
 		}
 
-		ninjaCount := parseInt(getCell(r, colNinja))
-		keetaCount := parseInt(getCell(r, colKeeta))
-		toyoCount := parseInt(getCell(r, colToyo))
+		ninjaCount := 0
+		if colNinja >= 0 {
+			ninjaCount = parseInt(getCell(r, colNinja))
+		}
+		keetaCount := 0
+		if colKeeta >= 0 {
+			keetaCount = parseInt(getCell(r, colKeeta))
+		}
+		toyoCount := 0
+		if colToyo >= 0 {
+			toyoCount = parseInt(getCell(r, colToyo))
+		}
 		// Total orders is sum of ALL count columns regardless of app name
 		rowTotal := ninjaCount + keetaCount + toyoCount
 
@@ -511,5 +536,59 @@ func extractDateFromFilename(filename string) string {
 		return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
 	}
 
+	// Format: D-M or DD-MM (e.g. 6-9.xlsx or 06-09.xlsx)
+	re3 := regexp.MustCompile(`^(\d{1,2})[-_](\d{1,2})\.xlsx?$`)
+	if match := re3.FindStringSubmatch(base); len(match) == 3 {
+		d, _ := strconv.Atoi(match[1])
+		m, _ := strconv.Atoi(match[2])
+		y := time.Now().Year()
+		if y < 2026 {
+			y = 2026
+		}
+		return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
+	}
+
+	return ""
+}
+
+// extractDateFromRows scans the first 3 rows of the sheet for date strings (e.g. 09-06-26 or 2026-09-06)
+func extractDateFromRows(rows [][]string) string {
+	for i := 0; i < len(rows) && i < 3; i++ {
+		for _, cell := range rows[i] {
+			cell = strings.TrimSpace(cell)
+			if cell == "" {
+				continue
+			}
+			// Format: YYYY-MM-DD
+			reISO := regexp.MustCompile(`(\d{4})[-/](\d{1,2})[-/](\d{1,2})`)
+			if match := reISO.FindStringSubmatch(cell); len(match) == 4 {
+				y, _ := strconv.Atoi(match[1])
+				m, _ := strconv.Atoi(match[2])
+				d, _ := strconv.Atoi(match[3])
+				return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
+			}
+			// Format: DD-MM-YYYY
+			reDMY := regexp.MustCompile(`(\d{1,2})[-/](\d{1,2})[-/](\d{4})`)
+			if match := reDMY.FindStringSubmatch(cell); len(match) == 4 {
+				d, _ := strconv.Atoi(match[1])
+				m, _ := strconv.Atoi(match[2])
+				y, _ := strconv.Atoi(match[3])
+				return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
+			}
+			// Format: MM-DD-YY (e.g. 09-06-26)
+			reMDY2 := regexp.MustCompile(`^(\d{2})[-/](\d{2})[-/](\d{2})$`)
+			if match := reMDY2.FindStringSubmatch(cell); len(match) == 4 {
+				m, _ := strconv.Atoi(match[1])
+				d, _ := strconv.Atoi(match[2])
+				y, _ := strconv.Atoi(match[3])
+				if y < 100 {
+					y += 2000
+				}
+				if m <= 12 && d <= 31 {
+					return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
+				}
+			}
+		}
+	}
 	return ""
 }
