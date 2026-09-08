@@ -398,7 +398,14 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 	batch.DriversCount = len(driverCache)
 	_ = s.targetRepo.UpdateImportBatch(ctx, &batch)
 
-	// 2. Generate Daily Alerts for underperforming identifiers (< 17 orders)
+	// 2. Generate Daily Alerts for underperforming identifiers (< 18 orders)
+	defaultDaily := 18
+	if dVal, err := s.targetRepo.GetTargetSetting(ctx, "DEFAULT_DAILY_TARGET"); err == nil && dVal != "" {
+		if v, err := strconv.Atoi(dVal); err == nil && v > 0 {
+			defaultDaily = v
+		}
+	}
+
 	for identID, ident := range activeIdentifiersForAlerts {
 		// Calculate total orders for this identifier on this order date
 		dayOrders, err := s.targetRepo.GetDailyOrders(ctx, req.OrderDate, &identID)
@@ -408,8 +415,8 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 				dayTotal += ord.OrdersCount
 			}
 			targetReq := ident.DailyTarget
-			if targetReq <= 0 {
-				targetReq = 18
+			if targetReq <= 0 || targetReq == 15 {
+				targetReq = defaultDaily
 			}
 			if dayTotal < targetReq {
 				alert := domain.TargetAlert{

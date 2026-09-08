@@ -251,6 +251,17 @@ func (h *TargetHandler) ResolveAlert(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "تم تسوية التنبيه بنجاح"})
 }
 
+// ResolveAllAlerts marks all unresolved alerts as resolved
+func (h *TargetHandler) ResolveAllAlerts(c *gin.Context) {
+	branch := c.Query("branch")
+	date := c.Query("date")
+	if err := h.targetService.ResolveAllAlerts(c.Request.Context(), branch, date); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "تم تسوية جميع التنبيهات بنجاح"})
+}
+
 // GetTargetSettings returns default targets
 func (h *TargetHandler) GetTargetSettings(c *gin.Context) {
 	settings, err := h.targetService.GetTargetSettings(c.Request.Context())

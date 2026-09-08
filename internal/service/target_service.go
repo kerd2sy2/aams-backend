@@ -28,6 +28,7 @@ type TargetService interface {
 	ListDrivers(ctx context.Context, search, month string, branch string) ([]dto.DriverPerformanceDTO, error)
 	ListAlerts(ctx context.Context, date string, unresolvedOnly bool, branch string) ([]dto.TargetAlertDTO, error)
 	ResolveAlert(ctx context.Context, id uuid.UUID) error
+	ResolveAllAlerts(ctx context.Context, branch string, date string) error
 
 	GetTargetSettings(ctx context.Context) (*dto.TargetSettingsDTO, error)
 	UpdateTargetSettings(ctx context.Context, monthlyTarget, dailyTarget int) error
@@ -759,7 +760,7 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 			Identifiers: idents,
 			Apps:        apps,
 			DailyOrders: dMap,
-			DailyTarget: 15,
+			DailyTarget: 18,
 			DaysActive:  daysActive,
 		})
 	}
@@ -820,6 +821,10 @@ func (s *targetService) ListAlerts(ctx context.Context, date string, unresolvedO
 
 func (s *targetService) ResolveAlert(ctx context.Context, id uuid.UUID) error {
 	return s.targetRepo.ResolveAlert(ctx, id)
+}
+
+func (s *targetService) ResolveAllAlerts(ctx context.Context, branch string, date string) error {
+	return s.targetRepo.ResolveAllAlerts(ctx, branch, date)
 }
 
 func (s *targetService) GetTargetSettings(ctx context.Context) (*dto.TargetSettingsDTO, error) {

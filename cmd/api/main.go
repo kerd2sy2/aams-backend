@@ -519,6 +519,7 @@ func main() {
 			targetRoutes.GET("/identifiers/:id", targetHandler.GetIdentifierDetails)
 			targetRoutes.GET("/drivers", targetHandler.ListDrivers)
 			targetRoutes.GET("/alerts", targetHandler.ListAlerts)
+			targetRoutes.PATCH("/alerts/resolve-all", targetHandler.ResolveAllAlerts)
 			targetRoutes.PATCH("/alerts/:id/resolve", targetHandler.ResolveAlert)
 			targetRoutes.GET("/settings", targetHandler.GetTargetSettings)
 			targetRoutes.GET("/batches", targetHandler.ListImportBatches)

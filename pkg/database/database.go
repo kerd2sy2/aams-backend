@@ -130,7 +130,7 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 				IF target_ident_id IS NULL THEN
 					target_ident_id := gen_random_uuid()::text;
 					INSERT INTO identifiers (id, name, app_name, monthly_target, daily_target, is_active, created_at, updated_at)
-					VALUES (target_ident_id::uuid, r.name, r.app_name, 460, 15, true, NOW(), NOW());
+					VALUES (target_ident_id::uuid, r.name, r.app_name, 460, 18, true, NOW(), NOW());
 				END IF;
 
 				UPDATE daily_orders 
@@ -154,6 +154,9 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		rawDB.Exec("UPDATE inventory_items SET barcode = '' WHERE barcode IS NULL")
 		rawDB.Exec("DROP INDEX IF EXISTS idx_inventory_items_barcode")
 		rawDB.Exec("DROP INDEX IF EXISTS uni_inventory_items_barcode")
+		rawDB.Exec("UPDATE identifiers SET daily_target = 18 WHERE daily_target = 15 OR daily_target <= 0")
+		rawDB.Exec("UPDATE target_settings SET setting_value = '18' WHERE setting_key = 'DEFAULT_DAILY_TARGET'")
+		rawDB.Exec("UPDATE target_alerts SET target_orders = 18, deficit = 18 - actual_orders WHERE target_orders = 15")
 	}
 
 	// Seed default data

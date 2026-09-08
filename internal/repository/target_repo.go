@@ -54,6 +54,7 @@ type TargetRepository interface {
 	CreateTargetAlert(ctx context.Context, alert *domain.TargetAlert) error
 	ListTargetAlerts(ctx context.Context, alertDate string, unresolvedOnly bool) ([]domain.TargetAlert, error)
 	ResolveAlert(ctx context.Context, id uuid.UUID) error
+	ResolveAllAlerts(ctx context.Context, branch string, alertDate string) error
 
 	// Settings
 	GetTargetSetting(ctx context.Context, key string) (string, error)
@@ -113,7 +114,7 @@ func (r *gormTargetRepository) FindOrCreateIdentifier(ctx context.Context, name,
 		Name:          name,
 		AppName:       appName,
 		MonthlyTarget: 460,
-		DailyTarget:   15,
+		DailyTarget:   18,
 		IsActive:      true,
 	}
 	if err := r.db.WithContext(ctx).Create(&newIdent).Error; err != nil {
@@ -381,6 +382,24 @@ func (r *gormTargetRepository) ListTargetAlerts(ctx context.Context, alertDate s
 
 func (r *gormTargetRepository) ResolveAlert(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Model(&domain.TargetAlert{}).Where("id = ?", id).Update("is_resolved", true).Error
+}
+
+func (r *gormTargetRepository) ResolveAllAlerts(ctx context.Context, branch string, alertDate string) error {
+	branch = strings.TrimSpace(branch)
+	if branch != "" && branch != "all" && branch != "الكل" {
+		subQuery := r.db.WithContext(ctx).Model(&domain.Identifier{}).Select("id").Where("branch = ?", branch)
+		q := r.db.WithContext(ctx).Model(&domain.TargetAlert{}).Where("is_resolved = false").Where("identifier_id IN (?)", subQuery)
+		if alertDate != "" {
+			q = q.Where("alert_date = ?", alertDate)
+		}
+		return q.Update("is_resolved", true).Error
+	}
+
+	q := r.db.WithContext(ctx).Model(&domain.TargetAlert{}).Where("is_resolved = false")
+	if alertDate != "" {
+		q = q.Where("alert_date = ?", alertDate)
+	}
+	return q.Update("is_resolved", true).Error
 }
 
 func (r *gormTargetRepository) GetTargetSetting(ctx context.Context, key string) (string, error) {
