@@ -21,7 +21,7 @@ type TargetService interface {
 	ListIdentifiers(ctx context.Context, search, status, month string, branch string) ([]dto.IdentifierPerformanceDTO, error)
 	GetIdentifierDetails(ctx context.Context, id uuid.UUID, month string) (*dto.IdentifierDetailsDTO, error)
 	CreateIdentifier(ctx context.Context, name, appName, code string, monthlyTarget, dailyTarget int) (*domain.Identifier, error)
-	UpdateIdentifier(ctx context.Context, id uuid.UUID, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool) error
+	UpdateIdentifier(ctx context.Context, id uuid.UUID, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool, accountStatus string) error
 	DeleteIdentifier(ctx context.Context, id uuid.UUID) error
 	DeleteAllIdentifiers(ctx context.Context) error
 
@@ -457,6 +457,14 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 			EstimatedAchievementDate: estDate,
 			IsQualified:              isQualified,
 			IsActive:                 ident.IsActive,
+			AccountStatus:            ident.AccountStatus,
+		}
+		if dtoItem.AccountStatus == "" {
+			if ident.IsActive {
+				dtoItem.AccountStatus = "ACTIVE"
+			} else {
+				dtoItem.AccountStatus = "SUSPENDED_TEMP"
+			}
 		}
 
 		result = append(result, dtoItem)
@@ -614,7 +622,7 @@ func (s *targetService) CreateIdentifier(ctx context.Context, name, appName, cod
 	return ident, nil
 }
 
-func (s *targetService) UpdateIdentifier(ctx context.Context, id uuid.UUID, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool) error {
+func (s *targetService) UpdateIdentifier(ctx context.Context, id uuid.UUID, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool, accountStatus string) error {
 	ident, err := s.targetRepo.FindIdentifierByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("المعرف غير موجود: %w", err)
@@ -633,7 +641,23 @@ func (s *targetService) UpdateIdentifier(ctx context.Context, id uuid.UUID, name
 	if dailyTarget > 0 {
 		ident.DailyTarget = dailyTarget
 	}
-	ident.IsActive = isActive
+
+	accountStatus = strings.TrimSpace(accountStatus)
+	if accountStatus != "" {
+		ident.AccountStatus = accountStatus
+		if accountStatus == "ACTIVE" {
+			ident.IsActive = true
+		} else {
+			ident.IsActive = false
+		}
+	} else {
+		ident.IsActive = isActive
+		if !isActive && (ident.AccountStatus == "" || ident.AccountStatus == "ACTIVE") {
+			ident.AccountStatus = "SUSPENDED_TEMP"
+		} else if isActive && ident.AccountStatus != "ACTIVE" {
+			ident.AccountStatus = "ACTIVE"
+		}
+	}
 
 	return s.targetRepo.UpdateIdentifier(ctx, ident)
 }

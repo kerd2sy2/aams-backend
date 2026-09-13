@@ -164,6 +164,7 @@ func (h *TargetHandler) UpdateIdentifier(c *gin.Context) {
 		MonthlyTarget int    `json:"monthly_target"`
 		DailyTarget   int    `json:"daily_target"`
 		IsActive      *bool  `json:"is_active"`
+		AccountStatus string `json:"account_status"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات غير صالحة"})
@@ -175,7 +176,7 @@ func (h *TargetHandler) UpdateIdentifier(c *gin.Context) {
 		isActive = *body.IsActive
 	}
 
-	if err := h.targetService.UpdateIdentifier(c.Request.Context(), id, body.Name, body.AppName, body.Code, body.MonthlyTarget, body.DailyTarget, isActive); err != nil {
+	if err := h.targetService.UpdateIdentifier(c.Request.Context(), id, body.Name, body.AppName, body.Code, body.MonthlyTarget, body.DailyTarget, isActive, body.AccountStatus); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

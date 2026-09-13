@@ -365,11 +365,18 @@ func (s *excelImportService) ConfirmImport(ctx context.Context, req dto.ConfirmI
 				}
 				identCache[identCacheKey] = ident
 			}
-			identID = &ident.ID
-			activeIdentifiersForAlerts[ident.ID] = ident
-			if row.Branch != "" && ident.Branch != row.Branch {
-				ident.Branch = row.Branch
-				_ = s.targetRepo.UpdateIdentifier(ctx, ident)
+			// If identifier is permanently suspended, do not link orders to it (user stopped, driver can work elsewhere)
+			if ident.AccountStatus == "SUSPENDED_PERM" {
+				identID = nil
+			} else {
+				identID = &ident.ID
+				if ident.AccountStatus != "SUSPENDED_TEMP" {
+					activeIdentifiersForAlerts[ident.ID] = ident
+				}
+				if row.Branch != "" && ident.Branch != row.Branch {
+					ident.Branch = row.Branch
+					_ = s.targetRepo.UpdateIdentifier(ctx, ident)
+				}
 			}
 		}
 

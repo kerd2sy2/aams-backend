@@ -74,6 +74,7 @@ type IdentifierPerformanceDTO struct {
 	EstimatedAchievementDate string    `json:"estimated_achievement_date,omitempty"` // YYYY-MM-DD or "N/A"
 	IsQualified              bool      `json:"is_qualified"`
 	IsActive                 bool      `json:"is_active"`
+	AccountStatus            string    `json:"account_status"` // ACTIVE, SUSPENDED_TEMP, SUSPENDED_PERM
 }
 
 // DriverContributionDTO breakdown of orders by driver within an identifier

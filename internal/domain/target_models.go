@@ -17,6 +17,7 @@ type Identifier struct {
 	MonthlyTarget int            `gorm:"default:460" json:"monthly_target"`
 	DailyTarget   int            `gorm:"default:18" json:"daily_target"`
 	IsActive      bool           `gorm:"default:true" json:"is_active"`
+	AccountStatus string         `gorm:"type:varchar(30);default:'ACTIVE'" json:"account_status"`
 	Drivers       []Driver       `gorm:"many2many:identifier_drivers;" json:"drivers,omitempty"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
@@ -32,6 +33,9 @@ func (i *Identifier) BeforeCreate(tx *gorm.DB) error {
 	}
 	if i.DailyTarget <= 0 {
 		i.DailyTarget = 15
+	}
+	if i.AccountStatus == "" {
+		i.AccountStatus = "ACTIVE"
 	}
 	return nil
 }
