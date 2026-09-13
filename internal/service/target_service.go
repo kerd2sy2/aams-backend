@@ -386,38 +386,38 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 			dailyRequired = math.Round(float64(remainingTarget) / float64(remainingDays))
 		}
 
-		// Improved Projection calculation:
-		// Actual month orders achieved + (Recent 7-day average daily run rate * Remaining days in month)
-		recentWindowDays := 7
-		if elapsedDays < 7 && elapsedDays > 0 {
-			recentWindowDays = elapsedDays
-		}
-		recentDailyRate := float64(weekOrders) / float64(recentWindowDays)
-		if weekOrders == 0 && monthOrders > 0 {
-			recentDailyRate = dailyAverage
+		// Adaptive Blended Projection Model:
+		// Combines cumulative month rate (stability) with recent active momentum
+		recentPace := dailyAverage
+		if weekOrders > 0 {
+			recentPace = float64(weekOrders) / 7.0
 		}
 
-		projected := int(math.Round(float64(monthOrders) + (recentDailyRate * float64(remainingDays))))
+		// Weight: 65% monthly cumulative stability, 35% recent momentum
+		blendedRate := (0.65 * dailyAverage) + (0.35 * recentPace)
+		projected := int(math.Round(float64(monthOrders) + (blendedRate * float64(remainingDays))))
 		if monthOrders > projected {
 			projected = monthOrders
 		}
-		isQualified := projected >= mTarget
 
-		// Status categorization based explicitly on projected orders:
-		// 1. TARGET_ACHIEVED: achieved full monthly target (monthOrders >= mTarget)
-		// 2. ON_TRACK: projected 460 or more (projected >= 460) -> يسير بالمعدل
-		// 3. AT_RISK: projected 380 to 459 (projected >= 380) -> على وشك المعدل
-		// 4. BEHIND_TARGET: projected less than 380 (projected < 380) -> متأخر
+		expectedToDate := (float64(mTarget) / float64(daysInMonth)) * float64(elapsedDays)
+
+		// Accurate Status Categorization:
+		// 1. TARGET_ACHIEVED: reached or exceeded monthly target (monthOrders >= mTarget)
+		// 2. ON_TRACK: projected to achieve target (projected >= mTarget) OR pacing ahead of target with achievable daily requirement (monthOrders >= expectedToDate && dailyRequired <= 18.0)
+		// 3. AT_RISK: projected between 390 and 459 (>= 85% of target) OR dailyRequired <= 20.5 with active work
+		// 4. BEHIND_TARGET: severely lagging (projected < 390 AND dailyRequired > 20.5)
 		status := "ON_TRACK"
 		if monthOrders >= mTarget {
 			status = "TARGET_ACHIEVED"
-		} else if projected >= 460 {
+		} else if projected >= mTarget || (float64(monthOrders) >= expectedToDate && dailyRequired <= 18.0) {
 			status = "ON_TRACK"
-		} else if projected >= 380 {
+		} else if projected >= 390 || (dailyRequired <= 20.5 && monthOrders >= 120) {
 			status = "AT_RISK"
 		} else {
 			status = "BEHIND_TARGET"
 		}
+		isQualified := status == "ON_TRACK" || status == "TARGET_ACHIEVED"
 
 		// Estimated Achievement Date
 		estDate := "غير محدد"
