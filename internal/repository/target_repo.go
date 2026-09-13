@@ -141,11 +141,22 @@ func (r *gormTargetRepository) ListIdentifiers(ctx context.Context, search strin
 }
 
 func (r *gormTargetRepository) CreateIdentifier(ctx context.Context, ident *domain.Identifier) error {
-	return r.db.WithContext(ctx).Create(ident).Error
+	return r.db.WithContext(ctx).Omit("Drivers", "DailyOrders").Create(ident).Error
 }
 
 func (r *gormTargetRepository) UpdateIdentifier(ctx context.Context, ident *domain.Identifier) error {
-	return r.db.WithContext(ctx).Save(ident).Error
+	return r.db.WithContext(ctx).Model(&domain.Identifier{}).
+		Where("id = ?", ident.ID).
+		Updates(map[string]interface{}{
+			"name":           ident.Name,
+			"app_name":       ident.AppName,
+			"code":           ident.Code,
+			"monthly_target": ident.MonthlyTarget,
+			"daily_target":   ident.DailyTarget,
+			"is_active":      ident.IsActive,
+			"account_status": ident.AccountStatus,
+			"updated_at":     time.Now(),
+		}).Error
 }
 
 func (r *gormTargetRepository) DeleteIdentifier(ctx context.Context, id uuid.UUID) error {
