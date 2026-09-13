@@ -304,7 +304,11 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 	} else if maxOrderDate != "" {
 		todayDate = maxOrderDate
 	}
-	weekStartDate := now.AddDate(0, 0, -7).Format("2006-01-02")
+	refDate := now
+	if t, err := time.Parse("2006-01-02", todayDate); err == nil {
+		refDate = t
+	}
+	weekStartDate := refDate.AddDate(0, 0, -6).Format("2006-01-02")
 
 	ordersByIdent := make(map[uuid.UUID][]domain.DailyOrder)
 	for _, ord := range allMonthOrders {
@@ -382,8 +386,18 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 			dailyRequired = math.Round(float64(remainingTarget) / float64(remainingDays))
 		}
 
-		// Projection calculation: based on actual daily run rate across total month days
-		projected := int(math.Round(dailyAverage * float64(daysInMonth)))
+		// Improved Projection calculation:
+		// Actual month orders achieved + (Recent 7-day average daily run rate * Remaining days in month)
+		recentWindowDays := 7
+		if elapsedDays < 7 && elapsedDays > 0 {
+			recentWindowDays = elapsedDays
+		}
+		recentDailyRate := float64(weekOrders) / float64(recentWindowDays)
+		if weekOrders == 0 && monthOrders > 0 {
+			recentDailyRate = dailyAverage
+		}
+
+		projected := int(math.Round(float64(monthOrders) + (recentDailyRate * float64(remainingDays))))
 		if monthOrders > projected {
 			projected = monthOrders
 		}
@@ -392,14 +406,14 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 		// Status categorization based explicitly on projected orders:
 		// 1. TARGET_ACHIEVED: achieved full monthly target (monthOrders >= mTarget)
 		// 2. ON_TRACK: projected 460 or more (projected >= 460) -> يسير بالمعدل
-		// 3. AT_RISK: projected 310 to 459 (projected >= 310) -> على وشك المعدل
-		// 4. BEHIND_TARGET: projected less than 310 (projected < 310) -> متأخر
+		// 3. AT_RISK: projected 380 to 459 (projected >= 380) -> على وشك المعدل
+		// 4. BEHIND_TARGET: projected less than 380 (projected < 380) -> متأخر
 		status := "ON_TRACK"
 		if monthOrders >= mTarget {
 			status = "TARGET_ACHIEVED"
 		} else if projected >= 460 {
 			status = "ON_TRACK"
-		} else if projected >= 310 {
+		} else if projected >= 380 {
 			status = "AT_RISK"
 		} else {
 			status = "BEHIND_TARGET"

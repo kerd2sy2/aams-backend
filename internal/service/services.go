@@ -432,40 +432,56 @@ func (s *authService) RefreshToken(ctx context.Context, req dto.RefreshTokenRequ
 	}
 
 	admin, err := s.adminRepo.FindByID(ctx, claims.AdminID)
-	if err != nil {
-		return nil, errors.New("المستخدم غير موجود")
+	if err == nil && admin != nil {
+		accessToken, refreshToken, err := jwt.GenerateTokens(admin.ID, admin.Email, admin.Name, admin.Role, admin.BranchID, s.cfg.JWTSecret, s.cfg.JWTRefreshSecret)
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &dto.LoginResponse{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+		}
+		resp.Admin.ID = admin.ID
+		resp.Admin.Name = admin.Name
+		resp.Admin.Email = admin.Email
+		resp.Admin.Username = admin.Username
+		resp.Admin.Phone = admin.Phone
+		resp.Admin.Role = admin.Role
+		resp.Admin.RoleID = admin.RoleID
+		resp.Admin.Permissions = ResolveAdminPermissions(admin)
+		resp.Admin.BranchID = admin.BranchID
+
+		if admin.BranchID != nil {
+			branch, err := s.branchRepo.FindByID(ctx, *admin.BranchID)
+			if err == nil {
+				resp.Admin.Branch = &struct {
+					ID   uuid.UUID `json:"id"`
+					Name string    `json:"name"`
+				}{ID: branch.ID, Name: branch.Name}
+			}
+		}
+
+		return resp, nil
 	}
 
-	accessToken, refreshToken, err := jwt.GenerateTokens(admin.ID, admin.Email, admin.Name, admin.Role, admin.BranchID, s.cfg.JWTSecret, s.cfg.JWTRefreshSecret)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &dto.LoginResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}
-	resp.Admin.ID = admin.ID
-	resp.Admin.Name = admin.Name
-	resp.Admin.Email = admin.Email
-	resp.Admin.Username = admin.Username
-	resp.Admin.Phone = admin.Phone
-	resp.Admin.Role = admin.Role
-	resp.Admin.RoleID = admin.RoleID
-	resp.Admin.Permissions = ResolveAdminPermissions(admin)
-	resp.Admin.BranchID = admin.BranchID
-
-	if admin.BranchID != nil {
-		branch, err := s.branchRepo.FindByID(ctx, *admin.BranchID)
-		if err == nil {
-			resp.Admin.Branch = &struct {
-				ID   uuid.UUID `json:"id"`
-				Name string    `json:"name"`
-			}{ID: branch.ID, Name: branch.Name}
+	if s.empRepo != nil {
+		emp, empErr := s.empRepo.FindByID(ctx, claims.AdminID)
+		if empErr == nil && emp != nil {
+			empEmail := emp.NationalID + "@aams.local"
+			accessToken, refreshToken, err := jwt.GenerateTokens(emp.ID, empEmail, emp.Name, "DRIVER", emp.BranchID, s.cfg.JWTSecret, s.cfg.JWTRefreshSecret)
+			if err != nil {
+				return nil, err
+			}
+			resp := &dto.LoginResponse{
+				AccessToken:  accessToken,
+				RefreshToken: refreshToken,
+			}
+			return resp, nil
 		}
 	}
 
-	return resp, nil
+	return nil, errors.New("المستخدم غير موجود")
 }
 
 // RoleService interface & impl
