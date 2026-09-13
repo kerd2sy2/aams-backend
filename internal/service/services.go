@@ -473,9 +473,33 @@ func (s *authService) RefreshToken(ctx context.Context, req dto.RefreshTokenRequ
 			if err != nil {
 				return nil, err
 			}
+			branchName := ""
+			if emp.BranchID != nil {
+				b, err := s.branchRepo.FindByID(ctx, *emp.BranchID)
+				if err == nil && b != nil {
+					branchName = b.Name
+				}
+			}
+
 			resp := &dto.LoginResponse{
 				AccessToken:  accessToken,
 				RefreshToken: refreshToken,
+				IsEmployee:   true,
+				Employee: &dto.EmployeeInfo{
+					ID:               emp.ID,
+					Name:             emp.Name,
+					NationalID:       emp.NationalID,
+					MotorcycleNumber: emp.MotorcycleNumber,
+					KeyNumber:        emp.KeyNumber,
+					EmployeeNumber:   emp.EmployeeNumber,
+					JobRole:          emp.JobRole,
+					PersonalImage:    emp.PersonalImage,
+					ApplicationID:    emp.ApplicationID,
+					ApplicationType:  emp.ApplicationType,
+					Shift:            emp.Shift,
+					BranchID:         emp.BranchID,
+					BranchName:       branchName,
+				},
 			}
 			return resp, nil
 		}
