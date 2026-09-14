@@ -104,19 +104,29 @@ type IdentifierDetailsDTO struct {
 	ActiveDriversCount int                      `json:"active_drivers_count"`
 }
 
+// DriverDailyShiftDTO stores specific identifier and app worked by a driver on a day
+type DriverDailyShiftDTO struct {
+	IdentifierName string `json:"identifier_name"`
+	AppName        string `json:"app_name"`
+	OrdersCount    int    `json:"orders_count"`
+	Label          string `json:"label"` // e.g. "فهد (نينجا)"
+}
+
 // DriverPerformanceDTO driver view across all identifiers
 type DriverPerformanceDTO struct {
-	ID          uuid.UUID      `json:"id"`
-	Name        string         `json:"name"`
-	Phone       string         `json:"phone,omitempty"`
-	Branch      string         `json:"branch,omitempty"`
-	MonthOrders int            `json:"month_orders"`
-	TodayOrders int            `json:"today_orders"`
-	Identifiers []string       `json:"identifiers"`
-	Apps        []string       `json:"apps"`
-	DailyOrders map[string]int `json:"daily_orders,omitempty"` // map[YYYY-MM-DD]ordersCount
-	DailyTarget int            `json:"daily_target"`           // default 15
-	DaysActive  int            `json:"days_active,omitempty"`
+	ID               uuid.UUID                        `json:"id"`
+	Name             string                           `json:"name"`
+	Phone            string                           `json:"phone,omitempty"`
+	Branch           string                           `json:"branch,omitempty"`
+	MonthOrders      int                              `json:"month_orders"`
+	TodayOrders      int                              `json:"today_orders"`
+	Identifiers      []string                         `json:"identifiers"`
+	Apps             []string                         `json:"apps"`
+	DailyOrders      map[string]int                   `json:"daily_orders,omitempty"`      // map[YYYY-MM-DD]ordersCount
+	DailyIdentifiers map[string][]string              `json:"daily_identifiers,omitempty"` // map[YYYY-MM-DD][]identifierNames e.g. ["فهد (نينجا)"]
+	DailyShifts      map[string][]DriverDailyShiftDTO `json:"daily_shifts,omitempty"`      // map[YYYY-MM-DD][]DriverDailyShiftDTO
+	DailyTarget      int                              `json:"daily_target"`                 // default 18
+	DaysActive       int                              `json:"days_active,omitempty"`
 }
 
 // TargetDashboardSummaryDTO top-level stats and charts for dashboard

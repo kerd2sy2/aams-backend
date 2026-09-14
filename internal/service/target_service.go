@@ -709,6 +709,8 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 	driverMonthOrders := make(map[uuid.UUID]int)
 	driverTodayOrders := make(map[uuid.UUID]int)
 	driverDailyMap := make(map[uuid.UUID]map[string]int)
+	driverDailyIdentsMap := make(map[uuid.UUID]map[string]map[string]bool)
+	driverDailyShiftsMap := make(map[uuid.UUID]map[string][]dto.DriverDailyShiftDTO)
 	driverIdentsMap := make(map[uuid.UUID]map[string]bool)
 	driverAppsMap := make(map[uuid.UUID]map[string]bool)
 	driverBranchMap := make(map[uuid.UUID]string)
@@ -740,17 +742,70 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 				sheetIndex++
 			}
 		}
-		if ord.Identifier != nil {
+
+		// App name normalization
+		appName := strings.TrimSpace(ord.AppName)
+		if appName == "" && ord.Identifier != nil && ord.Identifier.AppName != "" {
+			appName = strings.TrimSpace(ord.Identifier.AppName)
+		}
+		displayApp := appName
+		lowerApp := strings.ToLower(appName)
+		if lowerApp == "ninja" || appName == "نينجا" {
+			displayApp = "نينجا"
+		} else if lowerApp == "keeta" || appName == "كيتا" {
+			displayApp = "كيتا"
+		} else if lowerApp == "toyou" || appName == "تويو" {
+			displayApp = "تويو"
+		} else if lowerApp == "hungerstation" || appName == "هنقرستيشن" {
+			displayApp = "هنقرستيشن"
+		} else if lowerApp == "jahez" || appName == "جاهز" {
+			displayApp = "جاهز"
+		}
+
+		identName := ""
+		if ord.Identifier != nil && ord.Identifier.Name != "" {
+			identName = strings.TrimSpace(ord.Identifier.Name)
 			if driverIdentsMap[ord.DriverID] == nil {
 				driverIdentsMap[ord.DriverID] = make(map[string]bool)
 			}
-			driverIdentsMap[ord.DriverID][ord.Identifier.Name] = true
+			driverIdentsMap[ord.DriverID][identName] = true
 		}
-		if ord.AppName != "" {
+
+		if displayApp != "" {
 			if driverAppsMap[ord.DriverID] == nil {
 				driverAppsMap[ord.DriverID] = make(map[string]bool)
 			}
-			driverAppsMap[ord.DriverID][ord.AppName] = true
+			driverAppsMap[ord.DriverID][displayApp] = true
+		}
+
+		// Full descriptive label for this day (e.g. "فهد (نينجا)")
+		label := ""
+		if identName != "" && displayApp != "" {
+			label = fmt.Sprintf("%s (%s)", identName, displayApp)
+		} else if identName != "" {
+			label = identName
+		} else if displayApp != "" {
+			label = displayApp
+		}
+
+		if label != "" {
+			if driverDailyIdentsMap[ord.DriverID] == nil {
+				driverDailyIdentsMap[ord.DriverID] = make(map[string]map[string]bool)
+			}
+			if driverDailyIdentsMap[ord.DriverID][ord.OrderDate] == nil {
+				driverDailyIdentsMap[ord.DriverID][ord.OrderDate] = make(map[string]bool)
+			}
+			driverDailyIdentsMap[ord.DriverID][ord.OrderDate][label] = true
+
+			if driverDailyShiftsMap[ord.DriverID] == nil {
+				driverDailyShiftsMap[ord.DriverID] = make(map[string][]dto.DriverDailyShiftDTO)
+			}
+			driverDailyShiftsMap[ord.DriverID][ord.OrderDate] = append(driverDailyShiftsMap[ord.DriverID][ord.OrderDate], dto.DriverDailyShiftDTO{
+				IdentifierName: identName,
+				AppName:        displayApp,
+				OrdersCount:    ord.OrdersCount,
+				Label:          label,
+			})
 		}
 	}
 
@@ -788,23 +843,46 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 		dMap := driverDailyMap[d.ID]
 		daysActive := len(dMap)
 
+		dailyIdents := make(map[string][]string)
+		if dIdents, ok := driverDailyIdentsMap[d.ID]; ok {
+			for dateStr, identSet := range dIdents {
+				var idList []string
+				for idName := range identSet {
+					idList = append(idList, idName)
+				}
+				dailyIdents[dateStr] = idList
+			}
+		}
+
+		dailyShifts := driverDailyShiftsMap[d.ID]
+		if dailyShifts == nil {
+			dailyShifts = make(map[string][]dto.DriverDailyShiftDTO)
+		}
+
 		result = append(result, dto.DriverPerformanceDTO{
-			ID:          d.ID,
-			Name:        d.Name,
-			Phone:       d.Phone,
-			Branch:      driverBranchMap[d.ID],
-			MonthOrders: driverMonthOrders[d.ID],
-			TodayOrders: driverTodayOrders[d.ID],
-			Identifiers: idents,
-			Apps:        apps,
-			DailyOrders: dMap,
-			DailyTarget: 18,
-			DaysActive:  daysActive,
+			ID:               d.ID,
+			Name:             d.Name,
+			Phone:            d.Phone,
+			Branch:           driverBranchMap[d.ID],
+			MonthOrders:      driverMonthOrders[d.ID],
+			TodayOrders:      driverTodayOrders[d.ID],
+			Identifiers:      idents,
+			Apps:             apps,
+			DailyOrders:      dMap,
+			DailyIdentifiers: dailyIdents,
+			DailyShifts:      dailyShifts,
+			DailyTarget:      18,
+			DaysActive:       daysActive,
 		})
 	}
 
-	// Sort result so drivers appearing in the sheet are ordered exactly as in the sheet!
+	// Sort result strictly by the master sheet roster, and newly added drivers appear afterwards!
 	sort.SliceStable(result, func(i, j int) bool {
+		rankI := getDriverMasterRank(result[i].Name)
+		rankJ := getDriverMasterRank(result[j].Name)
+		if rankI != rankJ {
+			return rankI < rankJ
+		}
 		orderI, hasI := driverSheetOrder[result[i].ID]
 		orderJ, hasJ := driverSheetOrder[result[j].ID]
 		if hasI && hasJ {
@@ -820,6 +898,97 @@ func (s *targetService) ListDrivers(ctx context.Context, search, month string, b
 	})
 
 	return result, nil
+}
+
+var masterDriversOrder = []string{
+	"لابون شندر",
+	"هريدي",
+	"محمد سليمان",
+	"محمد سيد سالم",
+	"صفات",
+	"مكرم",
+	"محمد اسامة",
+	"سعيد",
+	"جيهانغير",
+	"مد روبل",
+	"دلوار",
+	"رقيب",
+	"شوهاج",
+	"ابو الخير",
+	"ابو كوثر",
+	"راجو",
+	"تمال",
+	"اكاش",
+	"اسو عاشور",
+	"اسلام عاطف",
+	"ايمون",
+	"جهيدال",
+	"شوهيل الرحمن",
+	"حماد حنيف",
+	"شوهيل رانا",
+	"منهاز",
+	"محمد نيون",
+	"علي رفعت",
+	"محمود اوسين",
+	"عمر فاروق",
+	"نور زمان",
+	"محبوب سردار",
+	"مومن جمان",
+	"اسماعيل حسين",
+	"رياض",
+	"حنيف",
+	"عبيدول",
+	"شهاب الدين",
+	"راشد",
+	"بشير خميس",
+	"شوهان شيك",
+	"بلال محمد",
+	"رحمان يونس",
+	"ابوسفيان",
+	"غلام",
+	"مصطفي عبد العال",
+	"نور علم",
+	"نهيد",
+	"ميلون",
+	"اشرفول",
+	"فردين",
+	"طارق الاسلام",
+	"هايدر شيك",
+	"محمد فيصل",
+	"محمد وقاص",
+	"مد منير",
+	"محمد متولي",
+	"شهادات",
+	"غاجي شوهيل",
+	"كريم الشريف",
+	"عدنان",
+	"مدرويل اوسين",
+	"دلوار اوسين",
+	"محمود اسماعيل",
+	"إبراهيم خليل",
+}
+
+func normalizeDriverName(s string) string {
+	s = strings.TrimSpace(strings.ToLower(s))
+	s = strings.ReplaceAll(s, "أ", "ا")
+	s = strings.ReplaceAll(s, "إ", "ا")
+	s = strings.ReplaceAll(s, "آ", "ا")
+	s = strings.ReplaceAll(s, "ة", "ه")
+	s = strings.ReplaceAll(s, "ى", "ي")
+	s = strings.ReplaceAll(s, "عبد ", "عبد")
+	s = strings.ReplaceAll(s, "ابو ", "ابو")
+	s = strings.ReplaceAll(s, " ", "")
+	return s
+}
+
+func getDriverMasterRank(name string) int {
+	norm := normalizeDriverName(name)
+	for idx, mName := range masterDriversOrder {
+		if normalizeDriverName(mName) == norm {
+			return idx
+		}
+	}
+	return 999999
 }
 
 func (s *targetService) ListAlerts(ctx context.Context, date string, unresolvedOnly bool, branch string) ([]dto.TargetAlertDTO, error) {
