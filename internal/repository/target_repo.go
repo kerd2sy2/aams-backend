@@ -169,7 +169,9 @@ func (r *gormTargetRepository) DeleteAllIdentifiers(ctx context.Context) error {
 		_ = tx.Exec("DELETE FROM daily_orders").Error
 		_ = tx.Exec("DELETE FROM identifier_drivers").Error
 		_ = tx.Exec("DELETE FROM import_batches").Error
-		return tx.Unscoped().Where("1 = 1").Delete(&domain.Identifier{}).Error
+		_ = tx.Unscoped().Where("1 = 1").Delete(&domain.Identifier{}).Error
+		// مسح المناديب (drivers) بالكامل أيضاً
+		return tx.Unscoped().Where("1 = 1").Delete(&domain.Driver{}).Error
 	})
 }
 
