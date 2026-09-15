@@ -270,14 +270,26 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 				if err := bcrypt.CompareHashAndPassword([]byte(emp.PasswordHash), []byte(passwordInput)); err == nil {
 					isValidPassword = true
 				}
-			} else {
-				// Default password fallback: last 6 digits of national ID or full national ID
-				if len(emp.NationalID) >= 6 {
-					last6 := emp.NationalID[len(emp.NationalID)-6:]
-					if passwordInput == last6 || passwordInput == emp.NationalID {
+			}
+
+			// Default password fallback:
+			// 1) Last 4 digits of National ID (Primary Default)
+			// 2) Last 6 digits of National ID (Backwards compatibility)
+			// 3) Full National ID
+			if !isValidPassword {
+				if len(emp.NationalID) >= 4 {
+					last4 := emp.NationalID[len(emp.NationalID)-4:]
+					if passwordInput == last4 {
 						isValidPassword = true
 					}
-				} else if passwordInput == emp.NationalID {
+				}
+				if len(emp.NationalID) >= 6 {
+					last6 := emp.NationalID[len(emp.NationalID)-6:]
+					if passwordInput == last6 {
+						isValidPassword = true
+					}
+				}
+				if passwordInput == emp.NationalID {
 					isValidPassword = true
 				}
 			}
@@ -1241,14 +1253,22 @@ func (s *employeeService) ChangePassword(ctx context.Context, id uuid.UUID, oldP
 		if err := bcrypt.CompareHashAndPassword([]byte(emp.PasswordHash), []byte(oldPass)); err == nil {
 			isValidOld = true
 		}
-	} else {
-		// Default fallback password logic (last 6 digits or full national ID)
-		if len(emp.NationalID) >= 6 {
-			last6 := emp.NationalID[len(emp.NationalID)-6:]
-			if oldPass == last6 || oldPass == emp.NationalID {
+	}
+	if !isValidOld {
+		// Default fallback password logic (last 4 digits, last 6 digits or full national ID)
+		if len(emp.NationalID) >= 4 {
+			last4 := emp.NationalID[len(emp.NationalID)-4:]
+			if oldPass == last4 {
 				isValidOld = true
 			}
-		} else if oldPass == emp.NationalID {
+		}
+		if len(emp.NationalID) >= 6 {
+			last6 := emp.NationalID[len(emp.NationalID)-6:]
+			if oldPass == last6 {
+				isValidOld = true
+			}
+		}
+		if oldPass == emp.NationalID {
 			isValidOld = true
 		}
 	}

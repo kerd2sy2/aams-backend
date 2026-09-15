@@ -18,7 +18,7 @@ type Claims struct {
 }
 
 func GenerateTokens(adminID uuid.UUID, email, name, role string, branchID *uuid.UUID, secret, refreshSecret string) (accessToken string, refreshToken string, err error) {
-	// Access token (valid for 7 days)
+	// Access token (valid for 180 days for continuous mobile usage)
 	accessClaims := &Claims{
 		AdminID:  adminID,
 		Email:    email,
@@ -26,7 +26,7 @@ func GenerateTokens(adminID uuid.UUID, email, name, role string, branchID *uuid.
 		Role:     role,
 		BranchID: branchID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(180 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   adminID.String(),
 		},
@@ -38,7 +38,7 @@ func GenerateTokens(adminID uuid.UUID, email, name, role string, branchID *uuid.
 		return "", "", err
 	}
 
-	// Refresh token (valid for 30 days)
+	// Refresh token (valid for 10 years for permanent session maintenance)
 	refreshClaims := &Claims{
 		AdminID:  adminID,
 		Email:    email,
@@ -46,7 +46,7 @@ func GenerateTokens(adminID uuid.UUID, email, name, role string, branchID *uuid.
 		Role:     role,
 		BranchID: branchID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * 24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * 365 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   adminID.String(),
 		},

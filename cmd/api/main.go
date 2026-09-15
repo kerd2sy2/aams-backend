@@ -304,16 +304,16 @@ func main() {
 	{
 		authRoutes.POST("/login", middleware.StrictLoginLimiter(), authHandler.Login)
 		authRoutes.POST("/auth/login", middleware.StrictLoginLimiter(), authHandler.Login)
-		authRoutes.POST("/refresh", middleware.StrictLoginLimiter(), authHandler.RefreshToken)
-		authRoutes.POST("/auth/refresh", middleware.StrictLoginLimiter(), authHandler.RefreshToken)
+		authRoutes.POST("/refresh", authHandler.RefreshToken)
+		authRoutes.POST("/auth/refresh", authHandler.RefreshToken)
 		authRoutes.POST("/auth/google/login", middleware.StrictLoginLimiter(), authHandler.GoogleLogin)
 		authRoutes.POST("/auth/request-otp", middleware.StrictLoginLimiter(), otpHandler.RequestOTP)
 		authRoutes.POST("/auth/verify-otp", middleware.StrictLoginLimiter(), otpHandler.VerifyOTP)
 	}
 
 	// Fallback refresh routes for compatibility with various client prefixes
-	r.POST("/api/refresh", middleware.StrictLoginLimiter(), authHandler.RefreshToken)
-	r.POST("/auth/refresh", middleware.StrictLoginLimiter(), authHandler.RefreshToken)
+	r.POST("/api/refresh", authHandler.RefreshToken)
+	r.POST("/auth/refresh", authHandler.RefreshToken)
 
 	// Public settings (no auth required) — used by login page
 	r.GET("/api/v1/settings/public", settingHandler.GetPublicSettings)
