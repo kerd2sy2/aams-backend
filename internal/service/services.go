@@ -911,12 +911,13 @@ type EmployeeService interface {
 }
 
 type employeeService struct {
-	empRepo  repository.EmployeeRepository
-	workRepo repository.WorkRepository
+	empRepo     repository.EmployeeRepository
+	workRepo    repository.WorkRepository
+	vehicleRepo repository.VehicleRepository
 }
 
-func NewEmployeeService(empRepo repository.EmployeeRepository, workRepo repository.WorkRepository) EmployeeService {
-	return &employeeService{empRepo: empRepo, workRepo: workRepo}
+func NewEmployeeService(empRepo repository.EmployeeRepository, workRepo repository.WorkRepository, vehicleRepo repository.VehicleRepository) EmployeeService {
+	return &employeeService{empRepo: empRepo, workRepo: workRepo, vehicleRepo: vehicleRepo}
 }
 
 func (s *employeeService) Create(ctx context.Context, req dto.CreateEmployeeRequest) (*domain.Employee, error) {
@@ -1165,7 +1166,32 @@ func (s *employeeService) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *employeeService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Employee, error) {
-	return s.empRepo.FindByID(ctx, id)
+	emp, err := s.empRepo.FindByID(ctx, id)
+	if err != nil || emp == nil {
+		return emp, err
+	}
+
+	var plate string
+	if s.workRepo != nil {
+		activeSession, _ := s.workRepo.FindActiveSessionByEmployeeID(ctx, id)
+		if activeSession != nil && activeSession.MotorcycleNumber != "" {
+			plate = strings.TrimSpace(activeSession.MotorcycleNumber)
+		}
+	}
+	if plate == "" && emp.MotorcycleNumber != "" {
+		plate = strings.TrimSpace(emp.MotorcycleNumber)
+	}
+
+	if plate != "" && s.vehicleRepo != nil {
+		if v, _ := s.vehicleRepo.FindByPlateNumber(ctx, plate); v != nil && v.RegistrationImage != "" {
+			emp.VehicleRegistrationImage = v.RegistrationImage
+			if emp.MotorcycleNumber != plate {
+				emp.MotorcycleNumber = plate
+			}
+		}
+	}
+
+	return emp, nil
 }
 
 func (s *employeeService) Search(ctx context.Context, term string, branchID *uuid.UUID) ([]domain.Employee, error) {
@@ -1314,7 +1340,7 @@ type WorkService interface {
 	ReviewSession(ctx context.Context, sessionID uuid.UUID, req dto.ReviewWorkSessionRequest, reviewerID *uuid.UUID, reviewerName string) (*domain.WorkSession, error)
 	GetActiveSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	GetLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
-	GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, error)
+	GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, string, error)
 	CountTodaySessions(ctx context.Context, empID uuid.UUID) (int64, error)
 	CheckOilChange(ctx context.Context, empID uuid.UUID) (*dto.OilChangeCheckResponse, error)
 	GetSessionByID(ctx context.Context, sessionID uuid.UUID) (*domain.WorkSession, error)
@@ -1434,6 +1460,24 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 
 	if err := s.workRepo.CreateSession(ctx, session); err != nil {
 		return nil, err
+	}
+
+	// Dynamic vehicle registration sync: if shift started with a motorcycle, update employee's active motorcycle and registration document
+	if motorcycleNumber != "" {
+		empNeedsUpdate := false
+		if emp.MotorcycleNumber != motorcycleNumber {
+			emp.MotorcycleNumber = motorcycleNumber
+			empNeedsUpdate = true
+		}
+		if s.vehicleRepo != nil {
+			if v, _ := s.vehicleRepo.FindByPlateNumber(ctx, motorcycleNumber); v != nil && v.RegistrationImage != "" {
+				emp.VehicleRegistrationImage = v.RegistrationImage
+				empNeedsUpdate = true
+			}
+		}
+		if empNeedsUpdate {
+			_ = s.empRepo.Update(ctx, emp)
+		}
 	}
 
 	// Always notify supervisors when an employee starts work
@@ -1620,16 +1664,20 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 	return activeSession, nil
 }
 
-func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, error) {
-	// If motorcycle number is specified, prioritize vehicle's latest odometer and broken status
+func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, string, error) {
+	var regImage string
+	// If motorcycle number is specified, prioritize vehicle's latest odometer, broken status, and registration image
 	if motorcycleNumber != "" && s.vehicleRepo != nil {
 		v, _ := s.vehicleRepo.FindByPlateNumber(ctx, motorcycleNumber)
-		if v != nil && v.IsOdometerBroken {
-			return 0, 0, true, nil
+		if v != nil {
+			regImage = v.RegistrationImage
+			if v.IsOdometerBroken {
+				return 0, 0, true, regImage, nil
+			}
 		}
 		latestKM, err := s.vehicleRepo.FindLatestVehicleKM(ctx, motorcycleNumber)
 		if err == nil && latestKM > 0 {
-			return latestKM, 0, false, nil
+			return latestKM, 0, false, regImage, nil
 		}
 	}
 
@@ -1637,11 +1685,16 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 	if empID != uuid.Nil {
 		session, err := s.workRepo.FindLastCompletedSession(ctx, empID)
 		if err == nil && session != nil {
-			return session.EndKM, session.StartKM, false, nil
+			if regImage == "" && session.MotorcycleNumber != "" && s.vehicleRepo != nil {
+				if v, _ := s.vehicleRepo.FindByPlateNumber(ctx, session.MotorcycleNumber); v != nil {
+					regImage = v.RegistrationImage
+				}
+			}
+			return session.EndKM, session.StartKM, false, regImage, nil
 		}
 	}
 
-	return 0, 0, false, errors.New("لا توجد قراءة سابقة")
+	return 0, 0, false, regImage, errors.New("لا توجد قراءة سابقة")
 }
 
 func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest) (*domain.WorkSession, error) {
@@ -3399,11 +3452,12 @@ type VehicleService interface {
 }
 
 type vehicleService struct {
-	vehicleRepo repository.VehicleRepository
+	vehicleRepo    repository.VehicleRepository
+	storageService StorageService
 }
 
-func NewVehicleService(vehicleRepo repository.VehicleRepository) VehicleService {
-	return &vehicleService{vehicleRepo: vehicleRepo}
+func NewVehicleService(vehicleRepo repository.VehicleRepository, storageService StorageService) VehicleService {
+	return &vehicleService{vehicleRepo: vehicleRepo, storageService: storageService}
 }
 
 func (s *vehicleService) Create(ctx context.Context, req dto.CreateVehicleRequest) (*domain.Vehicle, error) {
@@ -3415,6 +3469,13 @@ func (s *vehicleService) Create(ctx context.Context, req dto.CreateVehicleReques
 	vType := req.VehicleType
 	if vType == "" {
 		vType = "motorcycle"
+	}
+
+	regImage := strings.TrimSpace(req.RegistrationImage)
+	if s.storageService != nil && strings.HasPrefix(regImage, "data:image") {
+		if savedUrl, err := s.storageService.SaveBase64Image(regImage, "registration"); err == nil && savedUrl != "" {
+			regImage = savedUrl
+		}
 	}
 
 	// Check if vehicle exists (including soft-deleted records)
@@ -3429,6 +3490,9 @@ func (s *vehicleService) Create(ctx context.Context, req dto.CreateVehicleReques
 			existingUnscoped.Status = domain.VehicleStatusAvailable
 			existingUnscoped.BranchID = req.BranchID
 			existingUnscoped.Notes = req.Notes
+			if regImage != "" {
+				existingUnscoped.RegistrationImage = regImage
+			}
 			if req.CurrentKM > 0 {
 				existingUnscoped.CurrentKM = req.CurrentKM
 			}
@@ -3450,6 +3514,9 @@ func (s *vehicleService) Create(ctx context.Context, req dto.CreateVehicleReques
 			existingUnscoped.Status = domain.VehicleStatusAvailable
 			existingUnscoped.BranchID = req.BranchID
 			existingUnscoped.Notes = req.Notes
+			if regImage != "" {
+				existingUnscoped.RegistrationImage = regImage
+			}
 			if req.CurrentKM > 0 {
 				existingUnscoped.CurrentKM = req.CurrentKM
 			}
@@ -3467,19 +3534,20 @@ func (s *vehicleService) Create(ctx context.Context, req dto.CreateVehicleReques
 	}
 
 	vehicle := &domain.Vehicle{
-		ID:               uuid.New(),
-		PlateNumber:      plate,
-		VehicleType:      vType,
-		Brand:            req.Brand,
-		ModelYear:        req.ModelYear,
-		KeyNumber:        req.KeyNumber,
-		CurrentKM:        req.CurrentKM,
-		LastOilChangeKM:  req.LastOilChangeKM,
-		IsOdometerBroken: req.IsOdometerBroken,
-		TotalDistance:    0,
-		Status:           domain.VehicleStatusAvailable,
-		BranchID:         req.BranchID,
-		Notes:            req.Notes,
+		ID:                uuid.New(),
+		PlateNumber:       plate,
+		VehicleType:       vType,
+		Brand:             req.Brand,
+		ModelYear:         req.ModelYear,
+		KeyNumber:         req.KeyNumber,
+		CurrentKM:         req.CurrentKM,
+		LastOilChangeKM:   req.LastOilChangeKM,
+		IsOdometerBroken:  req.IsOdometerBroken,
+		RegistrationImage: regImage,
+		TotalDistance:     0,
+		Status:            domain.VehicleStatusAvailable,
+		BranchID:          req.BranchID,
+		Notes:             req.Notes,
 	}
 
 	if err := s.vehicleRepo.Create(ctx, vehicle); err != nil {
@@ -3517,6 +3585,15 @@ func (s *vehicleService) Update(ctx context.Context, id uuid.UUID, req dto.Updat
 	}
 	if req.IsOdometerBroken != nil {
 		vehicle.IsOdometerBroken = *req.IsOdometerBroken
+	}
+	if req.RegistrationImage != nil {
+		regImage := strings.TrimSpace(*req.RegistrationImage)
+		if s.storageService != nil && strings.HasPrefix(regImage, "data:image") {
+			if savedUrl, err := s.storageService.SaveBase64Image(regImage, "registration"); err == nil && savedUrl != "" {
+				regImage = savedUrl
+			}
+		}
+		vehicle.RegistrationImage = regImage
 	}
 	if req.Status != nil {
 		vehicle.Status = *req.Status

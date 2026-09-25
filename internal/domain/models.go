@@ -474,6 +474,7 @@ type Vehicle struct {
 	TotalDistance    float64        `gorm:"default:0" json:"total_distance"`                           // ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ظƒظٹظ„ظˆظ…طھط±ط§طھ ط§ظ„ظ…ظ‚ط·ظˆط¹ط©
 	Status           string         `gorm:"type:varchar(20);default:'AVAILABLE';index" json:"status"`  // "AVAILABLE", "IN_USE", "MAINTENANCE"
 	IsOdometerBroken bool           `gorm:"default:false;index" json:"is_odometer_broken"`             // عداد المسافات تالف / معطل
+	RegistrationImage string        `gorm:"type:text" json:"registration_image"`                       // صورة استمارة المركبة / الدباب
 	BranchID         *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
 	Branch           *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
 	Notes            string         `gorm:"type:text" json:"notes"`

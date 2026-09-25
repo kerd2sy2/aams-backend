@@ -1110,9 +1110,14 @@ func (h *WorkHandler) GetLastKM(c *gin.Context) {
 		}
 	}
 
-	lastEndKM, lastStartKM, isOdometerBroken, err := h.workService.GetLastSessionOrVehicleKM(c.Request.Context(), empID, motorcycleNumber)
+	lastEndKM, lastStartKM, isOdometerBroken, regImage, err := h.workService.GetLastSessionOrVehicleKM(c.Request.Context(), empID, motorcycleNumber)
 	if err != nil && !isOdometerBroken {
-		c.JSON(http.StatusNotFound, gin.H{"error": "لا توجد قراءة سابقة مسجلة"})
+		c.JSON(http.StatusOK, gin.H{
+			"last_end_km":        0,
+			"last_start_km":      0,
+			"is_odometer_broken": false,
+			"registration_image": regImage,
+		})
 		return
 	}
 
@@ -1120,6 +1125,7 @@ func (h *WorkHandler) GetLastKM(c *gin.Context) {
 		"last_end_km":        lastEndKM,
 		"last_start_km":      lastStartKM,
 		"is_odometer_broken": isOdometerBroken,
+		"registration_image": regImage,
 	})
 }
 
