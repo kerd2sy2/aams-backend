@@ -105,6 +105,8 @@ type Employee struct {
 	IsVPN                    bool           `gorm:"default:false" json:"is_vpn"`
 	IsMockLocation           bool           `gorm:"default:false" json:"is_mock_location"`
 	OutOfZone                bool           `gorm:"default:false" json:"out_of_zone"`
+	PushToken                string         `gorm:"type:text" json:"push_token"`
+	DeviceUUID               string         `gorm:"type:varchar(100)" json:"device_uuid"`
 	CreatedAt                time.Time      `json:"created_at"`
 	UpdatedAt                time.Time      `json:"updated_at"`
 	DeletedAt                gorm.DeletedAt `gorm:"index" json:"-"`
@@ -688,6 +690,7 @@ type Notification struct {
 	EmployeeID *uuid.UUID `gorm:"type:uuid;index" json:"employee_id"`
 	Title      string     `gorm:"type:varchar(255);not null" json:"title"`
 	Body       string     `gorm:"type:text;not null" json:"body"`
+	ImageURL   string     `gorm:"type:text" json:"image_url,omitempty"`
 	Type       string     `gorm:"type:varchar(50);not null;index" json:"type"`
 	Status     string     `gorm:"type:varchar(50);default:'unread';index" json:"status"`
 	CreatedAt  time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
@@ -701,6 +704,64 @@ type Notification struct {
 func (n *Notification) BeforeCreate(tx *gorm.DB) error {
 	if n.ID == uuid.Nil {
 		n.ID = uuid.New()
+	}
+	return nil
+}
+
+// BroadcastNotification model for mass announcements to delegates and phones
+type BroadcastNotification struct {
+	ID            uuid.UUID  `gorm:"type:char(36);primary_key" json:"id"`
+	Title         string     `gorm:"type:varchar(255);not null" json:"title"`
+	Body          string     `gorm:"type:text;not null" json:"body"`
+	ImageURL      string     `gorm:"type:text" json:"image_url"`
+	Target        string     `gorm:"type:varchar(50);default:'ALL'" json:"target"` // "ALL", "BRANCH"
+	BranchID      *uuid.UUID `gorm:"type:char(36);index" json:"branch_id"`
+	Branch        *Branch    `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
+	CreatedBy     string     `gorm:"type:varchar(150)" json:"created_by"`
+	SentCount     int        `gorm:"default:0" json:"sent_count"`
+	HasPoll       bool       `gorm:"default:false" json:"has_poll"`
+	PollQuestion  string     `gorm:"type:varchar(255)" json:"poll_question"`
+	AgreeCount    int        `gorm:"default:0" json:"agree_count"`
+	DisagreeCount int        `gorm:"default:0" json:"disagree_count"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+func (b *BroadcastNotification) BeforeCreate(tx *gorm.DB) error {
+	if b.ID == uuid.Nil {
+		b.ID = uuid.New()
+	}
+	return nil
+}
+
+// BroadcastRead tracks which employees have seen/dismissed a broadcast notification
+type BroadcastRead struct {
+	ID          uuid.UUID `gorm:"type:char(36);primary_key" json:"id"`
+	BroadcastID uuid.UUID `gorm:"type:char(36);index;not null" json:"broadcast_id"`
+	EmployeeID  uuid.UUID `gorm:"type:char(36);index;not null" json:"employee_id"`
+	ReadAt      time.Time `json:"read_at"`
+}
+
+func (r *BroadcastRead) BeforeCreate(tx *gorm.DB) error {
+	if r.ID == uuid.Nil {
+		r.ID = uuid.New()
+	}
+	return nil
+}
+
+// BroadcastVote records employee responses to poll questions (موافق / معترض)
+type BroadcastVote struct {
+	ID          uuid.UUID  `gorm:"type:char(36);primary_key" json:"id"`
+	BroadcastID uuid.UUID  `gorm:"type:char(36);index;not null" json:"broadcast_id"`
+	EmployeeID  uuid.UUID  `gorm:"type:char(36);index;not null" json:"employee_id"`
+	Employee    *Employee  `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
+	Response    string     `gorm:"type:varchar(20);not null" json:"response"` // "AGREE" or "DISAGREE"
+	Reason      string     `gorm:"type:text" json:"reason"`                  // optional reason
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+func (v *BroadcastVote) BeforeCreate(tx *gorm.DB) error {
+	if v.ID == uuid.Nil {
+		v.ID = uuid.New()
 	}
 	return nil
 }

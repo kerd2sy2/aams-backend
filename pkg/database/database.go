@@ -69,6 +69,9 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		&domain.LeaveRequest{},
 		&domain.SupportTicket{},
 		&domain.Notification{},
+		&domain.BroadcastNotification{},
+		&domain.BroadcastRead{},
+		&domain.BroadcastVote{},
 		&domain.OTPRequest{},
 		&domain.Identifier{},
 		&domain.Driver{},
@@ -85,6 +88,9 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	// Performance indexes for target orders
 	if rawDB, err := db.DB(); err == nil {
 		rawDB.Exec("ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS registration_image text")
+		rawDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS push_token text")
+		rawDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS device_uuid varchar(100)")
+		rawDB.Exec("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS image_url text")
 		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_daily_orders_date_id ON daily_orders (order_date, identifier_id)")
 		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_daily_orders_driver ON daily_orders (driver_id, order_date)")
 		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_daily_orders_dedup ON daily_orders (order_date, identifier_id, driver_id, app_name)")

@@ -2099,6 +2099,212 @@ func (r *gormNotificationRepository) FindByEmployeeAndTypeAndDate(ctx context.Co
 	return &notif, nil
 }
 
+func (r *gormNotificationRepository) CreateBroadcast(ctx context.Context, broadcast *domain.BroadcastNotification) error {
+	return r.db.WithContext(ctx).Create(broadcast).Error
+}
+
+func (r *gormNotificationRepository) FindBroadcasts(ctx context.Context, branchID *uuid.UUID, limit, offset int) ([]domain.BroadcastNotification, int64, error) {
+	var broadcasts []domain.BroadcastNotification
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&domain.BroadcastNotification{}).Preload("Branch")
+	if branchID != nil {
+		query = query.Where("target = 'ALL' OR branch_id = ?", branchID)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if limit <= 0 {
+		limit = 50
+	}
+	if err := query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&broadcasts).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return broadcasts, total, nil
+}
+
+func (r *gormNotificationRepository) FindBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, limit int) ([]dto.BroadcastItemDTO, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := r.db.WithContext(ctx).Model(&domain.BroadcastNotification{}).Preload("Branch")
+	if branchID != nil {
+		query = query.Where("target = 'ALL' OR branch_id = ?", branchID)
+	} else {
+		query = query.Where("target = 'ALL'")
+	}
+
+	var broadcasts []domain.BroadcastNotification
+	if err := query.Order("created_at DESC").Limit(limit).Find(&broadcasts).Error; err != nil {
+		return nil, err
+	}
+
+	if len(broadcasts) == 0 {
+		return []dto.BroadcastItemDTO{}, nil
+	}
+
+	// Fetch read records for this employee
+	var readIDs []uuid.UUID
+	r.db.WithContext(ctx).Model(&domain.BroadcastRead{}).Where("employee_id = ?", empID).Pluck("broadcast_id", &readIDs)
+	readMap := make(map[uuid.UUID]bool)
+	for _, id := range readIDs {
+		readMap[id] = true
+	}
+
+	// Fetch votes for this employee
+	var votes []domain.BroadcastVote
+	r.db.WithContext(ctx).Where("employee_id = ?", empID).Find(&votes)
+	voteMap := make(map[uuid.UUID]string)
+	for _, v := range votes {
+		voteMap[v.BroadcastID] = v.Response
+	}
+
+	res := make([]dto.BroadcastItemDTO, len(broadcasts))
+	for i, b := range broadcasts {
+		branchName := "جميع الفروع"
+		if b.Branch != nil {
+			branchName = b.Branch.Name
+		}
+		res[i] = dto.BroadcastItemDTO{
+			ID:            b.ID,
+			Title:         b.Title,
+			Body:          b.Body,
+			ImageURL:      b.ImageURL,
+			Target:        b.Target,
+			BranchID:      b.BranchID,
+			BranchName:    branchName,
+			CreatedBy:     b.CreatedBy,
+			SentCount:     b.SentCount,
+			HasPoll:       b.HasPoll,
+			PollQuestion:  b.PollQuestion,
+			AgreeCount:    b.AgreeCount,
+			DisagreeCount: b.DisagreeCount,
+			CreatedAt:     b.CreatedAt,
+			IsRead:        readMap[b.ID],
+			UserVote:      voteMap[b.ID],
+		}
+	}
+
+	return res, nil
+}
+
+func (r *gormNotificationRepository) GetUnreadBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID) ([]dto.BroadcastItemDTO, error) {
+	all, err := r.FindBroadcastsForEmployee(ctx, empID, branchID, 20)
+	if err != nil {
+		return nil, err
+	}
+	var unread []dto.BroadcastItemDTO
+	for _, item := range all {
+		if !item.IsRead {
+			unread = append(unread, item)
+		}
+	}
+	return unread, nil
+}
+
+func (r *gormNotificationRepository) MarkBroadcastAsRead(ctx context.Context, broadcastID, empID uuid.UUID) error {
+	var existing domain.BroadcastRead
+	err := r.db.WithContext(ctx).Where("broadcast_id = ? AND employee_id = ?", broadcastID, empID).First(&existing).Error
+	if err == nil {
+		return nil
+	}
+
+	read := &domain.BroadcastRead{
+		ID:          uuid.New(),
+		BroadcastID: broadcastID,
+		EmployeeID:  empID,
+		ReadAt:      time.Now(),
+	}
+	return r.db.WithContext(ctx).Create(read).Error
+}
+
+func (r *gormNotificationRepository) DeleteBroadcast(ctx context.Context, id uuid.UUID) error {
+	_ = r.db.WithContext(ctx).Where("broadcast_id = ?", id).Delete(&domain.BroadcastVote{}).Error
+	_ = r.db.WithContext(ctx).Where("broadcast_id = ?", id).Delete(&domain.BroadcastRead{}).Error
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&domain.BroadcastNotification{}).Error
+}
+
+func (r *gormNotificationRepository) RecordVote(ctx context.Context, vote *domain.BroadcastVote) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing domain.BroadcastVote
+		err := tx.Where("broadcast_id = ? AND employee_id = ?", vote.BroadcastID, vote.EmployeeID).First(&existing).Error
+		if err == nil {
+			// Update existing vote
+			existing.Response = vote.Response
+			existing.Reason = vote.Reason
+			if err := tx.Save(&existing).Error; err != nil {
+				return err
+			}
+		} else {
+			// Create new vote
+			if vote.ID == uuid.Nil {
+				vote.ID = uuid.New()
+			}
+			vote.CreatedAt = time.Now()
+			if err := tx.Create(vote).Error; err != nil {
+				return err
+			}
+		}
+
+		// Also mark as read automatically
+		var read domain.BroadcastRead
+		if err := tx.Where("broadcast_id = ? AND employee_id = ?", vote.BroadcastID, vote.EmployeeID).First(&read).Error; err != nil {
+			tx.Create(&domain.BroadcastRead{
+				ID:          uuid.New(),
+				BroadcastID: vote.BroadcastID,
+				EmployeeID:  vote.EmployeeID,
+				ReadAt:      time.Now(),
+			})
+		}
+
+		// Recount agree and disagree
+		var agreeCount, disagreeCount int64
+		tx.Model(&domain.BroadcastVote{}).Where("broadcast_id = ? AND response = 'AGREE'", vote.BroadcastID).Count(&agreeCount)
+		tx.Model(&domain.BroadcastVote{}).Where("broadcast_id = ? AND response = 'DISAGREE'", vote.BroadcastID).Count(&disagreeCount)
+
+		return tx.Model(&domain.BroadcastNotification{}).Where("id = ?", vote.BroadcastID).Updates(map[string]interface{}{
+			"agree_count":    agreeCount,
+			"disagree_count": disagreeCount,
+		}).Error
+	})
+}
+
+func (r *gormNotificationRepository) GetBroadcastVotes(ctx context.Context, broadcastID uuid.UUID) ([]dto.BroadcastVoteItemDTO, error) {
+	var votes []domain.BroadcastVote
+	if err := r.db.WithContext(ctx).Preload("Employee").Where("broadcast_id = ?", broadcastID).Order("created_at DESC").Find(&votes).Error; err != nil {
+		return nil, err
+	}
+	res := make([]dto.BroadcastVoteItemDTO, len(votes))
+	for i, v := range votes {
+		name := ""
+		empNum := ""
+		natID := ""
+		phone := ""
+		if v.Employee != nil {
+			name = v.Employee.Name
+			empNum = v.Employee.EmployeeNumber
+			natID = v.Employee.NationalID
+			phone = v.Employee.Phone
+		}
+		res[i] = dto.BroadcastVoteItemDTO{
+			ID:             v.ID,
+			EmployeeID:     v.EmployeeID,
+			EmployeeName:   name,
+			EmployeeNumber: empNum,
+			NationalID:     natID,
+			Phone:          phone,
+			Response:       v.Response,
+			Reason:         v.Reason,
+			CreatedAt:      v.CreatedAt,
+		}
+	}
+	return res, nil
+}
+
 // ------------------------------------------------------------------
 // 8. gormArchiveRepository (سجل الأرشيف والمحذوفات)
 // ------------------------------------------------------------------

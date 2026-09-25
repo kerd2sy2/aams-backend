@@ -254,6 +254,16 @@ type NotificationRepository interface {
 	MarkAllAsRead(ctx context.Context, adminID uuid.UUID) error
 	Create(ctx context.Context, notif *domain.Notification) error
 	FindByEmployeeAndTypeAndDate(ctx context.Context, empID uuid.UUID, notifType string, date string) (*domain.Notification, error)
+
+	// Broadcast announcements
+	CreateBroadcast(ctx context.Context, broadcast *domain.BroadcastNotification) error
+	FindBroadcasts(ctx context.Context, branchID *uuid.UUID, limit, offset int) ([]domain.BroadcastNotification, int64, error)
+	FindBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, limit int) ([]dto.BroadcastItemDTO, error)
+	GetUnreadBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID) ([]dto.BroadcastItemDTO, error)
+	MarkBroadcastAsRead(ctx context.Context, broadcastID, empID uuid.UUID) error
+	DeleteBroadcast(ctx context.Context, id uuid.UUID) error
+	RecordVote(ctx context.Context, vote *domain.BroadcastVote) error
+	GetBroadcastVotes(ctx context.Context, broadcastID uuid.UUID) ([]dto.BroadcastVoteItemDTO, error)
 }
 
 // ------------------------------------------------------------------

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	crand "crypto/rand"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net/http"
 	"strings"
 	"time"
 
@@ -4380,19 +4382,90 @@ func (s *supportTicketService) GetAll(ctx context.Context, filter dto.SupportTic
 	return s.repo.FindAll(ctx, filter)
 }
 
+func sendExpoPushNotifications(tokens []string, title, body, imageURL string) {
+	if len(tokens) == 0 {
+		return
+	}
+	type PushMessage struct {
+		To    string                 `json:"to"`
+		Sound string                 `json:"sound"`
+		Title string                 `json:"title"`
+		Body  string                 `json:"body"`
+		Data  map[string]interface{} `json:"data,omitempty"`
+	}
+
+	var messages []PushMessage
+	for _, tok := range tokens {
+		tok = strings.TrimSpace(tok)
+		if strings.HasPrefix(tok, "ExponentPushToken[") || strings.HasPrefix(tok, "ExpoPushToken[") {
+			messages = append(messages, PushMessage{
+				To:    tok,
+				Sound: "default",
+				Title: title,
+				Body:  body,
+				Data: map[string]interface{}{
+					"image_url": imageURL,
+					"type":      "BROADCAST",
+				},
+			})
+		}
+	}
+
+	if len(messages) == 0 {
+		return
+	}
+
+	bodyBytes, err := json.Marshal(messages)
+	if err != nil {
+		return
+	}
+
+	go func() {
+		req, err := http.NewRequest("POST", "https://exp.host/--/api/v2/push/send", bytes.NewBuffer(bodyBytes))
+		if err != nil {
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err == nil && resp != nil {
+			_ = resp.Body.Close()
+		}
+	}()
+}
+
 type NotificationService interface {
 	GetMyNotifications(ctx context.Context, adminID uuid.UUID, status string) ([]dto.NotificationResponse, error)
 	MarkAsRead(ctx context.Context, id uuid.UUID, adminID uuid.UUID) error
 	MarkAllAsRead(ctx context.Context, adminID uuid.UUID) error
+
+	// Broadcast operations
+	SendBroadcast(ctx context.Context, req dto.CreateBroadcastRequest, createdByName string) (*domain.BroadcastNotification, error)
+	GetBroadcasts(ctx context.Context, branchID *uuid.UUID, limit, offset int) ([]dto.BroadcastItemDTO, int64, error)
+	DeleteBroadcast(ctx context.Context, id uuid.UUID) error
+	GetEmployeeBroadcasts(ctx context.Context, empID uuid.UUID) ([]dto.BroadcastItemDTO, error)
+	GetEmployeeUnreadBroadcasts(ctx context.Context, empID uuid.UUID) ([]dto.BroadcastItemDTO, error)
+	MarkEmployeeBroadcastRead(ctx context.Context, broadcastID, empID uuid.UUID) error
+	SaveEmployeePushToken(ctx context.Context, empID uuid.UUID, pushToken, deviceUUID string) error
+	RecordVote(ctx context.Context, broadcastID, empID uuid.UUID, req dto.SubmitPollVoteRequest) error
+	GetBroadcastVotes(ctx context.Context, broadcastID uuid.UUID) ([]dto.BroadcastVoteItemDTO, error)
 }
 
 type notificationService struct {
-	notifRepo repository.NotificationRepository
-	adminRepo repository.AdminRepository
+	notifRepo      repository.NotificationRepository
+	adminRepo      repository.AdminRepository
+	empRepo        repository.EmployeeRepository
+	storageService StorageService
 }
 
-func NewNotificationService(notifRepo repository.NotificationRepository, adminRepo repository.AdminRepository) NotificationService {
-	return &notificationService{notifRepo: notifRepo, adminRepo: adminRepo}
+func NewNotificationService(notifRepo repository.NotificationRepository, adminRepo repository.AdminRepository, empRepo repository.EmployeeRepository, storageService StorageService) NotificationService {
+	return &notificationService{
+		notifRepo:      notifRepo,
+		adminRepo:      adminRepo,
+		empRepo:        empRepo,
+		storageService: storageService,
+	}
 }
 
 func (s *notificationService) GetMyNotifications(ctx context.Context, adminID uuid.UUID, status string) ([]dto.NotificationResponse, error) {
@@ -4412,6 +4485,7 @@ func (s *notificationService) GetMyNotifications(ctx context.Context, adminID uu
 			ID:        n.ID,
 			Title:     n.Title,
 			Body:      n.Body,
+			ImageURL:  n.ImageURL,
 			Type:      n.Type,
 			Status:    n.Status,
 			CreatedAt: n.CreatedAt,
@@ -4426,6 +4500,171 @@ func (s *notificationService) MarkAsRead(ctx context.Context, id uuid.UUID, admi
 
 func (s *notificationService) MarkAllAsRead(ctx context.Context, adminID uuid.UUID) error {
 	return s.notifRepo.MarkAllAsRead(ctx, adminID)
+}
+
+func (s *notificationService) SendBroadcast(ctx context.Context, req dto.CreateBroadcastRequest, createdByName string) (*domain.BroadcastNotification, error) {
+	title := strings.TrimSpace(req.Title)
+	body := strings.TrimSpace(req.Body)
+	if title == "" || body == "" {
+		return nil, errors.New("عنوان الإشعار ونصه مطلوبان")
+	}
+
+	img := strings.TrimSpace(req.ImageURL)
+	if s.storageService != nil && strings.HasPrefix(img, "data:image") {
+		if savedUrl, err := s.storageService.SaveBase64Image(img, "broadcast"); err == nil && savedUrl != "" {
+			img = savedUrl
+		}
+	}
+
+	target := strings.ToUpper(strings.TrimSpace(req.Target))
+	if target == "" {
+		if req.BranchID != nil {
+			target = "BRANCH"
+		} else {
+			target = "ALL"
+		}
+	}
+
+	broadcast := &domain.BroadcastNotification{
+		ID:           uuid.New(),
+		Title:        title,
+		Body:         body,
+		ImageURL:     img,
+		Target:       target,
+		BranchID:     req.BranchID,
+		CreatedBy:    createdByName,
+		HasPoll:      req.HasPoll,
+		PollQuestion: strings.TrimSpace(req.PollQuestion),
+		CreatedAt:    time.Now(),
+	}
+
+	// Find target employees to send in-app and push notifications
+	var targetEmployees []domain.Employee
+	if s.empRepo != nil {
+		filter := dto.EmployeeFilter{
+			Page:  1,
+			Limit: 5000,
+		}
+		if target == "BRANCH" && req.BranchID != nil {
+			filter.BranchID = req.BranchID
+		}
+		paginated, _, err := s.empRepo.FindAll(ctx, filter)
+		if err == nil && paginated != nil {
+			targetEmployees = paginated
+		}
+	}
+
+	broadcast.SentCount = len(targetEmployees)
+	if err := s.notifRepo.CreateBroadcast(ctx, broadcast); err != nil {
+		return nil, fmt.Errorf("فشل حفظ الإشعار الجماعي: %w", err)
+	}
+
+	// Create in-app notifications and collect push tokens
+	var pushTokens []string
+	for _, emp := range targetEmployees {
+		empID := emp.ID
+		_ = s.notifRepo.Create(ctx, &domain.Notification{
+			ID:         uuid.New(),
+			BranchID:   emp.BranchID,
+			EmployeeID: &empID,
+			Title:      title,
+			Body:       body,
+			ImageURL:   img,
+			Type:       "BROADCAST",
+			Status:     "unread",
+		})
+		if emp.PushToken != "" {
+			pushTokens = append(pushTokens, emp.PushToken)
+		}
+	}
+
+	// Trigger push notification to all phones in background
+	if len(pushTokens) > 0 {
+		sendExpoPushNotifications(pushTokens, title, body, img)
+	}
+
+	return broadcast, nil
+}
+
+func (s *notificationService) GetBroadcasts(ctx context.Context, branchID *uuid.UUID, limit, offset int) ([]dto.BroadcastItemDTO, int64, error) {
+	broadcasts, total, err := s.notifRepo.FindBroadcasts(ctx, branchID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	res := make([]dto.BroadcastItemDTO, len(broadcasts))
+	for i, b := range broadcasts {
+		branchName := "جميع الفروع"
+		if b.Branch != nil {
+			branchName = b.Branch.Name
+		}
+		res[i] = dto.BroadcastItemDTO{
+			ID:            b.ID,
+			Title:         b.Title,
+			Body:          b.Body,
+			ImageURL:      b.ImageURL,
+			Target:        b.Target,
+			BranchID:      b.BranchID,
+			BranchName:    branchName,
+			CreatedBy:     b.CreatedBy,
+			SentCount:     b.SentCount,
+			HasPoll:       b.HasPoll,
+			PollQuestion:  b.PollQuestion,
+			AgreeCount:    b.AgreeCount,
+			DisagreeCount: b.DisagreeCount,
+			CreatedAt:     b.CreatedAt,
+		}
+	}
+	return res, total, nil
+}
+
+func (s *notificationService) DeleteBroadcast(ctx context.Context, id uuid.UUID) error {
+	return s.notifRepo.DeleteBroadcast(ctx, id)
+}
+
+func (s *notificationService) GetEmployeeBroadcasts(ctx context.Context, empID uuid.UUID) ([]dto.BroadcastItemDTO, error) {
+	emp, err := s.empRepo.FindByID(ctx, empID)
+	if err != nil || emp == nil {
+		return nil, errors.New("الموظف غير موجود")
+	}
+	return s.notifRepo.FindBroadcastsForEmployee(ctx, empID, emp.BranchID, 50)
+}
+
+func (s *notificationService) GetEmployeeUnreadBroadcasts(ctx context.Context, empID uuid.UUID) ([]dto.BroadcastItemDTO, error) {
+	emp, err := s.empRepo.FindByID(ctx, empID)
+	if err != nil || emp == nil {
+		return nil, errors.New("الموظف غير موجود")
+	}
+	return s.notifRepo.GetUnreadBroadcastsForEmployee(ctx, empID, emp.BranchID)
+}
+
+func (s *notificationService) MarkEmployeeBroadcastRead(ctx context.Context, broadcastID, empID uuid.UUID) error {
+	return s.notifRepo.MarkBroadcastAsRead(ctx, broadcastID, empID)
+}
+
+func (s *notificationService) SaveEmployeePushToken(ctx context.Context, empID uuid.UUID, pushToken, deviceUUID string) error {
+	emp, err := s.empRepo.FindByID(ctx, empID)
+	if err != nil || emp == nil {
+		return errors.New("الموظف غير موجود")
+	}
+	emp.PushToken = strings.TrimSpace(pushToken)
+	if deviceUUID != "" {
+		emp.DeviceUUID = strings.TrimSpace(deviceUUID)
+	}
+	return s.empRepo.Update(ctx, emp)
+}
+
+func (s *notificationService) RecordVote(ctx context.Context, broadcastID, empID uuid.UUID, req dto.SubmitPollVoteRequest) error {
+	vote := &domain.BroadcastVote{
+		BroadcastID: broadcastID,
+		EmployeeID:  empID,
+		Response:    strings.ToUpper(strings.TrimSpace(req.Response)),
+		Reason:      strings.TrimSpace(req.Reason),
+	}
+	return s.notifRepo.RecordVote(ctx, vote)
+}
+
+func (s *notificationService) GetBroadcastVotes(ctx context.Context, broadcastID uuid.UUID) ([]dto.BroadcastVoteItemDTO, error) {
+	return s.notifRepo.GetBroadcastVotes(ctx, broadcastID)
 }
 
 // ------------------------------------------------------------------

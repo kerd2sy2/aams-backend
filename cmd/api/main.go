@@ -107,7 +107,7 @@ func main() {
 	bankService := service.NewEmployeeBankAccountService(bankRepo)
 	leaveService := service.NewLeaveRequestService(leaveRepo)
 	ticketService := service.NewSupportTicketService(ticketRepo)
-	notifService := service.NewNotificationService(notifRepo, adminRepo)
+	notifService := service.NewNotificationService(notifRepo, adminRepo, empRepo, storageService)
 	archiveService := service.NewArchiveService(archiveRepo)
 	excelImportService := service.NewExcelImportService(targetRepo)
 	targetService := service.NewTargetService(targetRepo)
@@ -406,7 +406,17 @@ func main() {
 		protected.GET("/notifications", notifHandler.GetMyNotifications)
 		protected.PUT("/notifications/read-all", notifHandler.MarkAllAsRead)
 		protected.PUT("/notifications/:id/read", notifHandler.MarkAsRead)
-		protected.POST("/investigations/:id/reject", investigationHandler.Reject)
+
+		// Broadcast & Survey Notifications (الإشعارات الجماعية والاستبيانات لجميع الهواتف)
+		protected.POST("/notifications/broadcast", notifHandler.SendBroadcast)
+		protected.GET("/notifications/broadcasts", notifHandler.GetBroadcasts)
+		protected.DELETE("/notifications/broadcasts/:id", notifHandler.DeleteBroadcast)
+		protected.GET("/notifications/broadcasts/:id/votes", notifHandler.GetBroadcastVotes)
+		protected.GET("/notifications/employee/broadcasts", notifHandler.GetEmployeeBroadcasts)
+		protected.GET("/notifications/employee/unread", notifHandler.GetEmployeeUnreadBroadcasts)
+		protected.POST("/notifications/employee/read/:id", notifHandler.MarkEmployeeBroadcastRead)
+		protected.POST("/notifications/employee/vote/:id", notifHandler.SubmitVote)
+		protected.POST("/employees/me/push-token", notifHandler.SaveEmployeePushToken)
 
 		// Attendance
 		protected.GET("/attendance", attendanceHandler.GetAttendance)
