@@ -207,6 +207,7 @@ func main() {
 
 	// Serve uploaded images statically
 	r.Static("/uploads", "./uploads")
+	r.Static("/api/v1/uploads", "./uploads")
 
 	// Health check & root route
 	r.GET("/", func(c *gin.Context) {

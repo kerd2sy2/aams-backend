@@ -74,12 +74,30 @@ func InitFCM(serviceAccountPath string) {
 	fmt.Println("[FCM] Service account not found — falling back to Expo Push API")
 }
 
+func ensureAbsoluteURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+		return rawURL
+	}
+	if !strings.HasPrefix(rawURL, "/") {
+		rawURL = "/" + rawURL
+	}
+	return "https://api.kerd2sy.com" + rawURL
+}
+
 // SendFCMBroadcast sends FCM push notifications to a list of FCM/Expo tokens in background.
 // For Expo tokens (ExponentPushToken[...]), it falls back to Expo Push API.
 // For native FCM tokens, it sends directly via FCM V1 API.
 func SendFCMBroadcast(tokens []string, title, body string, extraData map[string]string) {
 	if len(tokens) == 0 {
 		return
+	}
+
+	if extraData != nil && extraData["image_url"] != "" {
+		extraData["image_url"] = ensureAbsoluteURL(extraData["image_url"])
 	}
 
 	var fcmTokens []string
@@ -105,7 +123,11 @@ func SendFCMBroadcast(tokens []string, title, body string, extraData map[string]
 
 	// Send to Expo tokens via Expo Push API (which internally uses FCM)
 	if len(expoTokens) > 0 {
-		sendExpoPushNotifications(expoTokens, title, body, extraData["image_url"])
+		imgURL := ""
+		if extraData != nil {
+			imgURL = extraData["image_url"]
+		}
+		sendExpoPushNotifications(expoTokens, title, body, imgURL)
 	}
 }
 
@@ -130,11 +152,16 @@ func (f *fcmSenderClient) sendOne(accessToken, token, title, body string, extraD
 		data[k] = v
 	}
 
+	img := ensureAbsoluteURL(extraData["image_url"])
+	if img != "" {
+		data["image_url"] = img
+	}
+
 	notificationMap := map[string]interface{}{
 		"title": title,
 		"body":  body,
 	}
-	if img := extraData["image_url"]; img != "" {
+	if img != "" {
 		notificationMap["image"] = img
 	}
 
@@ -145,7 +172,7 @@ func (f *fcmSenderClient) sendOne(accessToken, token, title, body string, extraD
 		"visibility":            "PUBLIC",
 		"notification_priority": "PRIORITY_MAX",
 	}
-	if img := extraData["image_url"]; img != "" {
+	if img != "" {
 		androidNotification["image"] = img
 	}
 

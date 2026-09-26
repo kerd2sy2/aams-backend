@@ -4386,6 +4386,7 @@ func sendExpoPushNotifications(tokens []string, title, body, imageURL string) {
 	if len(tokens) == 0 {
 		return
 	}
+	imageURL = ensureAbsoluteURL(imageURL)
 	type PushMessage struct {
 		To        string                 `json:"to"`
 		Sound     string                 `json:"sound"`
