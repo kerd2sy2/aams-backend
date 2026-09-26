@@ -4393,6 +4393,7 @@ func sendExpoPushNotifications(tokens []string, title, body, imageURL string) {
 		Body      string                 `json:"body"`
 		Priority  string                 `json:"priority"`
 		ChannelID string                 `json:"channelId"`
+		Image     string                 `json:"image,omitempty"`
 		Data      map[string]interface{} `json:"data,omitempty"`
 	}
 
@@ -4403,10 +4404,11 @@ func sendExpoPushNotifications(tokens []string, title, body, imageURL string) {
 			messages = append(messages, PushMessage{
 				To:        tok,
 				Sound:     "default",
-				Title:     "📢 " + title,
+				Title:     title,
 				Body:      body,
 				Priority:  "high",
 				ChannelID: "aams_broadcasts",
+				Image:     imageURL,
 				Data: map[string]interface{}{
 					"image_url": imageURL,
 					"type":      "BROADCAST",

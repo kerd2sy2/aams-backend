@@ -105,7 +105,7 @@ func SendFCMBroadcast(tokens []string, title, body string, extraData map[string]
 
 	// Send to Expo tokens via Expo Push API (which internally uses FCM)
 	if len(expoTokens) > 0 {
-		sendExpoPushNotifications(expoTokens, title, body, "")
+		sendExpoPushNotifications(expoTokens, title, body, extraData["image_url"])
 	}
 }
 
@@ -130,22 +130,32 @@ func (f *fcmSenderClient) sendOne(accessToken, token, title, body string, extraD
 		data[k] = v
 	}
 
+	notificationMap := map[string]interface{}{
+		"title": title,
+		"body":  body,
+	}
+	if img := extraData["image_url"]; img != "" {
+		notificationMap["image"] = img
+	}
+
+	androidNotification := map[string]interface{}{
+		"channel_id":            "aams_broadcasts",
+		"sound":                 "default",
+		"default_sound":         true,
+		"visibility":            "PUBLIC",
+		"notification_priority": "PRIORITY_MAX",
+	}
+	if img := extraData["image_url"]; img != "" {
+		androidNotification["image"] = img
+	}
+
 	payload := map[string]interface{}{
 		"message": map[string]interface{}{
-			"token": token,
-			"notification": map[string]string{
-				"title": "📢 " + title,
-				"body":  body,
-			},
+			"token":        token,
+			"notification": notificationMap,
 			"android": map[string]interface{}{
-				"priority": "high",
-				"notification": map[string]interface{}{
-					"channel_id":    "aams_broadcasts",
-					"sound":         "default",
-					"default_sound": true,
-					"visibility":    "PUBLIC",
-					"notification_priority": "PRIORITY_MAX",
-				},
+				"priority":     "high",
+				"notification": androidNotification,
 			},
 			"data": data,
 		},
