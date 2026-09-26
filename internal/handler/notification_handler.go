@@ -240,6 +240,15 @@ func (h *NotificationHandler) SaveEmployeePushToken(c *gin.Context) {
 	if empIDStr == "" {
 		empIDStr = c.Param("employee_id")
 	}
+	if empIDStr == "" {
+		if id, exists := c.Get("employee_id"); exists && id != nil {
+			if uid, ok := id.(uuid.UUID); ok && uid != uuid.Nil {
+				empIDStr = uid.String()
+			} else if uidPtr, ok := id.(*uuid.UUID); ok && uidPtr != nil && *uidPtr != uuid.Nil {
+				empIDStr = uidPtr.String()
+			}
+		}
+	}
 
 	var req dto.PushTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
