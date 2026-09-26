@@ -127,7 +127,7 @@ func SendFCMBroadcast(tokens []string, title, body string, extraData map[string]
 		if extraData != nil {
 			imgURL = extraData["image_url"]
 		}
-		sendExpoPushNotifications(expoTokens, title, body, imgURL)
+		sendExpoPushNotifications(expoTokens, title, body, imgURL, extraData)
 	}
 }
 
@@ -157,6 +157,12 @@ func (f *fcmSenderClient) sendOne(accessToken, token, title, body string, extraD
 		data["image_url"] = img
 	}
 
+	hasPoll := extraData != nil && extraData["has_poll"] == "true"
+	if hasPoll {
+		data["_category"] = "POLL_CATEGORY"
+		data["categoryId"] = "POLL_CATEGORY"
+	}
+
 	notificationMap := map[string]interface{}{
 		"title": title,
 		"body":  body,
@@ -174,6 +180,9 @@ func (f *fcmSenderClient) sendOne(accessToken, token, title, body string, extraD
 	}
 	if img != "" {
 		androidNotification["image"] = img
+	}
+	if hasPoll {
+		androidNotification["click_action"] = "POLL_CATEGORY"
 	}
 
 	payload := map[string]interface{}{

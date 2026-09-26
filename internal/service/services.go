@@ -4382,27 +4382,43 @@ func (s *supportTicketService) GetAll(ctx context.Context, filter dto.SupportTic
 	return s.repo.FindAll(ctx, filter)
 }
 
-func sendExpoPushNotifications(tokens []string, title, body, imageURL string) {
+func sendExpoPushNotifications(tokens []string, title, body, imageURL string, extraData map[string]string) {
 	if len(tokens) == 0 {
 		return
 	}
 	imageURL = ensureAbsoluteURL(imageURL)
 	type PushMessage struct {
-		To        string                 `json:"to"`
-		Sound     string                 `json:"sound"`
-		Title     string                 `json:"title"`
-		Body      string                 `json:"body"`
-		Priority  string                 `json:"priority"`
-		ChannelID string                 `json:"channelId"`
-		Image     string                 `json:"image,omitempty"`
-		Data      map[string]interface{} `json:"data,omitempty"`
+		To         string                 `json:"to"`
+		Sound      string                 `json:"sound"`
+		Title      string                 `json:"title"`
+		Body       string                 `json:"body"`
+		Priority   string                 `json:"priority"`
+		ChannelID  string                 `json:"channelId"`
+		Image      string                 `json:"image,omitempty"`
+		CategoryId string                 `json:"categoryId,omitempty"`
+		Data       map[string]interface{} `json:"data,omitempty"`
+	}
+
+	hasPoll := extraData != nil && extraData["has_poll"] == "true"
+	broadcastID := ""
+	createdBy := ""
+	if extraData != nil {
+		broadcastID = extraData["broadcastId"]
+		createdBy = extraData["created_by"]
 	}
 
 	var messages []PushMessage
 	for _, tok := range tokens {
 		tok = strings.TrimSpace(tok)
 		if strings.HasPrefix(tok, "ExponentPushToken[") || strings.HasPrefix(tok, "ExpoPushToken[") {
-			messages = append(messages, PushMessage{
+			dataMap := map[string]interface{}{
+				"broadcastId": broadcastID,
+				"image_url":   imageURL,
+				"created_by":  createdBy,
+				"has_poll":    hasPoll,
+				"type":        "BROADCAST",
+			}
+			msg := PushMessage{
 				To:        tok,
 				Sound:     "default",
 				Title:     title,
@@ -4410,11 +4426,14 @@ func sendExpoPushNotifications(tokens []string, title, body, imageURL string) {
 				Priority:  "high",
 				ChannelID: "aams_broadcasts",
 				Image:     imageURL,
-				Data: map[string]interface{}{
-					"image_url": imageURL,
-					"type":      "BROADCAST",
-				},
-			})
+				Data:      dataMap,
+			}
+			if hasPoll {
+				msg.CategoryId = "POLL_CATEGORY"
+				dataMap["_category"] = "POLL_CATEGORY"
+				dataMap["categoryId"] = "POLL_CATEGORY"
+			}
+			messages = append(messages, msg)
 		}
 	}
 
