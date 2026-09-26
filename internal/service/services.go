@@ -1630,8 +1630,8 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 			if reviewerName != "" {
 				supervisorLabel = reviewerName
 			}
-			notifBody := fmt.Sprintf("✅ تم إنهاء ومصادقة شفت العمل مباشرة بواسطة المشرف (%s) للمندوب %s (هوية: %s) — [%d] طلبات، مسافة [%.1f كم]",
-				supervisorLabel, emp.Name, emp.NationalID, req.OrdersCount, distance)
+			notifBody := fmt.Sprintf("✅ تم إنهاء ومصادقة شفت العمل مباشرة بواسطة المشرف (%s) للمندوب %s (هوية: %s) — [%d] طلبات، مسافة [%.1f كم]، بنزين [%.2f ريال]",
+				supervisorLabel, emp.Name, emp.NationalID, req.OrdersCount, distance, req.FuelCost)
 			_ = s.notifRepo.Create(ctx, &domain.Notification{
 				ID:         uuid.New(),
 				Title:      "إنهاء ومصادقة شفت عمل",
@@ -1642,6 +1642,32 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 				BranchID:   emp.BranchID,
 				CreatedAt:  time.Now(),
 			})
+
+			// Also push notify employee if supervisor ended/approved it
+			if isSupervisor && emp.PushToken != "" {
+				lang := strings.ToLower(strings.TrimSpace(emp.Language))
+				var pushTitle, pushBody string
+				switch lang {
+				case "en":
+					pushTitle = "Shift Approved ✅"
+					pushBody = fmt.Sprintf("Supervisor approved your shift: %d Orders | Fuel: %.2f SAR", req.OrdersCount, req.FuelCost)
+				case "bn":
+					pushTitle = "শিফট অনুমোদিত হয়েছে ✅"
+					pushBody = fmt.Sprintf("সুপারভাইজার আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", req.OrdersCount, req.FuelCost)
+				default: // "ar"
+					pushTitle = "تمت المصادقة على شفت العمل ✅"
+					pushBody = fmt.Sprintf("وافق المشرف على طلباتك: %d طلب | بنزين: %.2f ريال", req.OrdersCount, req.FuelCost)
+				}
+				go func(token, t, b, sid string, orders int, fuel float64) {
+					dataPayload := map[string]string{
+						"type":        "SESSION_APPROVED",
+						"sessionId":   sid,
+						"ordersCount": fmt.Sprintf("%d", orders),
+						"fuelCost":    fmt.Sprintf("%.2f", fuel),
+					}
+					SendFCMBroadcast([]string{token}, t, b, dataPayload)
+				}(emp.PushToken, pushTitle, pushBody, activeSession.ID.String(), req.OrdersCount, req.FuelCost)
+			}
 		} else {
 			endNotifBody := fmt.Sprintf("🔴 أنهى المندوب %s (هوية: %s) شفت العمل — سجل [%d] طلبات، مسافة [%.1f كم] وبانتظار مصادقة المشرف",
 				emp.Name, emp.NationalID, req.OrdersCount, distance)
@@ -1827,6 +1853,52 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 	if err := s.workRepo.UpdateSession(ctx, session); err != nil {
 		return nil, err
 	}
+
+	// If supervisor reviewed / approved the session, notify the employee with the approved details
+	if session.IsReviewed && session.EmployeeID != nil && *session.EmployeeID != uuid.Nil {
+		emp, empErr := s.empRepo.FindByID(ctx, *session.EmployeeID)
+		if empErr == nil && emp != nil {
+			lang := strings.ToLower(strings.TrimSpace(emp.Language))
+			var title, body string
+			switch lang {
+			case "en":
+				title = "Shift Approved ✅"
+				body = fmt.Sprintf("Supervisor approved your shift: %d Orders | Fuel: %.2f SAR", session.OrdersCount, session.FuelCost)
+			case "bn":
+				title = "শিফট অনুমোদিত হয়েছে ✅"
+				body = fmt.Sprintf("সুপারভাইজার আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", session.OrdersCount, session.FuelCost)
+			default: // "ar"
+				title = "تمت المصادقة على شفت العمل ✅"
+				body = fmt.Sprintf("وافق المشرف على طلباتك: %d طلب | بنزين: %.2f ريال", session.OrdersCount, session.FuelCost)
+			}
+
+			if s.notifRepo != nil {
+				_ = s.notifRepo.Create(ctx, &domain.Notification{
+					ID:         uuid.New(),
+					Title:      title,
+					Body:       body,
+					Type:       "SESSION_APPROVED",
+					Status:     "unread",
+					EmployeeID: session.EmployeeID,
+					BranchID:   emp.BranchID,
+					CreatedAt:  time.Now(),
+				})
+			}
+
+			if emp.PushToken != "" {
+				go func(token, t, b, sid string, orders int, fuel float64) {
+					dataPayload := map[string]string{
+						"type":        "SESSION_APPROVED",
+						"sessionId":   sid,
+						"ordersCount": fmt.Sprintf("%d", orders),
+						"fuelCost":    fmt.Sprintf("%.2f", fuel),
+					}
+					SendFCMBroadcast([]string{token}, t, b, dataPayload)
+				}(emp.PushToken, title, body, session.ID.String(), session.OrdersCount, session.FuelCost)
+			}
+		}
+	}
+
 	return session, nil
 }
 
@@ -4473,7 +4545,7 @@ type NotificationService interface {
 	GetEmployeeBroadcasts(ctx context.Context, empID uuid.UUID) ([]dto.BroadcastItemDTO, error)
 	GetEmployeeUnreadBroadcasts(ctx context.Context, empID uuid.UUID) ([]dto.BroadcastItemDTO, error)
 	MarkEmployeeBroadcastRead(ctx context.Context, broadcastID, empID uuid.UUID) error
-	SaveEmployeePushToken(ctx context.Context, empID uuid.UUID, pushToken, deviceUUID string) error
+	SaveEmployeePushToken(ctx context.Context, empID uuid.UUID, pushToken, deviceUUID, language string) error
 	RecordVote(ctx context.Context, broadcastID, empID uuid.UUID, req dto.SubmitPollVoteRequest) error
 	GetBroadcastVotes(ctx context.Context, broadcastID uuid.UUID) ([]dto.BroadcastVoteItemDTO, error)
 }
@@ -4731,14 +4803,19 @@ func (s *notificationService) MarkEmployeeBroadcastRead(ctx context.Context, bro
 	return s.notifRepo.MarkBroadcastAsRead(ctx, broadcastID, empID)
 }
 
-func (s *notificationService) SaveEmployeePushToken(ctx context.Context, empID uuid.UUID, pushToken, deviceUUID string) error {
+func (s *notificationService) SaveEmployeePushToken(ctx context.Context, empID uuid.UUID, pushToken, deviceUUID, language string) error {
 	emp, err := s.empRepo.FindByID(ctx, empID)
 	if err != nil || emp == nil {
 		return errors.New("الموظف غير موجود")
 	}
-	emp.PushToken = strings.TrimSpace(pushToken)
+	if pushToken != "" {
+		emp.PushToken = strings.TrimSpace(pushToken)
+	}
 	if deviceUUID != "" {
 		emp.DeviceUUID = strings.TrimSpace(deviceUUID)
+	}
+	if language != "" {
+		emp.Language = strings.TrimSpace(language)
 	}
 	return s.empRepo.Update(ctx, emp)
 }

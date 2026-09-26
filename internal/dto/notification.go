@@ -80,6 +80,7 @@ type BroadcastVoteItemDTO struct {
 }
 
 type PushTokenRequest struct {
-	PushToken  string `json:"push_token" binding:"required"`
+	PushToken  string `json:"push_token"`
 	DeviceUUID string `json:"device_uuid"`
+	Language   string `json:"language"`
 }

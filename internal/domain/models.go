@@ -107,6 +107,7 @@ type Employee struct {
 	OutOfZone                bool           `gorm:"default:false" json:"out_of_zone"`
 	PushToken                string         `gorm:"type:text" json:"push_token"`
 	DeviceUUID               string         `gorm:"type:varchar(100)" json:"device_uuid"`
+	Language                 string         `gorm:"type:varchar(10);default:'ar'" json:"language"`
 	CreatedAt                time.Time      `json:"created_at"`
 	UpdatedAt                time.Time      `json:"updated_at"`
 	DeletedAt                gorm.DeletedAt `gorm:"index" json:"-"`

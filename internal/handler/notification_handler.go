@@ -262,7 +262,7 @@ func (h *NotificationHandler) SaveEmployeePushToken(c *gin.Context) {
 		return
 	}
 
-	if err := h.notifService.SaveEmployeePushToken(c.Request.Context(), empID, req.PushToken, req.DeviceUUID); err != nil {
+	if err := h.notifService.SaveEmployeePushToken(c.Request.Context(), empID, req.PushToken, req.DeviceUUID, req.Language); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل حفظ رمز الإشعارات: " + err.Error()})
 		return
 	}
