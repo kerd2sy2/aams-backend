@@ -235,6 +235,39 @@ func (h *NotificationHandler) MarkEmployeeBroadcastRead(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "تم تحديث حالة القراءة بنجاح"})
 }
 
+func (h *NotificationHandler) MarkAllEmployeeBroadcastsRead(c *gin.Context) {
+	empIDStr := c.Query("employee_id")
+	if empIDStr == "" {
+		var body struct {
+			EmployeeID string `json:"employee_id"`
+		}
+		_ = c.ShouldBindJSON(&body)
+		empIDStr = body.EmployeeID
+	}
+	if empIDStr == "" {
+		if id, exists := c.Get("employee_id"); exists && id != nil {
+			if uid, ok := id.(uuid.UUID); ok && uid != uuid.Nil {
+				empIDStr = uid.String()
+			} else if uidPtr, ok := id.(*uuid.UUID); ok && uidPtr != nil && *uidPtr != uuid.Nil {
+				empIDStr = uidPtr.String()
+			}
+		}
+	}
+
+	empID, err := uuid.Parse(empIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
+		return
+	}
+
+	if err := h.notifService.MarkAllEmployeeBroadcastsRead(c.Request.Context(), empID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل تحديث قراءة جميع الإشعارات: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "تم تعيين جميع الإشعارات كمقروءة بنجاح"})
+}
+
 func (h *NotificationHandler) SaveEmployeePushToken(c *gin.Context) {
 	empIDStr := c.Query("employee_id")
 	if empIDStr == "" {

@@ -4545,6 +4545,7 @@ type NotificationService interface {
 	GetEmployeeBroadcasts(ctx context.Context, empID uuid.UUID) ([]dto.BroadcastItemDTO, error)
 	GetEmployeeUnreadBroadcasts(ctx context.Context, empID uuid.UUID) ([]dto.BroadcastItemDTO, error)
 	MarkEmployeeBroadcastRead(ctx context.Context, broadcastID, empID uuid.UUID) error
+	MarkAllEmployeeBroadcastsRead(ctx context.Context, empID uuid.UUID) error
 	SaveEmployeePushToken(ctx context.Context, empID uuid.UUID, pushToken, deviceUUID, language string) error
 	RecordVote(ctx context.Context, broadcastID, empID uuid.UUID, req dto.SubmitPollVoteRequest) error
 	GetBroadcastVotes(ctx context.Context, broadcastID uuid.UUID) ([]dto.BroadcastVoteItemDTO, error)
@@ -4801,6 +4802,10 @@ func (s *notificationService) GetEmployeeUnreadBroadcasts(ctx context.Context, e
 
 func (s *notificationService) MarkEmployeeBroadcastRead(ctx context.Context, broadcastID, empID uuid.UUID) error {
 	return s.notifRepo.MarkBroadcastAsRead(ctx, broadcastID, empID)
+}
+
+func (s *notificationService) MarkAllEmployeeBroadcastsRead(ctx context.Context, empID uuid.UUID) error {
+	return s.notifRepo.MarkAllEmployeeBroadcastsRead(ctx, empID)
 }
 
 func (s *notificationService) SaveEmployeePushToken(ctx context.Context, empID uuid.UUID, pushToken, deviceUUID, language string) error {

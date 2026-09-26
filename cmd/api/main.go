@@ -418,6 +418,7 @@ func main() {
 		protected.GET("/notifications/employee/broadcasts", notifHandler.GetEmployeeBroadcasts)
 		protected.GET("/notifications/employee/unread", notifHandler.GetEmployeeUnreadBroadcasts)
 		protected.POST("/notifications/employee/read/:id", notifHandler.MarkEmployeeBroadcastRead)
+		protected.POST("/notifications/employee/read-all", notifHandler.MarkAllEmployeeBroadcastsRead)
 		protected.POST("/notifications/employee/vote/:id", notifHandler.SubmitVote)
 		protected.POST("/employees/me/push-token", notifHandler.SaveEmployeePushToken)
 

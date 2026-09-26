@@ -2236,6 +2236,35 @@ func (r *gormNotificationRepository) MarkBroadcastAsRead(ctx context.Context, br
 	return r.db.WithContext(ctx).Create(read).Error
 }
 
+func (r *gormNotificationRepository) MarkAllEmployeeBroadcastsRead(ctx context.Context, empID uuid.UUID) error {
+	var emp domain.Employee
+	if err := r.db.WithContext(ctx).Select("id", "branch_id", "created_at").Where("id = ?", empID).First(&emp).Error; err != nil {
+		return err
+	}
+
+	var unreadBroadcasts []domain.BroadcastNotification
+	query := r.db.WithContext(ctx).
+		Where("created_at >= ?", emp.CreatedAt).
+		Where("target = 'all' OR (target = 'branch' AND branch_id = ?)", emp.BranchID).
+		Where("id NOT IN (SELECT broadcast_id FROM broadcast_reads WHERE employee_id = ?)", empID)
+
+	if err := query.Find(&unreadBroadcasts).Error; err != nil {
+		return err
+	}
+
+	for _, b := range unreadBroadcasts {
+		read := domain.BroadcastRead{
+			ID:          uuid.New(),
+			BroadcastID: b.ID,
+			EmployeeID:  empID,
+			ReadAt:      time.Now(),
+		}
+		_ = r.db.WithContext(ctx).Create(&read).Error
+	}
+
+	return nil
+}
+
 func (r *gormNotificationRepository) DeleteBroadcast(ctx context.Context, id uuid.UUID) error {
 	_ = r.db.WithContext(ctx).Where("broadcast_id = ?", id).Delete(&domain.BroadcastVote{}).Error
 	_ = r.db.WithContext(ctx).Where("broadcast_id = ?", id).Delete(&domain.BroadcastRead{}).Error

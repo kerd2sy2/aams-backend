@@ -261,6 +261,7 @@ type NotificationRepository interface {
 	FindBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, registeredAt time.Time, limit int) ([]dto.BroadcastItemDTO, error)
 	GetUnreadBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, registeredAt time.Time) ([]dto.BroadcastItemDTO, error)
 	MarkBroadcastAsRead(ctx context.Context, broadcastID, empID uuid.UUID) error
+	MarkAllEmployeeBroadcastsRead(ctx context.Context, empID uuid.UUID) error
 	DeleteBroadcast(ctx context.Context, id uuid.UUID) error
 	RecordVote(ctx context.Context, vote *domain.BroadcastVote) error
 	GetBroadcastVotes(ctx context.Context, broadcastID uuid.UUID) ([]dto.BroadcastVoteItemDTO, error)
