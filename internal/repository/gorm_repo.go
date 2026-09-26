@@ -2126,7 +2126,7 @@ func (r *gormNotificationRepository) FindBroadcasts(ctx context.Context, branchI
 	return broadcasts, total, nil
 }
 
-func (r *gormNotificationRepository) FindBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, limit int) ([]dto.BroadcastItemDTO, error) {
+func (r *gormNotificationRepository) FindBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, registeredAt time.Time, limit int) ([]dto.BroadcastItemDTO, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -2136,6 +2136,11 @@ func (r *gormNotificationRepository) FindBroadcastsForEmployee(ctx context.Conte
 		query = query.Where("target = 'ALL' OR branch_id = ?", branchID)
 	} else {
 		query = query.Where("target = 'ALL'")
+	}
+
+	// Only show broadcasts created after/at the employee's registration time (with 2 minutes buffer)
+	if !registeredAt.IsZero() {
+		query = query.Where("created_at >= ?", registeredAt.Add(-2*time.Minute))
 	}
 
 	var broadcasts []domain.BroadcastNotification
@@ -2201,8 +2206,8 @@ func (r *gormNotificationRepository) FindBroadcastsForEmployee(ctx context.Conte
 	return res, nil
 }
 
-func (r *gormNotificationRepository) GetUnreadBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID) ([]dto.BroadcastItemDTO, error) {
-	all, err := r.FindBroadcastsForEmployee(ctx, empID, branchID, 20)
+func (r *gormNotificationRepository) GetUnreadBroadcastsForEmployee(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, registeredAt time.Time) ([]dto.BroadcastItemDTO, error) {
+	all, err := r.FindBroadcastsForEmployee(ctx, empID, branchID, registeredAt, 20)
 	if err != nil {
 		return nil, err
 	}

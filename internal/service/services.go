@@ -4716,7 +4716,7 @@ func (s *notificationService) GetEmployeeBroadcasts(ctx context.Context, empID u
 	if err != nil || emp == nil {
 		return nil, errors.New("الموظف غير موجود")
 	}
-	return s.notifRepo.FindBroadcastsForEmployee(ctx, empID, emp.BranchID, 50)
+	return s.notifRepo.FindBroadcastsForEmployee(ctx, empID, emp.BranchID, emp.CreatedAt, 50)
 }
 
 func (s *notificationService) GetEmployeeUnreadBroadcasts(ctx context.Context, empID uuid.UUID) ([]dto.BroadcastItemDTO, error) {
@@ -4724,7 +4724,7 @@ func (s *notificationService) GetEmployeeUnreadBroadcasts(ctx context.Context, e
 	if err != nil || emp == nil {
 		return nil, errors.New("الموظف غير موجود")
 	}
-	return s.notifRepo.GetUnreadBroadcastsForEmployee(ctx, empID, emp.BranchID)
+	return s.notifRepo.GetUnreadBroadcastsForEmployee(ctx, empID, emp.BranchID, emp.CreatedAt)
 }
 
 func (s *notificationService) MarkEmployeeBroadcastRead(ctx context.Context, broadcastID, empID uuid.UUID) error {
