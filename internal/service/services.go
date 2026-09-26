@@ -4640,6 +4640,8 @@ func (s *notificationService) SendBroadcast(ctx context.Context, req dto.CreateB
 		SendFCMBroadcast(pushTokens, title, body, map[string]string{
 			"broadcastId": broadcast.ID.String(),
 			"image_url":   img,
+			"created_by":  createdByName,
+			"has_poll":    fmt.Sprintf("%t", req.HasPoll),
 		})
 	}
 
