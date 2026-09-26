@@ -4387,11 +4387,13 @@ func sendExpoPushNotifications(tokens []string, title, body, imageURL string) {
 		return
 	}
 	type PushMessage struct {
-		To    string                 `json:"to"`
-		Sound string                 `json:"sound"`
-		Title string                 `json:"title"`
-		Body  string                 `json:"body"`
-		Data  map[string]interface{} `json:"data,omitempty"`
+		To        string                 `json:"to"`
+		Sound     string                 `json:"sound"`
+		Title     string                 `json:"title"`
+		Body      string                 `json:"body"`
+		Priority  string                 `json:"priority"`
+		ChannelID string                 `json:"channelId"`
+		Data      map[string]interface{} `json:"data,omitempty"`
 	}
 
 	var messages []PushMessage
@@ -4399,10 +4401,12 @@ func sendExpoPushNotifications(tokens []string, title, body, imageURL string) {
 		tok = strings.TrimSpace(tok)
 		if strings.HasPrefix(tok, "ExponentPushToken[") || strings.HasPrefix(tok, "ExpoPushToken[") {
 			messages = append(messages, PushMessage{
-				To:    tok,
-				Sound: "default",
-				Title: title,
-				Body:  body,
+				To:        tok,
+				Sound:     "default",
+				Title:     "📢 " + title,
+				Body:      body,
+				Priority:  "high",
+				ChannelID: "aams_broadcasts",
 				Data: map[string]interface{}{
 					"image_url": imageURL,
 					"type":      "BROADCAST",
@@ -4503,10 +4507,51 @@ func (s *notificationService) MarkAllAsRead(ctx context.Context, adminID uuid.UU
 }
 
 func (s *notificationService) SendBroadcast(ctx context.Context, req dto.CreateBroadcastRequest, createdByName string) (*domain.BroadcastNotification, error) {
-	title := strings.TrimSpace(req.Title)
-	body := strings.TrimSpace(req.Body)
+	titleAr := strings.TrimSpace(req.TitleAr)
+	if titleAr == "" {
+		titleAr = strings.TrimSpace(req.Title)
+	}
+	bodyAr := strings.TrimSpace(req.BodyAr)
+	if bodyAr == "" {
+		bodyAr = strings.TrimSpace(req.Body)
+	}
+	titleEn := strings.TrimSpace(req.TitleEn)
+	bodyEn := strings.TrimSpace(req.BodyEn)
+	titleBn := strings.TrimSpace(req.TitleBn)
+	bodyBn := strings.TrimSpace(req.BodyBn)
+
+	title := titleAr
+	if title == "" {
+		title = titleEn
+	}
+	if title == "" {
+		title = titleBn
+	}
+	body := bodyAr
+	if body == "" {
+		body = bodyEn
+	}
+	if body == "" {
+		body = bodyBn
+	}
+
 	if title == "" || body == "" {
 		return nil, errors.New("عنوان الإشعار ونصه مطلوبان")
+	}
+
+	pollQAr := strings.TrimSpace(req.PollQuestionAr)
+	if pollQAr == "" {
+		pollQAr = strings.TrimSpace(req.PollQuestion)
+	}
+	pollQEn := strings.TrimSpace(req.PollQuestionEn)
+	pollQBn := strings.TrimSpace(req.PollQuestionBn)
+
+	pollQ := pollQAr
+	if pollQ == "" {
+		pollQ = pollQEn
+	}
+	if pollQ == "" {
+		pollQ = pollQBn
 	}
 
 	img := strings.TrimSpace(req.ImageURL)
@@ -4526,16 +4571,25 @@ func (s *notificationService) SendBroadcast(ctx context.Context, req dto.CreateB
 	}
 
 	broadcast := &domain.BroadcastNotification{
-		ID:           uuid.New(),
-		Title:        title,
-		Body:         body,
-		ImageURL:     img,
-		Target:       target,
-		BranchID:     req.BranchID,
-		CreatedBy:    createdByName,
-		HasPoll:      req.HasPoll,
-		PollQuestion: strings.TrimSpace(req.PollQuestion),
-		CreatedAt:    time.Now(),
+		ID:             uuid.New(),
+		Title:          title,
+		Body:           body,
+		TitleAr:        titleAr,
+		TitleEn:        titleEn,
+		TitleBn:        titleBn,
+		BodyAr:         bodyAr,
+		BodyEn:         bodyEn,
+		BodyBn:         bodyBn,
+		ImageURL:       img,
+		Target:         target,
+		BranchID:       req.BranchID,
+		CreatedBy:      createdByName,
+		HasPoll:        req.HasPoll,
+		PollQuestion:   pollQ,
+		PollQuestionAr: pollQAr,
+		PollQuestionEn: pollQEn,
+		PollQuestionBn: pollQBn,
+		CreatedAt:      time.Now(),
 	}
 
 	// Find target employees to send in-app and push notifications
@@ -4578,9 +4632,12 @@ func (s *notificationService) SendBroadcast(ctx context.Context, req dto.CreateB
 		}
 	}
 
-	// Trigger push notification to all phones in background
+	// Trigger push notification to all phones in background (FCM V1 + Expo fallback)
 	if len(pushTokens) > 0 {
-		sendExpoPushNotifications(pushTokens, title, body, img)
+		SendFCMBroadcast(pushTokens, title, body, map[string]string{
+			"broadcastId": broadcast.ID.String(),
+			"image_url":   img,
+		})
 	}
 
 	return broadcast, nil
@@ -4598,20 +4655,29 @@ func (s *notificationService) GetBroadcasts(ctx context.Context, branchID *uuid.
 			branchName = b.Branch.Name
 		}
 		res[i] = dto.BroadcastItemDTO{
-			ID:            b.ID,
-			Title:         b.Title,
-			Body:          b.Body,
-			ImageURL:      b.ImageURL,
-			Target:        b.Target,
-			BranchID:      b.BranchID,
-			BranchName:    branchName,
-			CreatedBy:     b.CreatedBy,
-			SentCount:     b.SentCount,
-			HasPoll:       b.HasPoll,
-			PollQuestion:  b.PollQuestion,
-			AgreeCount:    b.AgreeCount,
-			DisagreeCount: b.DisagreeCount,
-			CreatedAt:     b.CreatedAt,
+			ID:             b.ID,
+			Title:          b.Title,
+			Body:           b.Body,
+			TitleAr:        b.TitleAr,
+			TitleEn:        b.TitleEn,
+			TitleBn:        b.TitleBn,
+			BodyAr:         b.BodyAr,
+			BodyEn:         b.BodyEn,
+			BodyBn:         b.BodyBn,
+			ImageURL:       b.ImageURL,
+			Target:         b.Target,
+			BranchID:       b.BranchID,
+			BranchName:     branchName,
+			CreatedBy:      b.CreatedBy,
+			SentCount:      b.SentCount,
+			HasPoll:        b.HasPoll,
+			PollQuestion:   b.PollQuestion,
+			PollQuestionAr: b.PollQuestionAr,
+			PollQuestionEn: b.PollQuestionEn,
+			PollQuestionBn: b.PollQuestionBn,
+			AgreeCount:     b.AgreeCount,
+			DisagreeCount:  b.DisagreeCount,
+			CreatedAt:      b.CreatedAt,
 		}
 	}
 	return res, total, nil

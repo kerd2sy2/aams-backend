@@ -112,6 +112,8 @@ func main() {
 	excelImportService := service.NewExcelImportService(targetRepo)
 	targetService := service.NewTargetService(targetRepo)
 
+	// Initialize Firebase Cloud Messaging (FCM V1) for background push notifications
+	service.InitFCM("")
 	// Initialize Handlers (Presentation Layer)
 	authHandler := handler.NewAuthHandler(authService, auditService)
 	otpHandler := handler.NewOTPHandler(otpService, auditService)

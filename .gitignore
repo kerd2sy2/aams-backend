@@ -10,6 +10,8 @@ server
 .env
 *.local
 token.txt
+*-adminsdk-*.json
+fcm-service-account.json
 
 # Databases
 *.db

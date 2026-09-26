@@ -710,20 +710,29 @@ func (n *Notification) BeforeCreate(tx *gorm.DB) error {
 
 // BroadcastNotification model for mass announcements to delegates and phones
 type BroadcastNotification struct {
-	ID            uuid.UUID  `gorm:"type:char(36);primary_key" json:"id"`
-	Title         string     `gorm:"type:varchar(255);not null" json:"title"`
-	Body          string     `gorm:"type:text;not null" json:"body"`
-	ImageURL      string     `gorm:"type:text" json:"image_url"`
-	Target        string     `gorm:"type:varchar(50);default:'ALL'" json:"target"` // "ALL", "BRANCH"
-	BranchID      *uuid.UUID `gorm:"type:char(36);index" json:"branch_id"`
-	Branch        *Branch    `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
-	CreatedBy     string     `gorm:"type:varchar(150)" json:"created_by"`
-	SentCount     int        `gorm:"default:0" json:"sent_count"`
-	HasPoll       bool       `gorm:"default:false" json:"has_poll"`
-	PollQuestion  string     `gorm:"type:varchar(255)" json:"poll_question"`
-	AgreeCount    int        `gorm:"default:0" json:"agree_count"`
-	DisagreeCount int        `gorm:"default:0" json:"disagree_count"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID             uuid.UUID  `gorm:"type:char(36);primary_key" json:"id"`
+	Title          string     `gorm:"type:varchar(255);not null" json:"title"`
+	Body           string     `gorm:"type:text;not null" json:"body"`
+	TitleAr        string     `gorm:"type:varchar(255)" json:"title_ar"`
+	TitleEn        string     `gorm:"type:varchar(255)" json:"title_en"`
+	TitleBn        string     `gorm:"type:varchar(255)" json:"title_bn"`
+	BodyAr         string     `gorm:"type:text" json:"body_ar"`
+	BodyEn         string     `gorm:"type:text" json:"body_en"`
+	BodyBn         string     `gorm:"type:text" json:"body_bn"`
+	ImageURL       string     `gorm:"type:text" json:"image_url"`
+	Target         string     `gorm:"type:varchar(50);default:'ALL'" json:"target"` // "ALL", "BRANCH"
+	BranchID       *uuid.UUID `gorm:"type:char(36);index" json:"branch_id"`
+	Branch         *Branch    `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
+	CreatedBy      string     `gorm:"type:varchar(150)" json:"created_by"`
+	SentCount      int        `gorm:"default:0" json:"sent_count"`
+	HasPoll        bool       `gorm:"default:false" json:"has_poll"`
+	PollQuestion   string     `gorm:"type:varchar(255)" json:"poll_question"`
+	PollQuestionAr string     `gorm:"type:varchar(255)" json:"poll_question_ar"`
+	PollQuestionEn string     `gorm:"type:varchar(255)" json:"poll_question_en"`
+	PollQuestionBn string     `gorm:"type:varchar(255)" json:"poll_question_bn"`
+	AgreeCount     int        `gorm:"default:0" json:"agree_count"`
+	DisagreeCount  int        `gorm:"default:0" json:"disagree_count"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 func (b *BroadcastNotification) BeforeCreate(tx *gorm.DB) error {
