@@ -1630,7 +1630,7 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 			if reviewerName != "" {
 				supervisorLabel = reviewerName
 			}
-			notifBody := fmt.Sprintf("✅ تم إنهاء ومصادقة شفت العمل مباشرة بواسطة المشرف (%s) للمندوب %s (هوية: %s) — [%d] طلبات، مسافة [%.1f كم]، بنزين [%.2f ريال]",
+			notifBody := fmt.Sprintf("تم إنهاء ومصادقة شفت العمل مباشرة بواسطة المشرف (%s) للمندوب %s (هوية: %s) — [%d] طلبات، مسافة [%.1f كم]، بنزين [%.2f ريال]",
 				supervisorLabel, emp.Name, emp.NationalID, req.OrdersCount, distance, req.FuelCost)
 			_ = s.notifRepo.Create(ctx, &domain.Notification{
 				ID:         uuid.New(),
@@ -1649,13 +1649,13 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 				var pushTitle, pushBody string
 				switch lang {
 				case "en":
-					pushTitle = "Shift Approved ✅"
+					pushTitle = "Shift Approved"
 					pushBody = fmt.Sprintf("Supervisor approved your shift: %d Orders | Fuel: %.2f SAR", req.OrdersCount, req.FuelCost)
 				case "bn":
-					pushTitle = "শিফট অনুমোদিত হয়েছে ✅"
+					pushTitle = "শিফট অনুমোদিত হয়েছে"
 					pushBody = fmt.Sprintf("সুপারভাইজার আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", req.OrdersCount, req.FuelCost)
 				default: // "ar"
-					pushTitle = "تمت المصادقة على شفت العمل ✅"
+					pushTitle = "تمت المصادقة على شفت العمل"
 					pushBody = fmt.Sprintf("وافق المشرف على طلباتك: %d طلب | بنزين: %.2f ريال", req.OrdersCount, req.FuelCost)
 				}
 				go func(token, t, b, sid string, orders int, fuel float64) {
@@ -1669,7 +1669,7 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 				}(emp.PushToken, pushTitle, pushBody, activeSession.ID.String(), req.OrdersCount, req.FuelCost)
 			}
 		} else {
-			endNotifBody := fmt.Sprintf("🔴 أنهى المندوب %s (هوية: %s) شفت العمل — سجل [%d] طلبات، مسافة [%.1f كم] وبانتظار مصادقة المشرف",
+			endNotifBody := fmt.Sprintf("أنهى المندوب %s (هوية: %s) شفت العمل — سجل [%d] طلبات، مسافة [%.1f كم] وبانتظار مصادقة المشرف",
 				emp.Name, emp.NationalID, req.OrdersCount, distance)
 			_ = s.notifRepo.Create(ctx, &domain.Notification{
 				ID:         uuid.New(),
@@ -1862,13 +1862,13 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 			var title, body string
 			switch lang {
 			case "en":
-				title = "Shift Approved ✅"
+				title = "Shift Approved"
 				body = fmt.Sprintf("Supervisor approved your shift: %d Orders | Fuel: %.2f SAR", session.OrdersCount, session.FuelCost)
 			case "bn":
-				title = "শিফট অনুমোদিত হয়েছে ✅"
+				title = "শিফট অনুমোদিত হয়েছে"
 				body = fmt.Sprintf("সুপারভাইজার আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", session.OrdersCount, session.FuelCost)
 			default: // "ar"
-				title = "تمت المصادقة على شفت العمل ✅"
+				title = "تمت المصادقة على شفت العمل"
 				body = fmt.Sprintf("وافق المشرف على طلباتك: %d طلب | بنزين: %.2f ريال", session.OrdersCount, session.FuelCost)
 			}
 
