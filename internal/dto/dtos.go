@@ -745,14 +745,14 @@ type UpdateFuelLogRequest struct {
 }
 
 type FuelLogFilter struct {
-	BranchID   *uuid.UUID `form:"branch_id"`
-	EmployeeID *uuid.UUID `form:"employee_id"`
+	BranchID   *uuid.UUID `form:"-"`
+	EmployeeID *uuid.UUID `form:"-"`
 	Plate      string     `form:"plate"`
 	StartDate  string     `form:"start_date"`
 	EndDate    string     `form:"end_date"`
 	Search     string     `form:"search"`
-	Page       int        `form:"page,default=1"`
-	Limit      int        `form:"limit,default=50"`
+	Page       int        `form:"page"`
+	Limit      int        `form:"limit"`
 }
 
 // ------------------------------------------------------------------
@@ -784,14 +784,14 @@ type UpdateTrafficViolationRequest struct {
 }
 
 type TrafficViolationFilter struct {
-	BranchID   *uuid.UUID `form:"branch_id"`
-	EmployeeID *uuid.UUID `form:"employee_id"`
+	BranchID   *uuid.UUID `form:"-"`
+	EmployeeID *uuid.UUID `form:"-"`
 	Status     string     `form:"status"`
 	Search     string     `form:"search"`
 	StartDate  string     `form:"start_date"`
 	EndDate    string     `form:"end_date"`
-	Page       int        `form:"page,default=1"`
-	Limit      int        `form:"limit,default=50"`
+	Page       int        `form:"page"`
+	Limit      int        `form:"limit"`
 }
 
 // ------------------------------------------------------------------
@@ -823,13 +823,13 @@ type UpdateMaintenanceRequestRequest struct {
 }
 
 type MaintenanceRequestFilter struct {
-	BranchID *uuid.UUID `form:"branch_id"`
+	BranchID *uuid.UUID `form:"-"`
 	Plate    string     `form:"plate"`
 	Priority string     `form:"priority"`
 	Status   string     `form:"status"`
 	Search   string     `form:"search"`
-	Page     int        `form:"page,default=1"`
-	Limit    int        `form:"limit,default=50"`
+	Page     int        `form:"page"`
+	Limit    int        `form:"limit"`
 }
 
 // ------------------------------------------------------------------

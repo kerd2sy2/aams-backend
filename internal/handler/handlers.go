@@ -2958,9 +2958,33 @@ func (h *TrafficViolationHandler) Delete(c *gin.Context) {
 
 func (h *TrafficViolationHandler) GetAll(c *gin.Context) {
 	var filter dto.TrafficViolationFilter
-	if err := c.ShouldBindQuery(&filter); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "فلاتر غير صالحة"})
-		return
+	_ = c.ShouldBindQuery(&filter)
+
+	if empIDStr := strings.TrimSpace(c.Query("employee_id")); empIDStr != "" {
+		if parsedID, err := uuid.Parse(empIDStr); err == nil {
+			filter.EmployeeID = &parsedID
+		}
+	}
+
+	if branchIDStr := strings.TrimSpace(c.Query("branch_id")); branchIDStr != "" {
+		if parsedID, err := uuid.Parse(branchIDStr); err == nil {
+			filter.BranchID = &parsedID
+		}
+	}
+
+	if filter.Page < 1 {
+		if p, err := strconv.Atoi(c.DefaultQuery("page", "1")); err == nil && p > 0 {
+			filter.Page = p
+		} else {
+			filter.Page = 1
+		}
+	}
+	if filter.Limit < 1 {
+		if l, err := strconv.Atoi(c.DefaultQuery("limit", "50")); err == nil && l > 0 {
+			filter.Limit = l
+		} else {
+			filter.Limit = 50
+		}
 	}
 
 	var branchID *uuid.UUID
@@ -2984,6 +3008,11 @@ func (h *TrafficViolationHandler) GetAll(c *gin.Context) {
 				}
 			}
 		}
+	}
+
+	// For specific employee queries, remove branch restriction to ensure all delegate violations show
+	if isEmployee || filter.EmployeeID != nil {
+		branchID = nil
 	}
 
 	list, total, err := h.violationService.GetAll(c.Request.Context(), filter, branchID)
