@@ -1129,6 +1129,29 @@ func (h *WorkHandler) GetLastKM(c *gin.Context) {
 	})
 }
 
+func (h *WorkHandler) ScanPlate(c *gin.Context) {
+	var req struct {
+		Image string `json:"image"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Image) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "صورة اللوحة مطلوبة"})
+		return
+	}
+
+	result, err := h.workService.ScanPlateImage(c.Request.Context(), req.Image)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"digits":     "",
+			"letters":    "",
+			"full_plate": "",
+			"confidence": 0,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 func (h *WorkHandler) TodayCount(c *gin.Context) {
 	empIDStr := c.Query("employee_id")
 	empID, err := uuid.Parse(empIDStr)
@@ -2949,13 +2972,40 @@ func (h *TrafficViolationHandler) GetAll(c *gin.Context) {
 		}
 	}
 
+	var isEmployee bool
+	if isEmp, exists := c.Get("is_employee"); exists && isEmp != nil {
+		if val, ok := isEmp.(bool); ok && val {
+			isEmployee = true
+			if empIDVal, exists := c.Get("employee_id"); exists && empIDVal != nil {
+				if valID, ok := empIDVal.(uuid.UUID); ok {
+					filter.EmployeeID = &valID
+				} else if ptrID, ok := empIDVal.(*uuid.UUID); ok {
+					filter.EmployeeID = ptrID
+				}
+			}
+		}
+	}
+
 	list, total, err := h.violationService.GetAll(c.Request.Context(), filter, branchID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	totalAmount, deductedAmount, totalCount, _ := h.violationService.GetStats(c.Request.Context(), branchID)
+	var totalAmount, deductedAmount float64
+	var totalCount int64
+
+	if isEmployee || filter.EmployeeID != nil {
+		totalCount = total
+		for _, item := range list {
+			totalAmount += item.Amount
+			if item.Status == "DEDUCTED" || item.Status == "PAID" {
+				deductedAmount += item.Amount
+			}
+		}
+	} else {
+		totalAmount, deductedAmount, totalCount, _ = h.violationService.GetStats(c.Request.Context(), branchID)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data":            list,

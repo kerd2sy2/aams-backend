@@ -364,6 +364,7 @@ func main() {
 		protected.GET("/work/sessions/:id", workHandler.GetSessionByID)
 		protected.GET("/work/active", workHandler.GetActiveSession)
 		protected.GET("/work/last-km", workHandler.GetLastKM)
+		protected.POST("/work/scan-plate", workHandler.ScanPlate)
 		protected.GET("/work/today-count", workHandler.TodayCount)
 		protected.GET("/work/check-oil", workHandler.CheckOilChange)
 

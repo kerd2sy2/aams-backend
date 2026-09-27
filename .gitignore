@@ -5,6 +5,11 @@
 *.so
 *.dylib
 server
+*-linux
+delivery-backend*
+aams-backend*
+bin/
+node_modules/
 
 # Environments and configs
 .env

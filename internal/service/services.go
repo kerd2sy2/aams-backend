@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	crand "crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -1185,11 +1188,8 @@ func (s *employeeService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Em
 	}
 
 	if plate != "" && s.vehicleRepo != nil {
-		if v, _ := s.vehicleRepo.FindByPlateNumber(ctx, plate); v != nil && v.RegistrationImage != "" {
+		if v, _ := s.vehicleRepo.FindByPlateNumber(ctx, plate); v != nil {
 			emp.VehicleRegistrationImage = v.RegistrationImage
-			if emp.MotorcycleNumber != plate {
-				emp.MotorcycleNumber = plate
-			}
 		}
 	}
 
@@ -1346,6 +1346,7 @@ type WorkService interface {
 	CountTodaySessions(ctx context.Context, empID uuid.UUID) (int64, error)
 	CheckOilChange(ctx context.Context, empID uuid.UUID) (*dto.OilChangeCheckResponse, error)
 	GetSessionByID(ctx context.Context, sessionID uuid.UUID) (*domain.WorkSession, error)
+	ScanPlateImage(ctx context.Context, imageBase64 string) (map[string]interface{}, error)
 }
 
 type workService struct {
@@ -1462,24 +1463,6 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 
 	if err := s.workRepo.CreateSession(ctx, session); err != nil {
 		return nil, err
-	}
-
-	// Dynamic vehicle registration sync: if shift started with a motorcycle, update employee's active motorcycle and registration document
-	if motorcycleNumber != "" {
-		empNeedsUpdate := false
-		if emp.MotorcycleNumber != motorcycleNumber {
-			emp.MotorcycleNumber = motorcycleNumber
-			empNeedsUpdate = true
-		}
-		if s.vehicleRepo != nil {
-			if v, _ := s.vehicleRepo.FindByPlateNumber(ctx, motorcycleNumber); v != nil && v.RegistrationImage != "" {
-				emp.VehicleRegistrationImage = v.RegistrationImage
-				empNeedsUpdate = true
-			}
-		}
-		if empNeedsUpdate {
-			_ = s.empRepo.Update(ctx, emp)
-		}
 	}
 
 	// Always notify supervisors when an employee starts work
@@ -1662,6 +1645,7 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 					dataPayload := map[string]string{
 						"type":        "SESSION_APPROVED",
 						"sessionId":   sid,
+						"session_id":  sid,
 						"ordersCount": fmt.Sprintf("%d", orders),
 						"fuelCost":    fmt.Sprintf("%.2f", fuel),
 					}
@@ -1692,24 +1676,62 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 	return activeSession, nil
 }
 
+func normalizeArabicDigits(input string) string {
+	var sb strings.Builder
+	for _, r := range input {
+		switch r {
+		case '٠':
+			sb.WriteRune('0')
+		case '١':
+			sb.WriteRune('1')
+		case '٢':
+			sb.WriteRune('2')
+		case '٣':
+			sb.WriteRune('3')
+		case '٤':
+			sb.WriteRune('4')
+		case '٥':
+			sb.WriteRune('5')
+		case '٦':
+			sb.WriteRune('6')
+		case '٧':
+			sb.WriteRune('7')
+		case '٨':
+			sb.WriteRune('8')
+		case '٩':
+			sb.WriteRune('9')
+		default:
+			sb.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(sb.String())
+}
+
 func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, string, error) {
 	var regImage string
+	cleanPlate := normalizeArabicDigits(motorcycleNumber)
+
 	// If motorcycle number is specified, prioritize vehicle's latest odometer, broken status, and registration image
-	if motorcycleNumber != "" && s.vehicleRepo != nil {
-		v, _ := s.vehicleRepo.FindByPlateNumber(ctx, motorcycleNumber)
+	if cleanPlate != "" && s.vehicleRepo != nil {
+		v, _ := s.vehicleRepo.FindByPlateNumber(ctx, cleanPlate)
 		if v != nil {
 			regImage = v.RegistrationImage
 			if v.IsOdometerBroken {
 				return 0, 0, true, regImage, nil
 			}
 		}
-		latestKM, err := s.vehicleRepo.FindLatestVehicleKM(ctx, motorcycleNumber)
+		latestKM, err := s.vehicleRepo.FindLatestVehicleKM(ctx, cleanPlate)
 		if err == nil && latestKM > 0 {
 			return latestKM, 0, false, regImage, nil
 		}
+		if v != nil && v.CurrentKM > 0 {
+			return v.CurrentKM, 0, false, regImage, nil
+		}
+		// Return 0 with the bike's registration image (if any) without falling back to other bikes
+		return 0, 0, false, regImage, nil
 	}
 
-	// Fallback to employee's last completed session
+	// Fallback to employee's last completed session (only when no motorcycleNumber was requested)
 	if empID != uuid.Nil {
 		session, err := s.workRepo.FindLastCompletedSession(ctx, empID)
 		if err == nil && session != nil {
@@ -1723,6 +1745,60 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 	}
 
 	return 0, 0, false, regImage, errors.New("لا توجد قراءة سابقة")
+}
+
+func (s *workService) ScanPlateImage(ctx context.Context, imageBase64 string) (map[string]interface{}, error) {
+	if strings.TrimSpace(imageBase64) == "" {
+		return nil, errors.New("الصورة فارغة")
+	}
+
+	// 1. Try smart Python OCR engine first
+	pureB64 := imageBase64
+	if idx := strings.Index(pureB64, ","); idx != -1 {
+		pureB64 = pureB64[idx+1:]
+	}
+
+	imgBytes, err := base64.StdEncoding.DecodeString(pureB64)
+	if err == nil {
+		tmpFile, tmpErr := os.CreateTemp("", "plate_scan_*.jpg")
+		if tmpErr == nil {
+			defer os.Remove(tmpFile.Name())
+			tmpFile.Write(imgBytes)
+			tmpFile.Close()
+
+			cmd := exec.CommandContext(ctx, "python3", "/opt/aams-backend/smart_plate_detector.py", tmpFile.Name())
+			out, cmdErr := cmd.Output()
+			if cmdErr == nil {
+				outStr := string(out)
+				var pyRes struct {
+					Digits    string `json:"digits"`
+					Letters   string `json:"letters"`
+					FullPlate string `json:"full_plate"`
+				}
+				
+				startIdx := strings.Index(outStr, "{")
+				endIdx := strings.LastIndex(outStr, "}")
+				if startIdx != -1 && endIdx != -1 && endIdx > startIdx {
+					jsonStr := outStr[startIdx : endIdx+1]
+					if jsonErr := json.Unmarshal([]byte(jsonStr), &pyRes); jsonErr == nil && (pyRes.Digits != "" || pyRes.Letters != "") {
+						return map[string]interface{}{
+							"digits":     pyRes.Digits,
+							"letters":    pyRes.Letters,
+							"full_plate": pyRes.FullPlate,
+							"confidence": 0.98,
+						}, nil
+					}
+				}
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"digits":     "",
+		"letters":    "",
+		"full_plate": "",
+		"confidence": 0,
+	}, nil
 }
 
 func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest) (*domain.WorkSession, error) {
@@ -1890,6 +1966,7 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 					dataPayload := map[string]string{
 						"type":        "SESSION_APPROVED",
 						"sessionId":   sid,
+						"session_id":  sid,
 						"ordersCount": fmt.Sprintf("%d", orders),
 						"fuelCost":    fmt.Sprintf("%.2f", fuel),
 					}
@@ -3976,7 +4053,7 @@ func (s *trafficViolationService) GetByID(ctx context.Context, id uuid.UUID) (*d
 }
 
 func (s *trafficViolationService) GetAll(ctx context.Context, filter dto.TrafficViolationFilter, adminBranchID *uuid.UUID) ([]domain.TrafficViolation, int64, error) {
-	if adminBranchID != nil {
+	if filter.EmployeeID == nil && adminBranchID != nil {
 		filter.BranchID = adminBranchID
 	}
 	return s.repo.FindAll(ctx, filter)

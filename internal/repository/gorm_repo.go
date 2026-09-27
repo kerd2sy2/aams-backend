@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -1368,22 +1369,37 @@ func (r *gormVehicleRepository) FindByID(ctx context.Context, id uuid.UUID) (*do
 }
 
 func (r *gormVehicleRepository) FindByPlateNumber(ctx context.Context, plateNumber string) (*domain.Vehicle, error) {
-	var vehicle domain.Vehicle
-	err := r.db.WithContext(ctx).Preload("Branch").First(&vehicle, "plate_number = ?", plateNumber).Error
-	if err != nil {
-		return nil, err
+	clean := strings.TrimSpace(plateNumber)
+	if clean == "" {
+		return nil, errors.New("رقم اللوحة فارغ")
 	}
-	return &vehicle, nil
+	var vehicle domain.Vehicle
+	// 1. Exact match
+	if err := r.db.WithContext(ctx).Preload("Branch").Where("TRIM(plate_number) = ?", clean).First(&vehicle).Error; err == nil {
+		return &vehicle, nil
+	}
+	// 2. Prefix match
+	if err := r.db.WithContext(ctx).Preload("Branch").Where("plate_number ILIKE ?", clean+"%").First(&vehicle).Error; err == nil {
+		return &vehicle, nil
+	}
+	// 3. Substring match
+	if err := r.db.WithContext(ctx).Preload("Branch").Where("plate_number ILIKE ?", "%"+clean+"%").First(&vehicle).Error; err == nil {
+		return &vehicle, nil
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 // FindByPlateNumberUnscoped finds a vehicle by plate number including soft-deleted records
 func (r *gormVehicleRepository) FindByPlateNumberUnscoped(ctx context.Context, plateNumber string) (*domain.Vehicle, error) {
-	var vehicle domain.Vehicle
-	err := r.db.WithContext(ctx).Unscoped().Preload("Branch").First(&vehicle, "plate_number = ?", plateNumber).Error
-	if err != nil {
-		return nil, err
+	clean := strings.TrimSpace(plateNumber)
+	if clean == "" {
+		return nil, errors.New("رقم اللوحة فارغ")
 	}
-	return &vehicle, nil
+	var vehicle domain.Vehicle
+	if err := r.db.WithContext(ctx).Unscoped().Preload("Branch").Where("TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?", clean, clean+"%", "%"+clean+"%").First(&vehicle).Error; err == nil {
+		return &vehicle, nil
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 // RestoreVehicle restores a soft-deleted vehicle and updates its fields
@@ -1488,25 +1504,44 @@ func (r *gormVehicleRepository) RecordOilChange(ctx context.Context, id uuid.UUI
 }
 
 func (r *gormVehicleRepository) FindLatestVehicleKM(ctx context.Context, plateNumber string) (float64, error) {
-	// First check vehicle table
-	var vehicle domain.Vehicle
-	if err := r.db.WithContext(ctx).First(&vehicle, "plate_number = ?", plateNumber).Error; err == nil && vehicle.CurrentKM > 0 {
-		return vehicle.CurrentKM, nil
+	cleanPlate := strings.TrimSpace(plateNumber)
+	if cleanPlate == "" {
+		return 0, errors.New("رقم اللوحة فارغ")
 	}
 
-	// Fallback to work_sessions table for this motorcycle number
+	// 1. First check work_sessions table for the most recent completed shift with this motorcycle number
 	var lastEndKM float64
 	err := r.db.WithContext(ctx).
 		Table("work_sessions").
 		Select("end_km").
-		Where("motorcycle_number = ? AND status = ?", plateNumber, domain.StatusCompleted).
-		Order("end_time DESC, updated_at DESC").
+		Where("(TRIM(motorcycle_number) = ? OR motorcycle_number ILIKE ? OR motorcycle_number ILIKE ?) AND end_km > 0", cleanPlate, cleanPlate+"%", "%"+cleanPlate+"%").
+		Order("end_time DESC, updated_at DESC, created_at DESC").
 		Limit(1).
 		Scan(&lastEndKM).Error
-	if err != nil || lastEndKM == 0 {
-		return 0, err
+	if err == nil && lastEndKM > 0 {
+		return lastEndKM, nil
 	}
-	return lastEndKM, nil
+
+	// 2. Check vehicles table current_km
+	var vehicle domain.Vehicle
+	if err := r.db.WithContext(ctx).Where("TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?", cleanPlate, cleanPlate+"%", "%"+cleanPlate+"%").First(&vehicle).Error; err == nil && vehicle.CurrentKM > 0 {
+		return vehicle.CurrentKM, nil
+	}
+
+	// 3. Check start_km in work_sessions as fallback
+	var lastStartKM float64
+	err = r.db.WithContext(ctx).
+		Table("work_sessions").
+		Select("start_km").
+		Where("(TRIM(motorcycle_number) = ? OR motorcycle_number ILIKE ? OR motorcycle_number ILIKE ?) AND start_km > 0", cleanPlate, cleanPlate+"%", "%"+cleanPlate+"%").
+		Order("created_at DESC").
+		Limit(1).
+		Scan(&lastStartKM).Error
+	if err == nil && lastStartKM > 0 {
+		return lastStartKM, nil
+	}
+
+	return 0, errors.New("لا توجد قراءة سابقة")
 }
 
 func (r *gormVehicleRepository) SetVehicleStatus(ctx context.Context, plateNumber string, status string) error {
@@ -1644,12 +1679,17 @@ func (r *gormTrafficViolationRepository) FindAll(ctx context.Context, filter dto
 
 	q := r.db.WithContext(ctx).Model(&domain.TrafficViolation{}).Preload("Employee").Preload("Branch")
 
-	if filter.BranchID != nil {
-		q = q.Where("branch_id = ?", filter.BranchID)
-	}
 	if filter.EmployeeID != nil {
-		q = q.Where("employee_id = ?", filter.EmployeeID)
+		var emp domain.Employee
+		if err := r.db.WithContext(ctx).Select("id, motorcycle_number").First(&emp, "id = ?", filter.EmployeeID).Error; err == nil && emp.MotorcycleNumber != "" {
+			q = q.Where("traffic_violations.employee_id = ? OR (traffic_violations.employee_id IS NULL AND traffic_violations.vehicle_plate = ?)", filter.EmployeeID, emp.MotorcycleNumber)
+		} else {
+			q = q.Where("traffic_violations.employee_id = ?", filter.EmployeeID)
+		}
+	} else if filter.BranchID != nil {
+		q = q.Where("traffic_violations.branch_id = ?", filter.BranchID)
 	}
+
 	if filter.Status != "" {
 		q = q.Where("status = ?", filter.Status)
 	}
