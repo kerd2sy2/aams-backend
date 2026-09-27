@@ -3957,11 +3957,94 @@ type TrafficViolationService interface {
 }
 
 type trafficViolationService struct {
-	repo repository.TrafficViolationRepository
+	repo      repository.TrafficViolationRepository
+	empRepo   repository.EmployeeRepository
+	notifRepo repository.NotificationRepository
 }
 
-func NewTrafficViolationService(repo repository.TrafficViolationRepository) TrafficViolationService {
-	return &trafficViolationService{repo: repo}
+func NewTrafficViolationService(repo repository.TrafficViolationRepository, empRepo repository.EmployeeRepository, notifRepo repository.NotificationRepository) TrafficViolationService {
+	return &trafficViolationService{repo: repo, empRepo: empRepo, notifRepo: notifRepo}
+}
+
+func (s *trafficViolationService) sendViolationNotification(ctx context.Context, v *domain.TrafficViolation, isPayment bool, paymentAmount float64) {
+	if v == nil || v.EmployeeID == nil || s.empRepo == nil {
+		return
+	}
+
+	emp, err := s.empRepo.FindByID(ctx, *v.EmployeeID)
+	if err != nil || emp == nil {
+		return
+	}
+
+	var titleAr, titleEn, titleBn string
+	var bodyAr, bodyEn, bodyBn string
+
+	r := strings.ToLower(v.Reason)
+	isPenalty := strings.Contains(r, "جزاء") ||
+		strings.Contains(r, "خصم") ||
+		strings.Contains(r, "تأخير") ||
+		strings.Contains(r, "غياب") ||
+		strings.Contains(r, "زي") ||
+		strings.Contains(r, "عهدة") ||
+		strings.Contains(r, "إهمال") ||
+		strings.Contains(r, "سلوك")
+
+	if isPayment {
+		rem := math.Max(0, v.Amount-v.PaidAmount)
+		titleAr = "💳 إشعار خصم وسداد"
+		bodyAr = fmt.Sprintf("تم خصم/سداد دفعة بقيمة %.2f ر.س من (%s). المتبقي: %.2f ر.س.", paymentAmount, v.Reason, rem)
+
+		titleEn = "💳 Deduction / Payment Notice"
+		bodyEn = fmt.Sprintf("An amount of %.2f SAR was deducted/paid for (%s). Remaining: %.2f SAR.", paymentAmount, v.Reason, rem)
+
+		titleBn = "💳 কর্তন ও পরিশোধের বিজ্ঞপ্তি"
+		bodyBn = fmt.Sprintf("%.2f রিয়াল কর্তন/পরিশোধ করা হয়েছে (%s)। অবশিষ্ট: %.2f রিয়াল।", paymentAmount, v.Reason, rem)
+	} else if isPenalty {
+		titleAr = "📋 إشعار جزاء إداري جديد"
+		bodyAr = fmt.Sprintf("تم تسجيل جزاء إداري عليك بقيمة %.2f ر.س بسبب (%s).", v.Amount, v.Reason)
+
+		titleEn = "📋 New Administrative Penalty"
+		bodyEn = fmt.Sprintf("An administrative penalty of %.2f SAR has been recorded for (%s).", v.Amount, v.Reason)
+
+		titleBn = "📋 নতুন প্রশাসনিক জরিমানা"
+		bodyBn = fmt.Sprintf("আপনার উপর %.2f রিয়াল জরিমানা ধার্য করা হয়েছে (%s)।", v.Amount, v.Reason)
+	} else {
+		titleAr = "🚦 مخالفة مرورية جديدة"
+		bodyAr = fmt.Sprintf("تم تسجيل مخالفة مرورية عليك بقيمة %.2f ر.س بسبب (%s).", v.Amount, v.Reason)
+
+		titleEn = "🚦 New Traffic Violation"
+		bodyEn = fmt.Sprintf("A traffic violation of %.2f SAR has been recorded for (%s).", v.Amount, v.Reason)
+
+		titleBn = "🚦 নতুন ট্রাফিক জরিমানা"
+		bodyBn = fmt.Sprintf("আপনার উপর %.2f রিয়াল ট্রাফিক জরিমানা ধার্য করা হয়েছে (%s)।", v.Amount, v.Reason)
+	}
+
+	combinedTitle := fmt.Sprintf("%s | %s | %s", titleAr, titleEn, titleBn)
+	combinedBody := fmt.Sprintf("%s\n%s\n%s", bodyAr, bodyEn, bodyBn)
+
+	if s.notifRepo != nil {
+		_ = s.notifRepo.Create(ctx, &domain.Notification{
+			ID:         uuid.New(),
+			EmployeeID: v.EmployeeID,
+			Title:      combinedTitle,
+			Body:       combinedBody,
+			Type:       "VIOLATION",
+			Status:     "unread",
+		})
+	}
+
+	if emp.PushToken != "" {
+		go SendFCMBroadcast(
+			[]string{emp.PushToken},
+			combinedTitle,
+			combinedBody,
+			map[string]string{
+				"type":         "VIOLATION",
+				"violation_id": v.ID.String(),
+				"amount":       fmt.Sprintf("%.2f", v.Amount),
+			},
+		)
+	}
 }
 
 func (s *trafficViolationService) Create(ctx context.Context, req dto.CreateTrafficViolationRequest, adminBranchID *uuid.UUID) (*domain.TrafficViolation, error) {
@@ -4013,7 +4096,12 @@ func (s *trafficViolationService) Create(ctx context.Context, req dto.CreateTraf
 	if err := s.repo.Create(ctx, v); err != nil {
 		return nil, err
 	}
-	return s.repo.FindByID(ctx, v.ID)
+
+	createdViolation, err := s.repo.FindByID(ctx, v.ID)
+	if err == nil && createdViolation != nil {
+		s.sendViolationNotification(ctx, createdViolation, false, 0)
+	}
+	return createdViolation, err
 }
 
 func (s *trafficViolationService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateTrafficViolationRequest) (*domain.TrafficViolation, error) {
@@ -4021,6 +4109,8 @@ func (s *trafficViolationService) Update(ctx context.Context, id uuid.UUID, req 
 	if err != nil {
 		return nil, errors.New("المخالفة غير موجودة")
 	}
+
+	var paymentAdded float64
 
 	if req.ViolationNumber != nil {
 		v.ViolationNumber = *req.ViolationNumber
@@ -4035,10 +4125,14 @@ func (s *trafficViolationService) Update(ctx context.Context, id uuid.UUID, req 
 		v.Amount = *req.Amount
 	}
 	if req.PaidAmount != nil {
+		if *req.PaidAmount > v.PaidAmount {
+			paymentAdded = *req.PaidAmount - v.PaidAmount
+		}
 		v.PaidAmount = *req.PaidAmount
 	}
 	if req.AddPayment != nil && *req.AddPayment > 0 {
 		v.PaidAmount += *req.AddPayment
+		paymentAdded = *req.AddPayment
 	}
 	if req.Reason != nil {
 		v.Reason = *req.Reason
@@ -4054,6 +4148,7 @@ func (s *trafficViolationService) Update(ctx context.Context, id uuid.UUID, req 
 	if req.Status != nil {
 		v.Status = *req.Status
 		if (*req.Status == "DEDUCTED" || *req.Status == "PAID") && v.PaidAmount < v.Amount {
+			paymentAdded = v.Amount - v.PaidAmount
 			v.PaidAmount = v.Amount
 		} else if *req.Status == "RECORDED" && req.PaidAmount == nil {
 			v.PaidAmount = 0
@@ -4077,7 +4172,13 @@ func (s *trafficViolationService) Update(ctx context.Context, id uuid.UUID, req 
 	if err := s.repo.Update(ctx, v); err != nil {
 		return nil, err
 	}
-	return s.repo.FindByID(ctx, id)
+
+	updatedViolation, err := s.repo.FindByID(ctx, id)
+	if err == nil && updatedViolation != nil && paymentAdded > 0 {
+		s.sendViolationNotification(ctx, updatedViolation, true, paymentAdded)
+	}
+
+	return updatedViolation, err
 }
 
 func (s *trafficViolationService) Delete(ctx context.Context, id uuid.UUID) error {

@@ -101,7 +101,7 @@ func main() {
 	custodyService := service.NewCustodyService(custodyRepo)
 	settingService := service.NewSettingService(settingRepo)
 	fuelLogService := service.NewFuelLogService(fuelLogRepo)
-	violationService := service.NewTrafficViolationService(violationRepo)
+	violationService := service.NewTrafficViolationService(violationRepo, empRepo, notifRepo)
 	maintRequestService := service.NewMaintenanceRequestService(maintRequestRepo)
 	docService := service.NewEmployeeDocumentService(docRepo)
 	bankService := service.NewEmployeeBankAccountService(bankRepo)
