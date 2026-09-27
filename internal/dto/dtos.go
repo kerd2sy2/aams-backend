@@ -276,6 +276,7 @@ type StartWorkRequest struct {
 	EmployeeID       string  `json:"employee_id" binding:"required,uuid"`
 	StartKM          float64 `json:"start_km" binding:"gte=0"` // not required — 0 is valid when odometer is broken
 	StartKMImage     string  `json:"start_km_image"`           // صورة عداد البداية
+	StartPlateImage  string  `json:"start_plate_image"`        // صورة لوحة الدباب الموثقة
 	ApplicationID    string  `json:"application_id"`
 	ApplicationType  string  `json:"application_type"`
 	VehicleType      string  `json:"vehicle_type"`      // override for this shift
@@ -309,6 +310,7 @@ type UpdateWorkSessionRequest struct {
 	EmployeeID      string     `json:"employee_id"`
 	StartKM         float64    `json:"start_km"`
 	StartKMImage    string     `json:"start_km_image"`
+	StartPlateImage string     `json:"start_plate_image"`
 	EndKM           float64    `json:"end_km"`
 	EndKMImage      string     `json:"end_km_image"`
 	OrdersCount     int        `json:"orders_count"`
@@ -365,6 +367,7 @@ type WorkSessionDetailResponse struct {
 	WorkingDuration      string     `json:"working_duration"`
 	StartKM              float64    `json:"start_km"`
 	StartKMImage         string     `json:"start_km_image"`
+	StartPlateImage      string     `json:"start_plate_image"`
 	EndKM                float64    `json:"end_km"`
 	EndKMImage           string     `json:"end_km_image"`
 	Distance             float64    `json:"distance"`

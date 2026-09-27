@@ -1446,6 +1446,13 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 		}
 	}
 
+	startPlateImg := req.StartPlateImage
+	if s.storageService != nil && strings.HasPrefix(startPlateImg, "data:image") {
+		if savedUrl, err := s.storageService.SaveBase64Image(startPlateImg, "plates"); err == nil && savedUrl != "" {
+			startPlateImg = savedUrl
+		}
+	}
+
 	session := &domain.WorkSession{
 		ID:               uuid.New(),
 		EmployeeID:       &empID,
@@ -1453,6 +1460,7 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 		StartKM:          req.StartKM,
 		OriginalStartKM:  req.StartKM,
 		StartKMImage:     startImg,
+		StartPlateImage:  startPlateImg,
 		ApplicationID:    appID,
 		ApplicationType:  appType,
 		VehicleType:      vehicleType,
@@ -1828,6 +1836,9 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 	if req.StartKMImage != "" {
 		session.StartKMImage = req.StartKMImage
 	}
+	if req.StartPlateImage != "" {
+		session.StartPlateImage = req.StartPlateImage
+	}
 
 	if req.EndKM > 0 {
 		if req.EndKM <= session.StartKM {
@@ -2124,6 +2135,7 @@ func (s *reportService) GetReports(ctx context.Context, filter dto.ReportFilter)
 			WorkingDuration:      durationStr,
 			StartKM:              s.StartKM,
 			StartKMImage:         s.StartKMImage,
+			StartPlateImage:      s.StartPlateImage,
 			EndKM:                s.EndKM,
 			EndKMImage:           s.EndKMImage,
 			Distance:             s.Distance,

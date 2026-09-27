@@ -144,6 +144,7 @@ type WorkSession struct {
 	ApplicationType      string         `gorm:"type:varchar(50)" json:"application_type"`
 	VehicleType          string         `gorm:"type:varchar(20)" json:"vehicle_type"`               // override for this shift: "car" or "motorcycle"
 	MotorcycleNumber     string         `gorm:"type:varchar(50)" json:"motorcycle_number"`          // رقم الدباب لهذا الشفت (قد يختلف عن المسجل)
+	StartPlateImage      string         `gorm:"type:text" json:"start_plate_image"`                 // صورة لوحة الدباب الموثقة بالكاميرا عند البدء
 	StartKMImage         string         `gorm:"type:text" json:"start_km_image"`                    // صورة عداد البداية
 	EndKMImage           string         `gorm:"type:text" json:"end_km_image"`                      // صورة عداد النهاية
 	IsReviewed           bool           `gorm:"default:false;index" json:"is_reviewed"`             // حالة مراجعة وتصديق المشرف
