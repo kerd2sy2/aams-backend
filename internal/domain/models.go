@@ -532,10 +532,11 @@ type TrafficViolation struct {
 	Employee        *Employee      `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
 	VehiclePlate    string         `gorm:"type:varchar(50);index" json:"vehicle_plate"`
 	Amount          float64        `gorm:"not null;default:0" json:"amount"`
-	Reason          string         `gorm:"type:varchar(255);not null" json:"reason"` // ط³ط±ط¹ط©طŒ ط¥ط´ط§ط±ط©طŒ ط­ط²ط§ظ…...
+	PaidAmount      float64        `gorm:"not null;default:0" json:"paid_amount"`
+	Reason          string         `gorm:"type:varchar(255);not null" json:"reason"` // سرعة، إشارة، حزام...
 	ViolationDate   time.Time      `gorm:"index" json:"violation_date"`
 	City            string         `gorm:"type:varchar(100)" json:"city"`
-	Status          string         `gorm:"type:varchar(30);default:'RECORDED';index" json:"status"` // RECORDED, DEDUCTED, DISPUTED, PAID
+	Status          string         `gorm:"type:varchar(30);default:'RECORDED';index" json:"status"` // RECORDED, PARTIAL, DEDUCTED, DISPUTED, PAID
 	BranchID        *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
 	Branch          *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
 	Notes           string         `gorm:"type:text" json:"notes"`

@@ -3977,6 +3977,19 @@ func (s *trafficViolationService) Create(ctx context.Context, req dto.CreateTraf
 		status = req.Status
 	}
 
+	var paidAmount float64
+	if req.PaidAmount != nil {
+		paidAmount = *req.PaidAmount
+	} else if status == "DEDUCTED" || status == "PAID" {
+		paidAmount = req.Amount
+	}
+
+	if paidAmount >= req.Amount && req.Amount > 0 {
+		status = "DEDUCTED"
+	} else if paidAmount > 0 && paidAmount < req.Amount {
+		status = "PARTIAL"
+	}
+
 	branchID := req.BranchID
 	if branchID == nil && adminBranchID != nil {
 		branchID = adminBranchID
@@ -3988,6 +4001,7 @@ func (s *trafficViolationService) Create(ctx context.Context, req dto.CreateTraf
 		EmployeeID:      req.EmployeeID,
 		VehiclePlate:    req.VehiclePlate,
 		Amount:          req.Amount,
+		PaidAmount:      paidAmount,
 		Reason:          req.Reason,
 		ViolationDate:   vDate,
 		City:            req.City,
@@ -4020,6 +4034,12 @@ func (s *trafficViolationService) Update(ctx context.Context, id uuid.UUID, req 
 	if req.Amount != nil {
 		v.Amount = *req.Amount
 	}
+	if req.PaidAmount != nil {
+		v.PaidAmount = *req.PaidAmount
+	}
+	if req.AddPayment != nil && *req.AddPayment > 0 {
+		v.PaidAmount += *req.AddPayment
+	}
 	if req.Reason != nil {
 		v.Reason = *req.Reason
 	}
@@ -4033,9 +4053,25 @@ func (s *trafficViolationService) Update(ctx context.Context, id uuid.UUID, req 
 	}
 	if req.Status != nil {
 		v.Status = *req.Status
+		if (*req.Status == "DEDUCTED" || *req.Status == "PAID") && v.PaidAmount < v.Amount {
+			v.PaidAmount = v.Amount
+		} else if *req.Status == "RECORDED" && req.PaidAmount == nil {
+			v.PaidAmount = 0
+		}
 	}
 	if req.Notes != nil {
 		v.Notes = *req.Notes
+	}
+
+	// Auto-compute status according to paid amount
+	if v.PaidAmount >= v.Amount && v.Amount > 0 {
+		if v.Status != "PAID" {
+			v.Status = "DEDUCTED"
+		}
+	} else if v.PaidAmount > 0 && v.PaidAmount < v.Amount {
+		v.Status = "PARTIAL"
+	} else if v.PaidAmount == 0 && (v.Status == "DEDUCTED" || v.Status == "PARTIAL") {
+		v.Status = "RECORDED"
 	}
 
 	if err := s.repo.Update(ctx, v); err != nil {

@@ -763,10 +763,11 @@ type CreateTrafficViolationRequest struct {
 	EmployeeID      *uuid.UUID `json:"employee_id"`
 	VehiclePlate    string     `json:"vehicle_plate"`
 	Amount          float64    `json:"amount" binding:"required"`
+	PaidAmount      *float64   `json:"paid_amount"`
 	Reason          string     `json:"reason" binding:"required"`
 	ViolationDate   string     `json:"violation_date"`
 	City            string     `json:"city"`
-	Status          string     `json:"status"` // RECORDED, DEDUCTED, DISPUTED, PAID
+	Status          string     `json:"status"` // RECORDED, PARTIAL, DEDUCTED, DISPUTED, PAID
 	BranchID        *uuid.UUID `json:"branch_id"`
 	Notes           string     `json:"notes"`
 }
@@ -776,6 +777,8 @@ type UpdateTrafficViolationRequest struct {
 	EmployeeID      *uuid.UUID `json:"employee_id"`
 	VehiclePlate    *string    `json:"vehicle_plate"`
 	Amount          *float64   `json:"amount"`
+	PaidAmount      *float64   `json:"paid_amount"`
+	AddPayment      *float64   `json:"add_payment"`
 	Reason          *string    `json:"reason"`
 	ViolationDate   *string    `json:"violation_date"`
 	City            *string    `json:"city"`

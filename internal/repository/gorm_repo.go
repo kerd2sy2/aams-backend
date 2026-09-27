@@ -1729,7 +1729,7 @@ func (r *gormTrafficViolationRepository) GetViolationStats(ctx context.Context, 
 	}
 	var res Result
 	q := r.db.WithContext(ctx).Model(&domain.TrafficViolation{}).
-		Select("COALESCE(SUM(amount), 0) as total_amount, COALESCE(SUM(CASE WHEN status IN ('DEDUCTED', 'PAID') THEN amount ELSE 0 END), 0) as deducted_amount, COUNT(*) as total_count")
+		Select("COALESCE(SUM(amount), 0) as total_amount, COALESCE(SUM(paid_amount), 0) as deducted_amount, COUNT(*) as total_count")
 
 	if branchID != nil {
 		q = q.Where("branch_id = ?", branchID)

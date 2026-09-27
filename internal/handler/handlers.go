@@ -3028,9 +3028,7 @@ func (h *TrafficViolationHandler) GetAll(c *gin.Context) {
 		totalCount = total
 		for _, item := range list {
 			totalAmount += item.Amount
-			if item.Status == "DEDUCTED" || item.Status == "PAID" {
-				deductedAmount += item.Amount
-			}
+			deductedAmount += item.PaidAmount
 		}
 	} else {
 		totalAmount, deductedAmount, totalCount, _ = h.violationService.GetStats(c.Request.Context(), branchID)
