@@ -4019,25 +4019,38 @@ func (s *trafficViolationService) sendViolationNotification(ctx context.Context,
 		bodyBn = fmt.Sprintf("আপনার উপর %.2f রিয়াল ট্রাফিক জরিমানা ধার্য করা হয়েছে (%s)।", v.Amount, v.Reason)
 	}
 
-	combinedTitle := fmt.Sprintf("%s | %s | %s", titleAr, titleEn, titleBn)
-	combinedBody := fmt.Sprintf("%s\n%s\n%s", bodyAr, bodyEn, bodyBn)
+	lang := strings.ToLower(strings.TrimSpace(emp.Language))
+	var title, body string
+	switch lang {
+	case "en":
+		title = titleEn
+		body = bodyEn
+	case "bn":
+		title = titleBn
+		body = bodyBn
+	default: // "ar"
+		title = titleAr
+		body = bodyAr
+	}
 
 	if s.notifRepo != nil {
 		_ = s.notifRepo.Create(ctx, &domain.Notification{
 			ID:         uuid.New(),
 			EmployeeID: v.EmployeeID,
-			Title:      combinedTitle,
-			Body:       combinedBody,
+			BranchID:   emp.BranchID,
+			Title:      title,
+			Body:       body,
 			Type:       "VIOLATION",
 			Status:     "unread",
+			CreatedAt:  time.Now(),
 		})
 	}
 
 	if emp.PushToken != "" {
 		go SendFCMBroadcast(
 			[]string{emp.PushToken},
-			combinedTitle,
-			combinedBody,
+			title,
+			body,
 			map[string]string{
 				"type":         "VIOLATION",
 				"violation_id": v.ID.String(),
