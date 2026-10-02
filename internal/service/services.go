@@ -4159,7 +4159,7 @@ func (s *trafficViolationService) sendViolationNotification(ctx context.Context,
 		bodyBn = fmt.Sprintf("%.2f রিয়াল কর্তন/পরিশোধ করা হয়েছে (%s)। অবশিষ্ট: %.2f রিয়াল।", paymentAmount, v.Reason, rem)
 
 		titleUr = "💳 کٹوتی / ادائیگی کی اطلاع"
-		bodyUr = fmt.Sprintf("آپ کے (%s) سے %.2f ریال منہا/ادا کر دیے گئے ہیں۔ بقایا: %.2f ریال۔", paymentAmount, v.Reason, rem)
+		bodyUr = fmt.Sprintf("آپ کے (%s) سے %.2f ریال منہا/ادا کر دیے گئے ہیں۔ بقایا: %.2f ریال۔", v.Reason, paymentAmount, rem)
 	} else if isPenalty {
 		titleAr = "📋 إشعار جزاء إداري جديد"
 		bodyAr = fmt.Sprintf("تم تسجيل جزاء إداري عليك بقيمة %.2f ر.س بسبب (%s).", v.Amount, v.Reason)
