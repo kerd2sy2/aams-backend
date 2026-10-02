@@ -1342,9 +1342,9 @@ type WorkService interface {
 	ReviewSession(ctx context.Context, sessionID uuid.UUID, req dto.ReviewWorkSessionRequest, reviewerID *uuid.UUID, reviewerName string) (*domain.WorkSession, error)
 	GetActiveSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	GetLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
-	GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, string, error)
+	GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, string, bool, float64, error)
 	CountTodaySessions(ctx context.Context, empID uuid.UUID) (int64, error)
-	CheckOilChange(ctx context.Context, empID uuid.UUID) (*dto.OilChangeCheckResponse, error)
+	CheckOilChange(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (*dto.OilChangeCheckResponse, error)
 	GetSessionByID(ctx context.Context, sessionID uuid.UUID) (*domain.WorkSession, error)
 	ScanPlateImage(ctx context.Context, imageBase64 string) (map[string]interface{}, error)
 }
@@ -1718,44 +1718,67 @@ func normalizeArabicDigits(input string) string {
 	return strings.TrimSpace(sb.String())
 }
 
-func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, string, error) {
+func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (float64, float64, bool, string, bool, float64, error) {
 	var regImage string
+	var needsOilChange bool
+	var remainingOilKM float64
 	cleanPlate := normalizeArabicDigits(motorcycleNumber)
 
-	// If motorcycle number is specified, prioritize vehicle's latest odometer, broken status, and registration image
+	// If motorcycle number is specified, prioritize vehicle's latest odometer, broken status, registration image, and oil change status
 	if cleanPlate != "" && s.vehicleRepo != nil {
 		v, _ := s.vehicleRepo.FindByPlateNumber(ctx, cleanPlate)
 		if v != nil {
 			regImage = v.RegistrationImage
+			interval := oilChangeInterval(v.VehicleType)
+			drivenSinceOil := v.CurrentKM - v.LastOilChangeKM
+			if drivenSinceOil < 0 {
+				drivenSinceOil = 0
+			}
+			needsOilChange = drivenSinceOil >= interval
+			remainingOilKM = interval - drivenSinceOil
+			if remainingOilKM < 0 {
+				remainingOilKM = 0
+			}
 			if v.IsOdometerBroken {
-				return 0, 0, true, regImage, nil
+				return 0, 0, true, regImage, needsOilChange, remainingOilKM, nil
 			}
 		}
 		latestKM, err := s.vehicleRepo.FindLatestVehicleKM(ctx, cleanPlate)
 		if err == nil && latestKM > 0 {
-			return latestKM, 0, false, regImage, nil
+			return latestKM, 0, false, regImage, needsOilChange, remainingOilKM, nil
 		}
 		if v != nil && v.CurrentKM > 0 {
-			return v.CurrentKM, 0, false, regImage, nil
+			return v.CurrentKM, 0, false, regImage, needsOilChange, remainingOilKM, nil
 		}
-		// Return 0 with the bike's registration image (if any) without falling back to other bikes
-		return 0, 0, false, regImage, nil
+		// Return 0 with the bike's registration image (if any) and oil status without falling back to other bikes
+		return 0, 0, false, regImage, needsOilChange, remainingOilKM, nil
 	}
 
 	// Fallback to employee's last completed session (only when no motorcycleNumber was requested)
 	if empID != uuid.Nil {
 		session, err := s.workRepo.FindLastCompletedSession(ctx, empID)
 		if err == nil && session != nil {
-			if regImage == "" && session.MotorcycleNumber != "" && s.vehicleRepo != nil {
+			if session.MotorcycleNumber != "" && s.vehicleRepo != nil {
 				if v, _ := s.vehicleRepo.FindByPlateNumber(ctx, session.MotorcycleNumber); v != nil {
 					regImage = v.RegistrationImage
+					interval := oilChangeInterval(v.VehicleType)
+					drivenSinceOil := v.CurrentKM - v.LastOilChangeKM
+					if drivenSinceOil < 0 {
+						drivenSinceOil = 0
+					}
+					needsOilChange = drivenSinceOil >= interval
+					rem := interval - drivenSinceOil
+					if rem < 0 {
+						rem = 0
+					}
+					remainingOilKM = rem
 				}
 			}
-			return session.EndKM, session.StartKM, false, regImage, nil
+			return session.EndKM, session.StartKM, false, regImage, needsOilChange, remainingOilKM, nil
 		}
 	}
 
-	return 0, 0, false, regImage, errors.New("لا توجد قراءة سابقة")
+	return 0, 0, false, regImage, false, 0, errors.New("لا توجد قراءة سابقة")
 }
 
 func (s *workService) ScanPlateImage(ctx context.Context, imageBase64 string) (map[string]interface{}, error) {
@@ -2093,21 +2116,53 @@ func (s *workService) CountTodaySessions(ctx context.Context, empID uuid.UUID) (
 	return s.workRepo.CountTodaySessions(ctx, empID)
 }
 
-func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID) (*dto.OilChangeCheckResponse, error) {
-	emp, err := s.empRepo.FindByID(ctx, empID)
-	if err != nil {
-		return nil, errors.New("الموظف غير موجود")
+func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (*dto.OilChangeCheckResponse, error) {
+	cleanPlate := normalizeArabicDigits(motorcycleNumber)
+	if cleanPlate != "" && s.vehicleRepo != nil {
+		v, _ := s.vehicleRepo.FindByPlateNumber(ctx, cleanPlate)
+		if v != nil {
+			interval := oilChangeInterval(v.VehicleType)
+			drivenSinceOil := v.CurrentKM - v.LastOilChangeKM
+			if drivenSinceOil < 0 {
+				drivenSinceOil = 0
+			}
+			return &dto.OilChangeCheckResponse{
+				NeedsOilChange:    drivenSinceOil >= interval,
+				TotalDistance:     v.CurrentKM,
+				DistanceSinceOil:  drivenSinceOil,
+				OilChangeInterval: interval,
+				VehicleType:       v.VehicleType,
+			}, nil
+		}
 	}
 
-	distanceSinceOil := emp.TotalDistance - emp.LastOilChangeDistance
-	interval := oilChangeInterval(emp.VehicleType)
+	if empID != uuid.Nil && s.empRepo != nil && s.vehicleRepo != nil {
+		emp, err := s.empRepo.FindByID(ctx, empID)
+		if err == nil && emp != nil && emp.MotorcycleNumber != "" {
+			v, _ := s.vehicleRepo.FindByPlateNumber(ctx, emp.MotorcycleNumber)
+			if v != nil {
+				interval := oilChangeInterval(v.VehicleType)
+				drivenSinceOil := v.CurrentKM - v.LastOilChangeKM
+				if drivenSinceOil < 0 {
+					drivenSinceOil = 0
+				}
+				return &dto.OilChangeCheckResponse{
+					NeedsOilChange:    drivenSinceOil >= interval,
+					TotalDistance:     v.CurrentKM,
+					DistanceSinceOil:  drivenSinceOil,
+					OilChangeInterval: interval,
+					VehicleType:       v.VehicleType,
+				}, nil
+			}
+		}
+	}
 
 	return &dto.OilChangeCheckResponse{
-		NeedsOilChange:    distanceSinceOil >= interval,
-		TotalDistance:     emp.TotalDistance,
-		DistanceSinceOil:  distanceSinceOil,
-		OilChangeInterval: interval,
-		VehicleType:       emp.VehicleType,
+		NeedsOilChange:    false,
+		TotalDistance:     0,
+		DistanceSinceOil:  0,
+		OilChangeInterval: 950,
+		VehicleType:       "motorcycle",
 	}, nil
 }
 

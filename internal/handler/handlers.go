@@ -1109,13 +1109,15 @@ func (h *WorkHandler) GetLastKM(c *gin.Context) {
 		}
 	}
 
-	lastEndKM, lastStartKM, isOdometerBroken, regImage, err := h.workService.GetLastSessionOrVehicleKM(c.Request.Context(), empID, motorcycleNumber)
+	lastEndKM, lastStartKM, isOdometerBroken, regImage, needsOilChange, remainingOilKM, err := h.workService.GetLastSessionOrVehicleKM(c.Request.Context(), empID, motorcycleNumber)
 	if err != nil && !isOdometerBroken {
 		c.JSON(http.StatusOK, gin.H{
 			"last_end_km":        0,
 			"last_start_km":      0,
 			"is_odometer_broken": false,
 			"registration_image": regImage,
+			"needs_oil_change":   needsOilChange,
+			"remaining_oil_km":   remainingOilKM,
 		})
 		return
 	}
@@ -1125,6 +1127,8 @@ func (h *WorkHandler) GetLastKM(c *gin.Context) {
 		"last_start_km":      lastStartKM,
 		"is_odometer_broken": isOdometerBroken,
 		"registration_image": regImage,
+		"needs_oil_change":   needsOilChange,
+		"remaining_oil_km":   remainingOilKM,
 	})
 }
 
@@ -2175,18 +2179,24 @@ func checkAdminOnly(c *gin.Context) bool {
 
 // WorkHandler - CheckOilChange
 func (h *WorkHandler) CheckOilChange(c *gin.Context) {
-	empIDStr := c.Query("employee_id")
-	empID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
-		return
+	empIDStr := strings.TrimSpace(c.Query("employee_id"))
+	motorcycleNumber := strings.TrimSpace(c.Query("motorcycle_number"))
+	if motorcycleNumber == "" {
+		motorcycleNumber = strings.TrimSpace(c.Query("plate"))
 	}
 
-	if _, ok := h.checkWorkEmployeeBranch(c, empID); !ok {
-		return
+	var empID uuid.UUID
+	if empIDStr != "" {
+		var err error
+		empID, err = uuid.Parse(empIDStr)
+		if err == nil {
+			if _, ok := h.checkWorkEmployeeBranch(c, empID); !ok {
+				return
+			}
+		}
 	}
 
-	resp, err := h.workService.CheckOilChange(c.Request.Context(), empID)
+	resp, err := h.workService.CheckOilChange(c.Request.Context(), empID, motorcycleNumber)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
