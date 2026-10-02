@@ -468,7 +468,7 @@ const (
 // Vehicle model for motorcycle & car assets (ط§ظ„ط«ظˆط§ط¨طھ / ط§ظ„ط¯ط¨ط§ط¨ط§طھ)
 type Vehicle struct {
 	ID               uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
-	PlateNumber      string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"plate_number"` // ط±ظ‚ظ… ط§ظ„ظ„ظˆط­ط© / ط§ظ„ط¯ط¨ط§ط¨
+	PlateNumber      string         `gorm:"type:varchar(50);index:idx_vehicles_plate_number,unique;not null" json:"plate_number"` // رقم اللوحة / الدباب
 	VehicleType      string         `gorm:"type:varchar(20);default:'motorcycle'" json:"vehicle_type"` // "motorcycle" or "car"
 	Brand            string         `gorm:"type:varchar(100)" json:"brand"`                            // ظ…ط§ط±ظƒط© ط§ظ„ط¯ط¨ط§ط¨ (ظ‡ظˆظ†ط¯ط§طŒ ط³ظˆط²ظˆظƒظٹ...)
 	ModelYear        string         `gorm:"type:varchar(20)" json:"model_year"`                        // ط³ظ†ط© ط§ظ„طµظ†ط¹

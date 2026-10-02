@@ -162,7 +162,18 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		`)
 
 		rawDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_identifiers_name_app ON identifiers (LOWER(TRIM(name)), LOWER(TRIM(COALESCE(app_name, ''))))")
+
+		// ── Vehicle plate_number partial-index migration ──────────────────────────
+		// The old full unique index on plate_number includes soft-deleted rows,
+		// which prevents renaming a plate to one that was previously used by a
+		// deleted vehicle. We convert it to a partial index (WHERE deleted_at IS NULL)
+		// so only active vehicles are constrained, freeing up plate names of
+		// soft-deleted vehicles.
+		rawDB.Exec("DELETE FROM vehicles WHERE deleted_at IS NOT NULL")
+		rawDB.Exec("DROP INDEX IF EXISTS idx_vehicles_plate_number")
+		rawDB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_plate_number ON vehicles (plate_number) WHERE deleted_at IS NULL`)
 	}
+
 
 	// One-time cleanup: barcode no longer needs a unique index.
 	// The DDL statements below are PostgreSQL-compatible and safe to re-run.

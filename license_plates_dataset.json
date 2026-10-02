@@ -482,5 +482,203 @@
       "numbers": "8039",
       "letters": "BE"
     }
+  },
+  {
+    "image_name": "5451.jpg",
+    "plate_arabic": {
+      "numbers": "٥٤٥١",
+      "letters": "ا ح"
+    },
+    "plate_english": {
+      "numbers": "5451",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "602.jpg",
+    "plate_arabic": {
+      "numbers": "٦٠٢",
+      "letters": "ر ع"
+    },
+    "plate_english": {
+      "numbers": "602",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "603.jpg",
+    "plate_arabic": {
+      "numbers": "٦٠٣",
+      "letters": "ر ع"
+    },
+    "plate_english": {
+      "numbers": "603",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "605.jpg",
+    "plate_arabic": {
+      "numbers": "٦٠٥",
+      "letters": "ر ع"
+    },
+    "plate_english": {
+      "numbers": "605",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "608.jpg",
+    "plate_arabic": {
+      "numbers": "٦٠٨",
+      "letters": "ر ع"
+    },
+    "plate_english": {
+      "numbers": "608",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "6242.jpg",
+    "plate_arabic": {
+      "numbers": "٦٢٤٢",
+      "letters": "ط ب"
+    },
+    "plate_english": {
+      "numbers": "6242",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "6536.jpg",
+    "plate_arabic": {
+      "numbers": "٦٥٣٦",
+      "letters": "د ا"
+    },
+    "plate_english": {
+      "numbers": "6536",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "653.jpg",
+    "plate_arabic": {
+      "numbers": "٦٥٣",
+      "letters": "ر ع"
+    },
+    "plate_english": {
+      "numbers": "653",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "6543.jpg",
+    "plate_arabic": {
+      "numbers": "٦٥٤٣",
+      "letters": "د ا"
+    },
+    "plate_english": {
+      "numbers": "6543",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "6544.jpg",
+    "plate_arabic": {
+      "numbers": "٦٥٤٤",
+      "letters": "د ا"
+    },
+    "plate_english": {
+      "numbers": "6544",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "6548.jpg",
+    "plate_arabic": {
+      "numbers": "٦٥٤٨",
+      "letters": "د ا"
+    },
+    "plate_english": {
+      "numbers": "6548",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "6549.jpg",
+    "plate_arabic": {
+      "numbers": "٦٥٤٩",
+      "letters": "د ا"
+    },
+    "plate_english": {
+      "numbers": "6549",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "7038.jpg",
+    "plate_arabic": {
+      "numbers": "٧٠٣٨",
+      "letters": "أ ح"
+    },
+    "plate_english": {
+      "numbers": "7038",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "7568.jpg",
+    "plate_arabic": {
+      "numbers": "٧٥٦٨",
+      "letters": "ع ب"
+    },
+    "plate_english": {
+      "numbers": "7568",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "7572.jpg",
+    "plate_arabic": {
+      "numbers": "٧٥٧٢",
+      "letters": ""
+    },
+    "plate_english": {
+      "numbers": "7572",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "7573.jpg",
+    "plate_arabic": {
+      "numbers": "٧٥٧٣",
+      "letters": "ع ب"
+    },
+    "plate_english": {
+      "numbers": "7573",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "8023.jpg",
+    "plate_arabic": {
+      "numbers": "٨٠٢٣",
+      "letters": "ع ب"
+    },
+    "plate_english": {
+      "numbers": "8023",
+      "letters": ""
+    }
+  },
+  {
+    "image_name": "8041.jpg",
+    "plate_arabic": {
+      "numbers": "٨٠٤١",
+      "letters": "ع ب"
+    },
+    "plate_english": {
+      "numbers": "8041",
+      "letters": ""
+    }
   }
 ]
