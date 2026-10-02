@@ -144,14 +144,7 @@ def format_plate_letters(en_str):
     if not clean: return '', ''
     en_chars = list(clean)
     en_display = " ".join(en_chars)
-    if len(en_chars) == 2:
-        ar1 = SAUDI_EN_TO_AR.get(en_chars[0], en_chars[0])
-        ar2 = SAUDI_EN_TO_AR.get(en_chars[1], en_chars[1])
-        ar1_d = 'ا' if ar1 in ['أ', 'إ', 'آ'] else ar1
-        ar2_d = 'ا' if ar2 in ['أ', 'إ', 'آ'] else ar2
-        ar_display = f"{ar2_d} {ar1_d}"
-    else:
-        ar_display = " ".join(['ا' if SAUDI_EN_TO_AR.get(c, c) in ['أ', 'إ', 'آ'] else SAUDI_EN_TO_AR.get(c, c) for c in en_chars])
+    ar_display = " ".join(['ا' if SAUDI_EN_TO_AR.get(c, c) in ['أ', 'إ', 'آ'] else SAUDI_EN_TO_AR.get(c, c) for c in en_chars])
     return ar_display, en_display
 
 ARABIC_LETTER_COMBOS = {
@@ -181,6 +174,34 @@ ARABIC_LETTER_COMBOS = {
     'بع':  {'en': 'BE', 'ar': 'ع ب'},
 }
 
+def preprocess_plate_image(img_crop):
+    """
+    OpenCV Preprocessing Pipeline:
+    1. Grayscale
+    2. CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    3. Bilateral / Median Blur for noise reduction
+    4. Adaptive Thresholding (Black characters on White background)
+    """
+    if len(img_crop.shape) == 3:
+        gray = cv2.cvtColor(img_crop, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = img_crop.copy()
+
+    # Step 1: CLAHE contrast enhancement
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+
+    # Step 2: Denoise with slight blur
+    denoised = cv2.medianBlur(enhanced, 3)
+
+    # Step 3: Adaptive Thresholding for crisp binary characters
+    thresh = cv2.adaptiveThreshold(
+        denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY, 15, 6
+    )
+
+    return enhanced, thresh
+
 def extract_plate_data(img):
     if img is None:
         return {"digits": "", "letters": "", "full_plate": "", "arabic_digits": "", "arabic_letters": "", "english_letters": ""}
@@ -189,8 +210,8 @@ def extract_plate_data(img):
     if h < 50 or w < 50:
         return {"digits": "", "letters": "", "full_plate": "", "arabic_digits": "", "arabic_letters": "", "english_letters": ""}
         
-    ymin, ymax = int(h * 0.10), int(h * 0.90)
-    xmin, xmax = int(w * 0.05), int(w * 0.95)
+    ymin, ymax = int(h * 0.08), int(h * 0.92)
+    xmin, xmax = int(w * 0.04), int(w * 0.96)
     target_crop = img[ymin:ymax, xmin:xmax]
     
     ch, cw = target_crop.shape[:2]
@@ -198,15 +219,29 @@ def extract_plate_data(img):
         target_crop = img
         ch, cw = h, w
 
-    scale = 650.0 / float(cw)
-    scaled_crop = cv2.resize(target_crop, (650, int(ch * scale)), interpolation=cv2.INTER_AREA)
+    # Resizing with proportional scale (Optimal ~700px width for OCR recognition)
+    target_w = 700
+    scale = target_w / float(cw)
+    scaled_crop = cv2.resize(target_crop, (target_w, int(ch * scale)), interpolation=cv2.INTER_CUBIC)
     
-    ocr_results = reader.readtext(scaled_crop)
+    # Apply OpenCV Preprocessing Pipeline
+    enhanced_gray, binary_thresh = preprocess_plate_image(scaled_crop)
     
+    # Run Multi-Pass OCR on Preprocessed Images
     all_blocks = []
-    for bbox, text, conf in ocr_results:
-        if conf > 0.10:
+    
+    # Pass 1: CLAHE Enhanced Grayscale
+    results_enhanced = reader.readtext(enhanced_gray)
+    for bbox, text, conf in results_enhanced:
+        if conf > 0.08 and text.strip():
             all_blocks.append(text.strip())
+            
+    # Pass 2: Adaptive Threshold Binary if Pass 1 had few results
+    if len(all_blocks) < 2:
+        results_thresh = reader.readtext(binary_thresh)
+        for bbox, text, conf in results_thresh:
+            if conf > 0.08 and text.strip() and text.strip() not in all_blocks:
+                all_blocks.append(text.strip())
             
     if not all_blocks:
         return {"digits": "", "letters": "", "full_plate": "", "arabic_digits": "", "arabic_letters": "", "english_letters": ""}
