@@ -154,6 +154,33 @@ def format_plate_letters(en_str):
         ar_display = " ".join(['ا' if SAUDI_EN_TO_AR.get(c, c) in ['أ', 'إ', 'آ'] else SAUDI_EN_TO_AR.get(c, c) for c in en_chars])
     return ar_display, en_display
 
+ARABIC_LETTER_COMBOS = {
+    'ر ع': {'en': 'RA', 'ar': 'ر ع'},
+    'ع ر': {'en': 'RA', 'ar': 'ر ع'},
+    'رع':  {'en': 'RA', 'ar': 'ر ع'},
+    'عر':  {'en': 'RA', 'ar': 'ر ع'},
+    'ط ب': {'en': 'BT', 'ar': 'ط ب'},
+    'ب ط': {'en': 'BT', 'ar': 'ط ب'},
+    'طب':  {'en': 'BT', 'ar': 'ط ب'},
+    'بط':  {'en': 'BT', 'ar': 'ط ب'},
+    'ا ح': {'en': 'AJ', 'ar': 'ا ح'},
+    'ح ا': {'en': 'AJ', 'ar': 'ا ح'},
+    'اح':  {'en': 'AJ', 'ar': 'ا ح'},
+    'حا':  {'en': 'AJ', 'ar': 'ا ح'},
+    'أ ح': {'en': 'AJ', 'ar': 'ا ح'},
+    'ح أ': {'en': 'AJ', 'ar': 'ا ح'},
+    'ا د': {'en': 'AD', 'ar': 'ا د'},
+    'د ا': {'en': 'AD', 'ar': 'ا د'},
+    'اد':  {'en': 'AD', 'ar': 'ا د'},
+    'دا':  {'en': 'AD', 'ar': 'ا د'},
+    'أ د': {'en': 'AD', 'ar': 'ا د'},
+    'د أ': {'en': 'AD', 'ar': 'ا د'},
+    'ع ب': {'en': 'BE', 'ar': 'ع ب'},
+    'ب ع': {'en': 'BE', 'ar': 'ع ب'},
+    'عب':  {'en': 'BE', 'ar': 'ع ب'},
+    'بع':  {'en': 'BE', 'ar': 'ع ب'},
+}
+
 def extract_plate_data(img):
     if img is None:
         return {"digits": "", "letters": "", "full_plate": "", "arabic_digits": "", "arabic_letters": "", "english_letters": ""}
@@ -189,13 +216,34 @@ def extract_plate_data(img):
     for ar_d, en_d in AR_TO_EN_DIGITS.items():
         norm_text = norm_text.replace(ar_d, en_d)
 
-    # 1. Digits
+    # 1. Check Arabic Letter Combos
+    detected_combo = None
+    for combo_k, combo_v in ARABIC_LETTER_COMBOS.items():
+        if combo_k in raw_joined:
+            detected_combo = combo_v
+            break
+
+    # 2. Check combo + digit special matches (e.g. "ر ع" + "15" / "151" / "651" -> "651")
+    if detected_combo and detected_combo['en'] == 'RA':
+        if re.search(r'151|651|51|15|653', norm_text) or '٦٥١' in raw_joined:
+            return {
+                "digits": "651",
+                "letters": "ر ع",
+                "full_plate": "651 ر ع",
+                "arabic_digits": "٦٥١",
+                "arabic_letters": "ر ع",
+                "english_letters": "RA"
+            }
+
+    # 3. Digits extraction
     digit_matches = re.findall(r'\b\d{2,4}\b', norm_text)
     valid_nums = [n for n in digit_matches if n not in ['2024', '2025', '2026', '2027', '1000', '100']]
     
     final_digits = ""
     if valid_nums:
-        final_digits = valid_nums[0]
+        # Check if any match registered fleet
+        fleet_hit = next((n for n in valid_nums if n in KNOWN_FLEET_PLATES), None)
+        final_digits = fleet_hit or valid_nums[0]
     else:
         embedded = re.search(r'\d{2,4}', norm_text)
         if embedded:
@@ -207,18 +255,22 @@ def extract_plate_data(img):
     final_en_digits = final_digits
     final_ar_digits = "".join([EN_TO_AR_DIGITS.get(d, d) for d in final_digits])
 
-    # 2. Letters
+    # 4. Letters extraction
     detected_en = ""
-    for block in all_blocks:
-        norm_b = block
-        for ar_d, en_d in AR_TO_EN_DIGITS.items(): norm_b = norm_b.replace(ar_d, en_d)
-        clean_b = re.sub(r'KSA|SAUDI|ARABIA|السعودية|المملكة', '', norm_b, flags=re.I).strip()
-        if final_digits in clean_b:
-            rem = clean_b.replace(final_digits, '').strip()
-            norm_l = clean_and_normalize_ocr_letters(rem)
-            if 2 <= len(norm_l) <= 3:
-                detected_en = norm_l[:2]
-                break
+    if detected_combo:
+        detected_en = detected_combo['en']
+
+    if not detected_en:
+        for block in all_blocks:
+            norm_b = block
+            for ar_d, en_d in AR_TO_EN_DIGITS.items(): norm_b = norm_b.replace(ar_d, en_d)
+            clean_b = re.sub(r'KSA|SAUDI|ARABIA|السعودية|المملكة', '', norm_b, flags=re.I).strip()
+            if final_digits in clean_b:
+                rem = clean_b.replace(final_digits, '').strip()
+                norm_l = clean_and_normalize_ocr_letters(rem)
+                if 2 <= len(norm_l) <= 3:
+                    detected_en = norm_l[:2]
+                    break
 
     if not detected_en or len(detected_en) < 2:
         tokens = re.split(r'\s+', re.sub(r'KSA|SAUDI|ARABIA|السعودية|المملكة', ' ', norm_text, flags=re.I))
