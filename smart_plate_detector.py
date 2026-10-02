@@ -40,42 +40,60 @@ SAUDI_AR_TO_EN = {
 }
 
 KNOWN_FLEET_PLATES = {
-    '6534': {'en': 'AD', 'ar': 'د أ'},
+    '6534': {'en': 'AD', 'ar': 'ا د'},
     '6238': {'en': 'BT', 'ar': 'ط ب'},
     '8022': {'en': 'BE', 'ar': 'ع ب'},
     '7572': {'en': 'BE', 'ar': 'ع ب'},
-    '5443': {'en': 'AJ', 'ar': 'ح أ'},
+    '5443': {'en': 'AJ', 'ar': 'ا ح'},
     '7570': {'en': 'BE', 'ar': 'ع ب'},
-    '8874': {'en': 'AJ', 'ar': 'ح أ'},
+    '8874': {'en': 'AJ', 'ar': 'ا ح'},
     '6242': {'en': 'BT', 'ar': 'ط ب'},
-    '5098': {'en': 'AJ', 'ar': 'ح أ'},
-    '6536': {'en': 'AD', 'ar': 'د أ'},
-    '5442': {'en': 'AJ', 'ar': 'ح أ'},
-    '5447': {'en': 'AJ', 'ar': 'ح أ'},
+    '5098': {'en': 'AJ', 'ar': 'ا ح'},
+    '6536': {'en': 'AD', 'ar': 'ا د'},
+    '5442': {'en': 'AJ', 'ar': 'ا ح'},
+    '5447': {'en': 'AJ', 'ar': 'ا ح'},
     '8044': {'en': 'BE', 'ar': 'ع ب'},
     '8035': {'en': 'BE', 'ar': 'ع ب'},
     '6241': {'en': 'BT', 'ar': 'ط ب'},
     '7578': {'en': 'BE', 'ar': 'ع ب'},
-    '6535': {'en': 'AD', 'ar': 'د أ'},
+    '6535': {'en': 'AD', 'ar': 'ا د'},
     '8020': {'en': 'BE', 'ar': 'ع ب'},
-    '8036': {'en': 'BE', 'ar': 'ع ب'},
-    '7036': {'en': 'AJ', 'ar': 'ح أ'},
+    '8036': {'en': 'BE', ar: 'ع ب'},
+    '7036': {'en': 'AJ', 'ar': 'ا ح'},
     '8040': {'en': 'BE', 'ar': 'ع ب'},
     '7577': {'en': 'BE', 'ar': 'ع ب'},
     '7038': {'en': 'BE', 'ar': 'ع ب'},
-    '8875': {'en': 'AJ', 'ar': 'ح أ'},
-    '5097': {'en': 'AJ', 'ar': 'ح أ'},
-    '651':  {'en': 'RE', 'ar': 'ر ع'},
-    '5099': {'en': 'AJ', 'ar': 'ح أ'},
-    '7035': {'en': 'AJ', 'ar': 'ح أ'},
+    '8875': {'en': 'AJ', 'ar': 'ا ح'},
+    '5097': {'en': 'AJ', 'ar': 'ا ح'},
+    '651':  {'en': 'RA', 'ar': 'ر ع'},
+    '5099': {'en': 'AJ', 'ar': 'ا ح'},
+    '7035': {'en': 'AJ', 'ar': 'ا ح'},
     '6240': {'en': 'BT', 'ar': 'ط ب'},
-    '6546': {'en': 'AD', 'ar': 'د أ'},
+    '6546': {'en': 'AD', 'ar': 'ا د'},
     '8039': {'en': 'BE', 'ar': 'ع ب'},
-    '5446': {'en': 'AJ', 'ar': 'ح أ'},
+    '5446': {'en': 'AJ', 'ar': 'ا ح'},
     '7030': {'en': 'BE', 'ar': 'ع ب'},
-    '653':  {'en': 'RE', 'ar': 'ر ع'},
+    '653':  {'en': 'RA', 'ar': 'ر ع'},
     '8037': {'en': 'BE', 'ar': 'ع ب'},
 }
+
+# Load from license_plates_dataset.json if available
+dataset_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'license_plates_dataset.json')
+if os.path.exists(dataset_path):
+    try:
+        with open(dataset_path, 'r', encoding='utf-8') as f:
+            ds = json.load(f)
+            for it in ds:
+                num = str(it.get('plate_english', {}).get('numbers') or it.get('plate_arabic', {}).get('numbers') or '').strip()
+                # Normalize Arabic numerals
+                for ar_d, en_d in AR_TO_EN_DIGITS.items():
+                    num = num.replace(ar_d, en_d)
+                let_en = str(it.get('plate_english', {}).get('letters') or '').strip().upper().replace(' ', '')
+                let_ar = str(it.get('plate_arabic', {}).get('letters') or '').strip()
+                if num and len(num) >= 2:
+                    KNOWN_FLEET_PLATES[num] = {'en': let_en, 'ar': let_ar}
+    except Exception as e:
+        pass
 
 
 def clean_and_normalize_ocr_letters(raw):
