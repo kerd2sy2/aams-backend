@@ -1645,6 +1645,9 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 				case "bn":
 					pushTitle = "শিফট অনুমোদিত হয়েছে"
 					pushBody = fmt.Sprintf("সুপারভাইজার আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", req.OrdersCount, req.FuelCost)
+				case "ur":
+					pushTitle = "شفٹ کی تصدیق ہو گئی"
+					pushBody = fmt.Sprintf("نگران نے آپ کی شفٹ کی تصدیق کر دی: %d آرڈرز | ایندھن: %.2f ریال", req.OrdersCount, req.FuelCost)
 				default: // "ar"
 					pushTitle = "تمت المصادقة على شفت العمل"
 					pushBody = fmt.Sprintf("وافق المشرف على طلباتك: %d طلب | بنزين: %.2f ريال", req.OrdersCount, req.FuelCost)
@@ -2018,6 +2021,13 @@ func (s *workService) notifyEmployeeShiftReview(ctx context.Context, session *do
 			} else {
 				body = fmt.Sprintf("সুপারভাইজার %s আপনার শিফট সংশোধন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", sName, session.OrdersCount, session.FuelCost)
 			}
+		case "ur":
+			title = "شفٹ میں ترمیم اور تصدیق کر دی گئی"
+			if session.OriginalOrdersCount > 0 && session.OriginalOrdersCount != session.OrdersCount {
+				body = fmt.Sprintf("نگران %s نے آپ کے آرڈرز %d کر دیے (پہلے %d تھے) | ایندھن: %.2f ریال", sName, session.OrdersCount, session.OriginalOrdersCount, session.FuelCost)
+			} else {
+				body = fmt.Sprintf("نگران %s نے آپ کے شفٹ کے ڈیٹا میں ترمیم کر کے تصدیق کر دی: %d آرڈرز | ایندھن: %.2f ریال", sName, session.OrdersCount, session.FuelCost)
+			}
 		default: // "ar"
 			title = "تم تعديل واعتماد الشفت"
 			if session.OriginalOrdersCount > 0 && session.OriginalOrdersCount != session.OrdersCount {
@@ -2034,6 +2044,9 @@ func (s *workService) notifyEmployeeShiftReview(ctx context.Context, session *do
 		case "bn":
 			title = "শিফট অনুমোদিত হয়েছে"
 			body = fmt.Sprintf("সুপারভাইজার %s আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", sName, session.OrdersCount, session.FuelCost)
+		case "ur":
+			title = "شفٹ کی تصدیق ہو گئی"
+			body = fmt.Sprintf("نگران %s نے آپ کے آرڈرز کی تصدیق کر دی: %d آرڈرز | ایندھن: %.2f ریال", sName, session.OrdersCount, session.FuelCost)
 		default: // "ar"
 			title = "تمت المصادقة على شفت العمل"
 			body = fmt.Sprintf("قام المشرف %s بالمصادقة على طلباتك: %d طلب | بنزين: %.2f ريال", sName, session.OrdersCount, session.FuelCost)
@@ -4066,8 +4079,8 @@ func (s *trafficViolationService) sendViolationNotification(ctx context.Context,
 		return
 	}
 
-	var titleAr, titleEn, titleBn string
-	var bodyAr, bodyEn, bodyBn string
+	var titleAr, titleEn, titleBn, titleUr string
+	var bodyAr, bodyEn, bodyBn, bodyUr string
 
 	r := strings.ToLower(v.Reason)
 	isPenalty := strings.Contains(r, "جزاء") ||
@@ -4089,6 +4102,9 @@ func (s *trafficViolationService) sendViolationNotification(ctx context.Context,
 
 		titleBn = "💳 কর্তন ও পরিশোধের বিজ্ঞপ্তি"
 		bodyBn = fmt.Sprintf("%.2f রিয়াল কর্তন/পরিশোধ করা হয়েছে (%s)। অবশিষ্ট: %.2f রিয়াল।", paymentAmount, v.Reason, rem)
+
+		titleUr = "💳 کٹوتی / ادائیگی کی اطلاع"
+		bodyUr = fmt.Sprintf("آپ کے (%s) سے %.2f ریال منہا/ادا کر دیے گئے ہیں۔ بقایا: %.2f ریال۔", paymentAmount, v.Reason, rem)
 	} else if isPenalty {
 		titleAr = "📋 إشعار جزاء إداري جديد"
 		bodyAr = fmt.Sprintf("تم تسجيل جزاء إداري عليك بقيمة %.2f ر.س بسبب (%s).", v.Amount, v.Reason)
@@ -4098,6 +4114,9 @@ func (s *trafficViolationService) sendViolationNotification(ctx context.Context,
 
 		titleBn = "📋 নতুন প্রশাসনিক জরিমানা"
 		bodyBn = fmt.Sprintf("আপনার উপর %.2f রিয়াল জরিমানা ধার্য করা হয়েছে (%s)।", v.Amount, v.Reason)
+
+		titleUr = "📋 نیا انتظامی جرمانہ"
+		bodyUr = fmt.Sprintf("آپ پر %.2f ریال کا جرمانہ عائد کیا گیا ہے (%s)۔", v.Amount, v.Reason)
 	} else {
 		titleAr = "🚦 مخالفة مرورية جديدة"
 		bodyAr = fmt.Sprintf("تم تسجيل مخالفة مرورية عليك بقيمة %.2f ر.س بسبب (%s).", v.Amount, v.Reason)
@@ -4107,6 +4126,9 @@ func (s *trafficViolationService) sendViolationNotification(ctx context.Context,
 
 		titleBn = "🚦 নতুন ট্রাফিক জরিমানা"
 		bodyBn = fmt.Sprintf("আপনার উপর %.2f রিয়াল ট্রাফিক জরিমানা ধার্য করা হয়েছে (%s)।", v.Amount, v.Reason)
+
+		titleUr = "🚦 نیا ٹریفک چالان"
+		bodyUr = fmt.Sprintf("آپ پر %.2f ریال کا ٹریفک چالان درج کیا گیا ہے (%s)۔", v.Amount, v.Reason)
 	}
 
 	lang := strings.ToLower(strings.TrimSpace(emp.Language))
@@ -4118,6 +4140,9 @@ func (s *trafficViolationService) sendViolationNotification(ctx context.Context,
 	case "bn":
 		title = titleBn
 		body = bodyBn
+	case "ur":
+		title = titleUr
+		body = bodyUr
 	default: // "ar"
 		title = titleAr
 		body = bodyAr
