@@ -1003,13 +1003,12 @@ func (h *WorkHandler) UpdateWorkSession(c *gin.Context) {
 		}
 	}
 
-	session, err = h.workService.UpdateWorkSession(c.Request.Context(), sessionID, req)
+	adminName := c.GetString("admin_name")
+	session, err = h.workService.UpdateWorkSession(c.Request.Context(), sessionID, req, adminName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	adminName := c.GetString("admin_name")
 	empName := "الموظف"
 	if session.Employee != nil {
 		empName = session.Employee.Name

@@ -1338,7 +1338,7 @@ func (s *employeeService) ResetPassword(ctx context.Context, id uuid.UUID, newPa
 type WorkService interface {
 	StartWork(ctx context.Context, req dto.StartWorkRequest) (*domain.WorkSession, error)
 	EndWork(ctx context.Context, req dto.EndWorkRequest, reviewerID *uuid.UUID, reviewerName string, isSupervisor bool) (*domain.WorkSession, error)
-	UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest) (*domain.WorkSession, error)
+	UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest, adminName string) (*domain.WorkSession, error)
 	ReviewSession(ctx context.Context, sessionID uuid.UUID, req dto.ReviewWorkSessionRequest, reviewerID *uuid.UUID, reviewerName string) (*domain.WorkSession, error)
 	GetActiveSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	GetLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
@@ -1809,11 +1809,13 @@ func (s *workService) ScanPlateImage(ctx context.Context, imageBase64 string) (m
 	}, nil
 }
 
-func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest) (*domain.WorkSession, error) {
+func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req dto.UpdateWorkSessionRequest, adminName string) (*domain.WorkSession, error) {
 	session, err := s.workRepo.FindSessionByID(ctx, sessionID)
 	if err != nil {
 		return nil, errors.New("الشفت غير موجود")
 	}
+
+	isEdited := false
 
 	// Update employee if provided
 	if req.EmployeeID != "" {
@@ -1830,8 +1832,12 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 	}
 
 	// Update start_km if provided
-	if req.StartKM > 0 {
+	if req.StartKM > 0 && req.StartKM != session.StartKM {
+		if session.OriginalStartKM == 0 {
+			session.OriginalStartKM = session.StartKM
+		}
 		session.StartKM = req.StartKM
+		isEdited = true
 	}
 	if req.StartKMImage != "" {
 		session.StartKMImage = req.StartKMImage
@@ -1840,12 +1846,16 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 		session.StartPlateImage = req.StartPlateImage
 	}
 
-	if req.EndKM > 0 {
+	if req.EndKM > 0 && req.EndKM != session.EndKM {
 		if req.EndKM <= session.StartKM {
 			return nil, fmt.Errorf("قراءة عداد النهاية (%.2f) يجب أن تكون أكبر من قراءة البداية (%.2f)", req.EndKM, session.StartKM)
 		}
+		if session.OriginalEndKM == 0 {
+			session.OriginalEndKM = session.EndKM
+		}
 		session.EndKM = req.EndKM
 		session.Distance = req.EndKM - session.StartKM
+		isEdited = true
 	}
 	if req.EndKMImage != "" {
 		session.EndKMImage = req.EndKMImage
@@ -1862,8 +1872,17 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 		}
 	}
 
-	session.OrdersCount = req.OrdersCount
-	session.FuelCost = req.FuelCost
+	if req.OrdersCount >= 0 && req.OrdersCount != session.OrdersCount {
+		if session.OriginalOrdersCount == 0 {
+			session.OriginalOrdersCount = session.OrdersCount
+		}
+		session.OrdersCount = req.OrdersCount
+		isEdited = true
+	}
+	if req.FuelCost >= 0 && req.FuelCost != session.FuelCost {
+		session.FuelCost = req.FuelCost
+		isEdited = true
+	}
 	if req.ApplicationType != "" {
 		session.ApplicationType = req.ApplicationType
 	}
@@ -1871,8 +1890,22 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 		session.Notes = req.Notes
 	}
 
+	if isEdited {
+		session.IsEditedBySupervisor = true
+		if adminName != "" {
+			session.EditedByName = adminName
+		} else {
+			session.EditedByName = "المشرف"
+		}
+	}
+
 	if err := s.workRepo.UpdateSession(ctx, session); err != nil {
 		return nil, err
+	}
+
+	// Notify employee if shift was edited or is reviewed
+	if isEdited || session.IsReviewed {
+		s.notifyEmployeeShiftReview(ctx, session, adminName)
 	}
 
 	return session, nil
@@ -1941,53 +1974,98 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 		return nil, err
 	}
 
-	// If supervisor reviewed / approved the session, notify the employee with the approved details
-	if session.IsReviewed && session.EmployeeID != nil && *session.EmployeeID != uuid.Nil {
-		emp, empErr := s.empRepo.FindByID(ctx, *session.EmployeeID)
-		if empErr == nil && emp != nil {
-			lang := strings.ToLower(strings.TrimSpace(emp.Language))
-			var title, body string
-			switch lang {
-			case "en":
-				title = "Shift Approved"
-				body = fmt.Sprintf("Supervisor approved your shift: %d Orders | Fuel: %.2f SAR", session.OrdersCount, session.FuelCost)
-			case "bn":
-				title = "শিফট অনুমোদিত হয়েছে"
-				body = fmt.Sprintf("সুপারভাইজার আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", session.OrdersCount, session.FuelCost)
-			default: // "ar"
-				title = "تمت المصادقة على شفت العمل"
-				body = fmt.Sprintf("وافق المشرف على طلباتك: %d طلب | بنزين: %.2f ريال", session.OrdersCount, session.FuelCost)
-			}
-
-			if s.notifRepo != nil {
-				_ = s.notifRepo.Create(ctx, &domain.Notification{
-					ID:         uuid.New(),
-					Title:      title,
-					Body:       body,
-					Type:       "SESSION_APPROVED",
-					Status:     "unread",
-					EmployeeID: session.EmployeeID,
-					BranchID:   emp.BranchID,
-					CreatedAt:  time.Now(),
-				})
-			}
-
-			if emp.PushToken != "" {
-				go func(token, t, b, sid string, orders int, fuel float64) {
-					dataPayload := map[string]string{
-						"type":        "SESSION_APPROVED",
-						"sessionId":   sid,
-						"session_id":  sid,
-						"ordersCount": fmt.Sprintf("%d", orders),
-						"fuelCost":    fmt.Sprintf("%.2f", fuel),
-					}
-					SendFCMBroadcast([]string{token}, t, b, dataPayload)
-				}(emp.PushToken, title, body, session.ID.String(), session.OrdersCount, session.FuelCost)
-			}
-		}
+	// Notify employee if reviewed or edited
+	if isEdited || session.IsReviewed {
+		s.notifyEmployeeShiftReview(ctx, session, reviewerName)
 	}
 
 	return session, nil
+}
+
+func (s *workService) notifyEmployeeShiftReview(ctx context.Context, session *domain.WorkSession, supervisorName string) {
+	if session == nil || session.EmployeeID == nil || *session.EmployeeID == uuid.Nil {
+		return
+	}
+
+	emp, empErr := s.empRepo.FindByID(ctx, *session.EmployeeID)
+	if empErr != nil || emp == nil {
+		return
+	}
+
+	lang := strings.ToLower(strings.TrimSpace(emp.Language))
+	sName := session.EditedByName
+	if sName == "" && supervisorName != "" {
+		sName = supervisorName
+	}
+	if sName == "" {
+		sName = "المشرف"
+	}
+
+	var title, body string
+	if session.IsEditedBySupervisor {
+		switch lang {
+		case "en":
+			title = "Shift Edited & Approved"
+			if session.OriginalOrdersCount > 0 && session.OriginalOrdersCount != session.OrdersCount {
+				body = fmt.Sprintf("Supervisor %s adjusted your orders to %d (was %d) | Fuel: %.2f SAR", sName, session.OrdersCount, session.OriginalOrdersCount, session.FuelCost)
+			} else {
+				body = fmt.Sprintf("Supervisor %s modified your shift data: %d Orders | Fuel: %.2f SAR", sName, session.OrdersCount, session.FuelCost)
+			}
+		case "bn":
+			title = "শিফট সংশোধন ও অনুমোদিত হয়েছে"
+			if session.OriginalOrdersCount > 0 && session.OriginalOrdersCount != session.OrdersCount {
+				body = fmt.Sprintf("সুপারভাইজার %s আপনার অর্ডার সংশোধন করে %d টি করেছেন (আগে ছিল %d) | জ্বালানী: %.2f SAR", sName, session.OrdersCount, session.OriginalOrdersCount, session.FuelCost)
+			} else {
+				body = fmt.Sprintf("সুপারভাইজার %s আপনার শিফট সংশোধন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", sName, session.OrdersCount, session.FuelCost)
+			}
+		default: // "ar"
+			title = "تم تعديل واعتماد الشفت"
+			if session.OriginalOrdersCount > 0 && session.OriginalOrdersCount != session.OrdersCount {
+				body = fmt.Sprintf("قام المشرف %s بتعديل طلباتك إلى %d طلب (بدلاً من %d) | بنزين: %.2f ريال", sName, session.OrdersCount, session.OriginalOrdersCount, session.FuelCost)
+			} else {
+				body = fmt.Sprintf("قام المشرف %s بتعديل بيانات واعتماد شفتك: %d طلب | بنزين: %.2f ريال", sName, session.OrdersCount, session.FuelCost)
+			}
+		}
+	} else {
+		switch lang {
+		case "en":
+			title = "Shift Approved"
+			body = fmt.Sprintf("Supervisor %s approved your shift: %d Orders | Fuel: %.2f SAR", sName, session.OrdersCount, session.FuelCost)
+		case "bn":
+			title = "শিফট অনুমোদিত হয়েছে"
+			body = fmt.Sprintf("সুপারভাইজার %s আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", sName, session.OrdersCount, session.FuelCost)
+		default: // "ar"
+			title = "تمت المصادقة على شفت العمل"
+			body = fmt.Sprintf("قام المشرف %s بالمصادقة على طلباتك: %d طلب | بنزين: %.2f ريال", sName, session.OrdersCount, session.FuelCost)
+		}
+	}
+
+	if s.notifRepo != nil {
+		_ = s.notifRepo.Create(ctx, &domain.Notification{
+			ID:         uuid.New(),
+			Title:      title,
+			Body:       body,
+			Type:       "SESSION_APPROVED",
+			Status:     "unread",
+			EmployeeID: session.EmployeeID,
+			BranchID:   emp.BranchID,
+			CreatedAt:  time.Now(),
+		})
+	}
+
+	if emp.PushToken != "" {
+		go func(token, t, b, sid string, orders int, fuel float64, supName string) {
+			dataPayload := map[string]string{
+				"type":        "SESSION_APPROVED",
+				"sessionId":   sid,
+				"session_id":  sid,
+				"ordersCount": fmt.Sprintf("%d", orders),
+				"fuelCost":    fmt.Sprintf("%.2f", fuel),
+				"supervisor":  supName,
+			}
+			SendFCMBroadcast([]string{token}, t, b, dataPayload)
+		}(emp.PushToken, title, body, session.ID.String(), session.OrdersCount, session.FuelCost, sName)
+	}
 }
 
 func (s *workService) GetActiveSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error) {

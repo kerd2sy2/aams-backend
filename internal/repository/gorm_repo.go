@@ -449,6 +449,9 @@ func (r *gormWorkRepository) GetReports(ctx context.Context, filter dto.ReportFi
 
 	offset := (filter.Page - 1) * filter.Limit
 	orderClause := "work_sessions.is_reviewed ASC, work_sessions.start_time DESC, work_sessions.created_at DESC"
+	if filter.EmployeeID != "" {
+		orderClause = "work_sessions.start_time DESC, work_sessions.created_at DESC"
+	}
 	err := query.Order(orderClause).Offset(offset).Limit(filter.Limit).Find(&sessions).Error
 	return sessions, total, err
 }
