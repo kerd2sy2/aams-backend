@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"delivery-backend/internal/modules/system/controller"
+	"delivery-backend/internal/modules/system/domain"
 	"delivery-backend/internal/modules/system/dto"
 )
 
@@ -38,11 +39,9 @@ func (m *mockSettingService) GetAllSettings(ctx context.Context) (dto.AppSetting
 	return dto.AppSettingsResponse{SiteName: "AAMS Portal"}, nil
 }
 
-func (m *mockSettingService) GetSettingByKey(ctx context.Context, key string) (*domainAppSettingMock, error) {
+func (m *mockSettingService) GetSettingByKey(ctx context.Context, key string) (*domain.AppSetting, error) {
 	return nil, nil
 }
-
-type domainAppSettingMock struct{}
 
 func (m *mockSettingService) UpdateAppSettings(ctx context.Context, req dto.UpdateAppSettingsRequest) error {
 	if m.updateAppSettingsFunc != nil {

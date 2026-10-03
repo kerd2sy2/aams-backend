@@ -278,7 +278,11 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 			return err
 		}
 		if s.empProvider != nil {
-			if err := s.empProvider.UpdateEmployeeOnEndWork(ctx, empID, distance, req.OrdersCount); err != nil {
+			ordersToAdd := 0
+			if session.IsReviewed {
+				ordersToAdd = req.OrdersCount
+			}
+			if err := s.empProvider.UpdateEmployeeOnEndWork(ctx, empID, distance, ordersToAdd); err != nil {
 				return err
 			}
 		}
@@ -338,6 +342,7 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 		return nil, errors.New("جلسة العمل غير موجودة")
 	}
 
+	wasReviewed := session.IsReviewed
 	session.IsReviewed = req.IsReviewed
 	session.ReviewNotes = req.ReviewNotes
 	session.ReviewedBy = reviewerID
@@ -361,6 +366,12 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 	if err := s.repo.Update(ctx, session); err != nil {
 		return nil, err
 	}
+
+	// If session wasn't previously reviewed and is now approved, credit orders to employee
+	if !wasReviewed && session.IsReviewed && s.empProvider != nil && session.EmployeeID != nil && session.OrdersCount > 0 {
+		_ = s.empProvider.UpdateEmployeeOnEndWork(ctx, *session.EmployeeID, 0, session.OrdersCount)
+	}
+
 	return session, nil
 }
 

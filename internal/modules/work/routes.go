@@ -67,7 +67,14 @@ func (a *gormEmployeeAdapter) UpdateEmployeeOnStartWork(ctx context.Context, id 
 		updates["application_type"] = appType
 	}
 	if motorcycleNumber != "" {
-		updates["motorcycle_number"] = motorcycleNumber
+		// Only set motorcycle_number if employee doesn't already have one assigned.
+		// If they already have an assigned motorcycle, this shift is on a temporary bike,
+		// and they revert back to their assigned motorcycle upon ending the shift.
+		var currentAssigned *string
+		_ = a.db.WithContext(ctx).Table("employees").Select("motorcycle_number").Where("id = ?", id).Scan(&currentAssigned).Error
+		if currentAssigned == nil || strings.TrimSpace(*currentAssigned) == "" {
+			updates["motorcycle_number"] = motorcycleNumber
+		}
 	}
 	return a.db.WithContext(ctx).Table("employees").Where("id = ?", id).Updates(updates).Error
 }

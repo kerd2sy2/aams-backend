@@ -18,7 +18,7 @@ import (
 
 type mockBranchService struct {
 	createFunc func(ctx context.Context, req dto.CreateBranchRequest) (*domain.Branch, error)
-	findAllFunc func(ctx context.Context) ([]domain.Branch, error)
+	findAllFunc func(ctx context.Context) ([]dto.BranchResponse, error)
 	findByIDFunc func(ctx context.Context, id uuid.UUID) (*domain.Branch, error)
 	updateFunc func(ctx context.Context, id uuid.UUID, req dto.UpdateBranchRequest) (*domain.Branch, error)
 	deleteFunc func(ctx context.Context, id uuid.UUID) error
@@ -28,13 +28,13 @@ func (m *mockBranchService) Create(ctx context.Context, req dto.CreateBranchRequ
 	if m.createFunc != nil {
 		return m.createFunc(ctx, req)
 	}
-	return &domain.Branch{ID: uuid.New(), Name: req.Name, City: req.City}, nil
+	return &domain.Branch{ID: uuid.New(), Name: req.Name}, nil
 }
-func (m *mockBranchService) FindAll(ctx context.Context) ([]domain.Branch, error) {
+func (m *mockBranchService) FindAll(ctx context.Context) ([]dto.BranchResponse, error) {
 	if m.findAllFunc != nil {
 		return m.findAllFunc(ctx)
 	}
-	return []domain.Branch{}, nil
+	return []dto.BranchResponse{}, nil
 }
 func (m *mockBranchService) FindByID(ctx context.Context, id uuid.UUID) (*domain.Branch, error) {
 	if m.findByIDFunc != nil {
@@ -57,7 +57,7 @@ func (m *mockBranchService) Delete(ctx context.Context, id uuid.UUID) error {
 
 type mockRoleService struct {
 	createFunc func(ctx context.Context, req dto.CreateRoleRequest) (*domain.Role, error)
-	findAllFunc func(ctx context.Context) ([]domain.Role, error)
+	findAllFunc func(ctx context.Context) ([]dto.RoleResponse, error)
 	findByIDFunc func(ctx context.Context, id uuid.UUID) (*domain.Role, error)
 	updateFunc func(ctx context.Context, id uuid.UUID, req dto.UpdateRoleRequest) (*domain.Role, error)
 	deleteFunc func(ctx context.Context, id uuid.UUID) error
@@ -69,11 +69,11 @@ func (m *mockRoleService) Create(ctx context.Context, req dto.CreateRoleRequest)
 	}
 	return &domain.Role{ID: uuid.New(), Name: req.Name, Description: req.Description}, nil
 }
-func (m *mockRoleService) FindAll(ctx context.Context) ([]domain.Role, error) {
+func (m *mockRoleService) FindAll(ctx context.Context) ([]dto.RoleResponse, error) {
 	if m.findAllFunc != nil {
 		return m.findAllFunc(ctx)
 	}
-	return []domain.Role{}, nil
+	return []dto.RoleResponse{}, nil
 }
 func (m *mockRoleService) FindByID(ctx context.Context, id uuid.UUID) (*domain.Role, error) {
 	if m.findByIDFunc != nil {
@@ -85,7 +85,7 @@ func (m *mockRoleService) Update(ctx context.Context, id uuid.UUID, req dto.Upda
 	if m.updateFunc != nil {
 		return m.updateFunc(ctx, id, req)
 	}
-	return &domain.Role{ID: id, Name: req.Name}, nil
+	return &domain.Role{ID: id, DisplayName: req.DisplayName}, nil
 }
 func (m *mockRoleService) Delete(ctx context.Context, id uuid.UUID) error {
 	if m.deleteFunc != nil {
@@ -104,7 +104,6 @@ func TestBranchHandler_Create(t *testing.T) {
 
 	reqBody, _ := json.Marshal(dto.CreateBranchRequest{
 		Name: "Jeddah Branch",
-		City: "Jeddah",
 	})
 	req, _ := http.NewRequest(http.MethodPost, "/api/v1/branches", bytes.NewBuffer(reqBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -126,6 +125,7 @@ func TestRoleHandler_Create(t *testing.T) {
 
 	reqBody, _ := json.Marshal(dto.CreateRoleRequest{
 		Name:        "Supervisor",
+		DisplayName: "مشرف",
 		Description: "Shift supervisor",
 		Permissions: []string{"read", "edit"},
 	})

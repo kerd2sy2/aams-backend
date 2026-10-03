@@ -360,10 +360,11 @@ func (r *gormSystemRepository) SubmitVote(ctx context.Context, vote *domain.Broa
 			return err
 		}
 
-		if vote.Response == "AGREE" {
+		switch vote.Response {
+		case "AGREE":
 			return tx.Model(&domain.BroadcastNotification{}).Where("id = ?", vote.BroadcastID).
 				Update("agree_count", gorm.Expr("agree_count + 1")).Error
-		} else if vote.Response == "DISAGREE" {
+		case "DISAGREE":
 			return tx.Model(&domain.BroadcastNotification{}).Where("id = ?", vote.BroadcastID).
 				Update("disagree_count", gorm.Expr("disagree_count + 1")).Error
 		}
@@ -576,10 +577,10 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 	// Finished shifts today
 	baseQuery().Where("work_sessions.start_time >= ? AND work_sessions.status = ?", startOfDay, "COMPLETED").Count(&resp.FinishedEmployees)
 
-	// Today's Orders Sum (only reviewed or all completed)
+	// Today's Orders Sum (only reviewed sessions approved by supervisor)
 	var ordersSum struct{ Total int64 }
 	baseQuery().Select("COALESCE(SUM(work_sessions.orders_count), 0) as total").
-		Where("work_sessions.start_time >= ?", startOfDay).
+		Where("work_sessions.start_time >= ? AND work_sessions.is_reviewed = ?", startOfDay, true).
 		Scan(&ordersSum)
 	resp.TodayOrders = ordersSum.Total
 
@@ -620,14 +621,15 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
 
 	type sessionAgg struct {
-		StartTime time.Time `gorm:"column:start_time"`
-		Distance  float64   `gorm:"column:distance"`
-		Orders    int       `gorm:"column:orders_count"`
-		Fuel      float64   `gorm:"column:fuel_cost"`
+		StartTime  time.Time `gorm:"column:start_time"`
+		Distance   float64   `gorm:"column:distance"`
+		Orders     int       `gorm:"column:orders_count"`
+		Fuel       float64   `gorm:"column:fuel_cost"`
+		IsReviewed bool      `gorm:"column:is_reviewed"`
 	}
 	var aggSessions []sessionAgg
 	chartQ := r.db.WithContext(ctx).Table("work_sessions").
-		Select("work_sessions.start_time, work_sessions.distance, work_sessions.orders_count, work_sessions.fuel_cost").
+		Select("work_sessions.start_time, work_sessions.distance, work_sessions.orders_count, work_sessions.fuel_cost, work_sessions.is_reviewed").
 		Where("work_sessions.start_time >= ?", firstOfMonth)
 	if branchID != nil {
 		chartQ = chartQ.Joins("JOIN employees ON employees.id = work_sessions.employee_id").
@@ -647,7 +649,9 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 			dayMap[key] = &dayTotals{}
 		}
 		dayMap[key].dist += s.Distance
-		dayMap[key].ord += float64(s.Orders)
+		if s.IsReviewed {
+			dayMap[key].ord += float64(s.Orders)
+		}
 		dayMap[key].fuel += s.Fuel
 	}
 

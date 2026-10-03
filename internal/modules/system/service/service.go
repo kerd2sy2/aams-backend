@@ -194,9 +194,10 @@ func (s *settingService) GetAllSettings(ctx context.Context) (dto.AppSettingsRes
 	}
 
 	for _, set := range settings {
-		if set.Key == "site_name" {
+		switch set.Key {
+		case "site_name":
 			resp.SiteName = set.Value
-		} else if set.Key == "logo_url" {
+		case "logo_url":
 			resp.LogoURL = set.Value
 		}
 	}
