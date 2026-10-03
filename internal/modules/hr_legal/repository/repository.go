@@ -357,7 +357,9 @@ func (r *gormHRLegalRepository) FindViolations(ctx context.Context, filter dto.T
 		DeductedAmount float64 `gorm:"column:deducted_amount"`
 	}
 	var sums Sums
-	_ = db.Select("COALESCE(SUM(amount), 0) AS total_amount, COALESCE(SUM(paid_amount), 0) AS deducted_amount").Scan(&sums).Error
+	_ = db.Session(&gorm.Session{}).
+		Select("COALESCE(SUM(amount), 0) AS total_amount, COALESCE(SUM(paid_amount), 0) AS deducted_amount").
+		Scan(&sums).Error
 	totalAmount = sums.TotalAmount
 	deductedAmount = sums.DeductedAmount
 
@@ -368,7 +370,11 @@ func (r *gormHRLegalRepository) FindViolations(ctx context.Context, filter dto.T
 	}
 	offset := (page - 1) * limit
 
-	err := db.Order("traffic_violations.violation_date DESC, traffic_violations.created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
+	err := db.Session(&gorm.Session{}).
+		Order("traffic_violations.violation_date DESC, traffic_violations.created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&list).Error
 	return list, total, totalAmount, deductedAmount, err
 }
 
