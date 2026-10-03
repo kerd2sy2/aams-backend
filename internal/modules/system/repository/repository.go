@@ -596,10 +596,10 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 		Scan(&ordersSum)
 	resp.TodayOrders = ordersSum.Total
 
-	// Today's Distance Sum
+	// Today's Distance Sum (only reviewed sessions approved by supervisor)
 	var distSum struct{ Total float64 }
 	baseQuery().Select("COALESCE(SUM(work_sessions.distance), 0) as total").
-		Where("work_sessions.start_time >= ?", startOfDay).
+		Where("work_sessions.start_time >= ? AND work_sessions.is_reviewed = ?", startOfDay, true).
 		Scan(&distSum)
 	resp.TodayDistance = distSum.Total
 
@@ -660,8 +660,8 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 		if dayMap[key] == nil {
 			dayMap[key] = &dayTotals{}
 		}
-		dayMap[key].dist += s.Distance
 		if s.IsReviewed {
+			dayMap[key].dist += s.Distance
 			dayMap[key].ord += float64(s.Orders)
 			dayMap[key].fuel += s.Fuel
 		}

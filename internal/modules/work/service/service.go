@@ -279,15 +279,17 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 			return err
 		}
 		if s.empProvider != nil {
+			distanceToAdd := 0.0
 			ordersToAdd := 0
 			if session.IsReviewed {
+				distanceToAdd = distance
 				ordersToAdd = req.OrdersCount
 			}
-			if err := s.empProvider.UpdateEmployeeOnEndWork(ctx, empID, distance, ordersToAdd); err != nil {
+			if err := s.empProvider.UpdateEmployeeOnEndWork(ctx, empID, distanceToAdd, ordersToAdd); err != nil {
 				return err
 			}
 		}
-		if s.vehicleProvider != nil && session.MotorcycleNumber != "" && req.EndKM > 0 {
+		if session.IsReviewed && s.vehicleProvider != nil && session.MotorcycleNumber != "" && req.EndKM > 0 {
 			_ = s.vehicleProvider.UpdateVehicleKM(ctx, session.MotorcycleNumber, req.EndKM)
 		}
 		return nil
@@ -372,12 +374,17 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 		return nil, err
 	}
 
-	// If session wasn't previously reviewed and is now approved, credit orders to employee and notify
-	if !wasReviewed && session.IsReviewed && s.empProvider != nil && session.EmployeeID != nil {
-		if session.OrdersCount > 0 {
-			_ = s.empProvider.UpdateEmployeeOnEndWork(ctx, *session.EmployeeID, 0, session.OrdersCount)
+	// If session wasn't previously reviewed and is now approved, credit distance and orders to employee, update vehicle KM, and notify
+	if !wasReviewed && session.IsReviewed && session.EmployeeID != nil {
+		if s.empProvider != nil {
+			_ = s.empProvider.UpdateEmployeeOnEndWork(ctx, *session.EmployeeID, session.Distance, session.OrdersCount)
 		}
-		_ = s.empProvider.SendShiftApprovalNotification(ctx, *session.EmployeeID, session.ID, session.OrdersCount, session.FuelCost, reviewerName)
+		if s.vehicleProvider != nil && session.MotorcycleNumber != "" && session.EndKM > 0 {
+			_ = s.vehicleProvider.UpdateVehicleKM(ctx, session.MotorcycleNumber, session.EndKM)
+		}
+		if s.empProvider != nil {
+			_ = s.empProvider.SendShiftApprovalNotification(ctx, *session.EmployeeID, session.ID, session.OrdersCount, session.FuelCost, reviewerName)
+		}
 	}
 
 	return session, nil
