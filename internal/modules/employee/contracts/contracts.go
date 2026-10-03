@@ -27,8 +27,6 @@ type EmployeeDTO struct {
 
 type IEmployeeContract interface {
 	GetEmployee(ctx context.Context, id uuid.UUID) (*EmployeeDTO, error)
-	FindAll(ctx context.Context, branchID *uuid.UUID) ([]EmployeeDTO, error)
-	FindByID(ctx context.Context, id uuid.UUID) (*EmployeeDTO, error)
 	FindByNationalID(ctx context.Context, nationalID string) (*EmployeeDTO, error)
 	UpdateOnStartWork(ctx context.Context, id uuid.UUID, appID, appType, motorcycleNumber string) error
 	UpdateOnEndWork(ctx context.Context, id uuid.UUID, addedDistance float64, totalOrders int) error

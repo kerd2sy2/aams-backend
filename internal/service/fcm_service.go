@@ -131,6 +131,62 @@ func SendFCMBroadcast(tokens []string, title, body string, extraData map[string]
 	}
 }
 
+// sendExpoPushNotifications sends notifications to Expo push tokens
+func sendExpoPushNotifications(tokens []string, title, body, imgURL string, extraData map[string]string) {
+	if len(tokens) == 0 {
+		return
+	}
+	type expoMsg struct {
+		To        string            `json:"to"`
+		Title     string            `json:"title"`
+		Body      string            `json:"body"`
+		Data      map[string]string `json:"data,omitempty"`
+		Sound     string            `json:"sound,omitempty"`
+		ChannelID string            `json:"channelId,omitempty"`
+		Priority  string            `json:"priority,omitempty"`
+	}
+
+	messages := make([]expoMsg, len(tokens))
+	dataPayload := map[string]string{}
+	for k, v := range extraData {
+		dataPayload[k] = v
+	}
+	if imgURL != "" {
+		dataPayload["image_url"] = imgURL
+	}
+
+	for i, t := range tokens {
+		messages[i] = expoMsg{
+			To:        t,
+			Title:     title,
+			Body:      body,
+			Data:      dataPayload,
+			Sound:     "default",
+			ChannelID: "aams_broadcasts",
+			Priority:  "high",
+		}
+	}
+
+	payloadBytes, err := json.Marshal(messages)
+	if err != nil {
+		return
+	}
+
+	go func() {
+		client := &http.Client{Timeout: 10 * time.Second}
+		req, err := http.NewRequest("POST", "https://exp.host/--/api/v2/push/send", bytes.NewBuffer(payloadBytes))
+		if err != nil {
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		resp, err := client.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+		}
+	}()
+}
+
 // sendBatch sends FCM notifications to a batch of native FCM tokens
 func (f *fcmSenderClient) sendBatch(tokens []string, title, body string, extraData map[string]string) {
 	accessToken, err := f.getOAuthToken()

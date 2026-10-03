@@ -3,12 +3,10 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"delivery-backend/internal/modules/auth/domain"
 	"delivery-backend/internal/modules/auth/dto"
 	"delivery-backend/internal/modules/auth/service"
 )

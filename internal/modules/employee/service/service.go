@@ -268,22 +268,6 @@ func (s *employeeService) GetEmployee(ctx context.Context, id uuid.UUID) (*contr
 	return toEmployeeDTO(emp), nil
 }
 
-func (s *employeeService) FindAll(ctx context.Context, branchID *uuid.UUID) ([]contracts.EmployeeDTO, error) {
-	emps, _, err := s.repo.FindAll(ctx, dto.EmployeeFilter{BranchID: branchID, Limit: 1000})
-	if err != nil {
-		return nil, err
-	}
-	res := make([]contracts.EmployeeDTO, len(emps))
-	for i, e := range emps {
-		res[i] = *toEmployeeDTO(&e)
-	}
-	return res, nil
-}
-
-func (s *employeeService) FindByID(ctx context.Context, id uuid.UUID) (*contracts.EmployeeDTO, error) {
-	return s.GetEmployee(ctx, id)
-}
-
 func (s *employeeService) FindByNationalID(ctx context.Context, nationalID string) (*contracts.EmployeeDTO, error) {
 	emp, err := s.repo.FindByNationalID(ctx, nationalID)
 	if err != nil {

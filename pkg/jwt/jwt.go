@@ -61,6 +61,23 @@ func GenerateTokens(adminID uuid.UUID, email, name, role string, branchID *uuid.
 	return accessToken, refreshToken, nil
 }
 
+func GenerateToken(adminID uuid.UUID, email, role, secret string) (string, time.Time, error) {
+	expTime := time.Now().Add(180 * 24 * time.Hour)
+	claims := &Claims{
+		AdminID:  adminID,
+		Email:    email,
+		Role:     role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Subject:   adminID.String(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenStr, err := token.SignedString([]byte(secret))
+	return tokenStr, expTime, err
+}
+
 func ValidateToken(tokenStr, secret string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {

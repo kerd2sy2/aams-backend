@@ -26,12 +26,12 @@ type Module struct {
 }
 
 func NewModule(db *gorm.DB, cfg *config.Config) *Module {
-	repo := repository.NewAuthRepository(db)
-	authSvc := service.NewAuthService(repo, cfg)
-	otpSvc := service.NewOTPService(repo, cfg)
-	roleSvc := service.NewRoleService(repo)
-	adminSvc := service.NewAdminService(repo)
-	branchSvc := service.NewBranchService(repo)
+	adminRepo, roleRepo, otpRepo, branchRepo := repository.NewAuthRepository(db)
+	authSvc := service.NewAuthService(adminRepo, branchRepo, cfg)
+	otpSvc := service.NewOTPService(otpRepo, cfg)
+	roleSvc := service.NewRoleService(roleRepo)
+	adminSvc := service.NewAdminService(adminRepo)
+	branchSvc := service.NewBranchService(branchRepo)
 
 	return &Module{
 		AuthService:   authSvc,
