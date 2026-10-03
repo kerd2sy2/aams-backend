@@ -7,16 +7,20 @@ import (
 )
 
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
+	Username string `json:"username"`
+	Login    string `json:"login"`
+	Email    string `json:"email"`
 	Password string `json:"password" binding:"required"`
 }
 
 type LoginResponse struct {
 	Token        string     `json:"token"`
+	AccessToken  string     `json:"access_token"`
 	RefreshToken string     `json:"refresh_token"`
 	ExpiresAt    time.Time  `json:"expires_at"`
 	Type         string     `json:"type"` // "admin" or "employee"
 	Admin        *AdminInfo `json:"admin,omitempty"`
+	User         *AdminInfo `json:"user,omitempty"`
 }
 
 type AdminInfo struct {

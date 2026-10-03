@@ -77,11 +77,22 @@ func NewAuthService(adminRepo repository.AdminRepository, branchRepo repository.
 }
 
 func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.LoginResponse, error) {
-	admin, err := s.adminRepo.FindByUsername(ctx, req.Username)
+	userKey := strings.TrimSpace(req.Username)
+	if userKey == "" {
+		userKey = strings.TrimSpace(req.Login)
+	}
+	if userKey == "" {
+		userKey = strings.TrimSpace(req.Email)
+	}
+	if userKey == "" || req.Password == "" {
+		return nil, errors.New("اسم المستخدم وكلمة المرور مطلوبان")
+	}
+
+	admin, err := s.adminRepo.FindByUsername(ctx, userKey)
 	if err != nil {
-		admin, err = s.adminRepo.FindByEmail(ctx, req.Username)
+		admin, err = s.adminRepo.FindByEmail(ctx, userKey)
 		if err != nil {
-			admin, err = s.adminRepo.FindByPhone(ctx, req.Username)
+			admin, err = s.adminRepo.FindByPhone(ctx, userKey)
 			if err != nil {
 				return nil, errors.New("اسم المستخدم أو كلمة المرور غير صحيحة")
 			}
@@ -109,24 +120,28 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		branchName = admin.Branch.Name
 	}
 
+	adminInfo := &dto.AdminInfo{
+		ID:             admin.ID,
+		Email:          admin.Email,
+		Username:       admin.Username,
+		Name:           admin.Name,
+		Role:           admin.Role,
+		Permissions:    perms,
+		GoogleEmail:    admin.GoogleEmail,
+		GoogleAvatar:   admin.GoogleAvatar,
+		IsGoogleLinked: admin.GoogleID != "",
+		BranchID:       admin.BranchID,
+		BranchName:     branchName,
+	}
+
 	return &dto.LoginResponse{
 		Token:        token,
+		AccessToken:  token,
 		RefreshToken: refreshToken,
 		ExpiresAt:    exp,
 		Type:         "admin",
-		Admin: &dto.AdminInfo{
-			ID:             admin.ID,
-			Email:          admin.Email,
-			Username:       admin.Username,
-			Name:           admin.Name,
-			Role:           admin.Role,
-			Permissions:    perms,
-			GoogleEmail:    admin.GoogleEmail,
-			GoogleAvatar:   admin.GoogleAvatar,
-			IsGoogleLinked: admin.GoogleID != "",
-			BranchID:       admin.BranchID,
-			BranchName:     branchName,
-		},
+		Admin:        adminInfo,
+		User:         adminInfo,
 	}, nil
 }
 
@@ -146,11 +161,37 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*d
 		return nil, err
 	}
 
+	var perms []string
+	if admin.Permissions != "" {
+		_ = json.Unmarshal([]byte(admin.Permissions), &perms)
+	}
+	branchName := ""
+	if admin.Branch != nil {
+		branchName = admin.Branch.Name
+	}
+
+	adminInfo := &dto.AdminInfo{
+		ID:             admin.ID,
+		Email:          admin.Email,
+		Username:       admin.Username,
+		Name:           admin.Name,
+		Role:           admin.Role,
+		Permissions:    perms,
+		GoogleEmail:    admin.GoogleEmail,
+		GoogleAvatar:   admin.GoogleAvatar,
+		IsGoogleLinked: admin.GoogleID != "",
+		BranchID:       admin.BranchID,
+		BranchName:     branchName,
+	}
+
 	return &dto.LoginResponse{
 		Token:        token,
+		AccessToken:  token,
 		RefreshToken: refreshToken,
 		ExpiresAt:    exp,
 		Type:         "admin",
+		Admin:        adminInfo,
+		User:         adminInfo,
 	}, nil
 }
 
@@ -173,11 +214,37 @@ func (s *authService) GoogleLogin(ctx context.Context, req dto.GoogleLoginReques
 
 	refreshToken, _, _ := jwt.GenerateToken(admin.ID, admin.Email, admin.Role, s.cfg.JWTSecret)
 
+	var perms []string
+	if admin.Permissions != "" {
+		_ = json.Unmarshal([]byte(admin.Permissions), &perms)
+	}
+	branchName := ""
+	if admin.Branch != nil {
+		branchName = admin.Branch.Name
+	}
+
+	adminInfo := &dto.AdminInfo{
+		ID:             admin.ID,
+		Email:          admin.Email,
+		Username:       admin.Username,
+		Name:           admin.Name,
+		Role:           admin.Role,
+		Permissions:    perms,
+		GoogleEmail:    admin.GoogleEmail,
+		GoogleAvatar:   admin.GoogleAvatar,
+		IsGoogleLinked: admin.GoogleID != "",
+		BranchID:       admin.BranchID,
+		BranchName:     branchName,
+	}
+
 	return &dto.LoginResponse{
 		Token:        token,
+		AccessToken:  token,
 		RefreshToken: refreshToken,
 		ExpiresAt:    exp,
 		Type:         "admin",
+		Admin:        adminInfo,
+		User:         adminInfo,
 	}, nil
 }
 
