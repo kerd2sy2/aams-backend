@@ -14,7 +14,18 @@ import (
 	"time"
 
 	"delivery-backend/internal/domain"
-	"delivery-backend/internal/handler"
+	"delivery-backend/internal/modules/attendance"
+	"delivery-backend/internal/modules/auth"
+	"delivery-backend/internal/modules/custody"
+	"delivery-backend/internal/modules/employee"
+	"delivery-backend/internal/modules/fleet"
+	"delivery-backend/internal/modules/hr_legal"
+	"delivery-backend/internal/modules/inventory"
+	"delivery-backend/internal/modules/maintenance"
+	"delivery-backend/internal/modules/system"
+	"delivery-backend/internal/modules/target"
+	"delivery-backend/internal/modules/ticket"
+	"delivery-backend/internal/modules/work"
 	"delivery-backend/internal/repository"
 	"delivery-backend/internal/service"
 	"delivery-backend/pkg/backup"
@@ -55,94 +66,33 @@ func main() {
 	// Start background cron jobs
 	startIqamaExpirationChecker(db)
 
-	// Initialize Repositories (Data Layer)
-	roleRepo := repository.NewRoleRepository(db)
+	// Repositories needed for core Auth Middleware
 	adminRepo := repository.NewAdminRepository(db)
 	empRepo := repository.NewEmployeeRepository(db)
-	workRepo := repository.NewWorkRepository(db)
-	auditRepo := repository.NewAuditRepository(db)
-	branchRepo := repository.NewBranchRepository(db)
-	invRepo := repository.NewInventoryRepository(db)
-	maintenanceRepo := repository.NewMaintenanceRepository(db)
-	investigationRepo := repository.NewInvestigationRepository(db)
-	attendanceRepo := repository.NewAttendanceRepository(db)
-	custodyRepo := repository.NewCustodyRepository(db)
-	settingRepo := repository.NewSettingRepository(db)
-	vehicleRepo := repository.NewVehicleRepository(db)
-	fuelLogRepo := repository.NewFuelLogRepository(db)
-	violationRepo := repository.NewTrafficViolationRepository(db)
-	maintRequestRepo := repository.NewMaintenanceRequestRepository(db)
-	docRepo := repository.NewEmployeeDocumentRepository(db)
-	bankRepo := repository.NewEmployeeBankAccountRepository(db)
-	leaveRepo := repository.NewLeaveRequestRepository(db)
-	ticketRepo := repository.NewSupportTicketRepository(db)
-	notifRepo := repository.NewNotificationRepository(db)
-	archiveRepo := repository.NewArchiveRepository(db)
-	otpRepo := repository.NewOTPRepository(db)
-	targetRepo := repository.NewTargetRepository(db)
 
-	// Initialize Services (Business Layer)
+	// Shared services
 	storageService := service.NewStorageService(cfg)
+	auditRepo := repository.NewAuditRepository(db)
 	auditService := service.NewAuditService(auditRepo)
-	authService := service.NewAuthService(adminRepo, branchRepo, empRepo, cfg)
-	otpService := service.NewOTPService(otpRepo, empRepo, branchRepo, cfg)
-	roleService := service.NewRoleService(roleRepo)
-	adminService := service.NewAdminService(adminRepo)
-	branchService := service.NewBranchService(branchRepo, empRepo)
-	empService := service.NewEmployeeService(empRepo, workRepo, vehicleRepo)
-	vehicleService := service.NewVehicleService(vehicleRepo, storageService)
-	workService := service.NewWorkService(workRepo, empRepo, maintenanceRepo, vehicleRepo, notifRepo, auditRepo, storageService)
-	dashService := service.NewDashboardService(workRepo, auditRepo, empRepo)
-	reportService := service.NewReportService(workRepo)
-	invService := service.NewInventoryService(invRepo, empRepo, maintenanceRepo)
-	maintService := service.NewMaintenanceService(maintenanceRepo)
-	investigationService := service.NewInvestigationService(investigationRepo, empRepo, adminRepo)
-	attendanceService := service.NewAttendanceService(attendanceRepo, empRepo, workRepo)
-	custodyService := service.NewCustodyService(custodyRepo)
-	settingService := service.NewSettingService(settingRepo)
-	fuelLogService := service.NewFuelLogService(fuelLogRepo)
-	violationService := service.NewTrafficViolationService(violationRepo, empRepo, notifRepo)
-	maintRequestService := service.NewMaintenanceRequestService(maintRequestRepo)
-	docService := service.NewEmployeeDocumentService(docRepo)
-	bankService := service.NewEmployeeBankAccountService(bankRepo)
-	leaveService := service.NewLeaveRequestService(leaveRepo)
-	ticketService := service.NewSupportTicketService(ticketRepo)
-	notifService := service.NewNotificationService(notifRepo, adminRepo, empRepo, storageService)
-	archiveService := service.NewArchiveService(archiveRepo)
-	excelImportService := service.NewExcelImportService(targetRepo)
-	targetService := service.NewTargetService(targetRepo)
 
 	// Initialize Firebase Cloud Messaging (FCM V1) for background push notifications
 	service.InitFCM("")
-	// Initialize Handlers (Presentation Layer)
-	authHandler := handler.NewAuthHandler(authService, auditService)
-	otpHandler := handler.NewOTPHandler(otpService, auditService)
-	roleHandler := handler.NewRoleHandler(roleService, auditService)
-	adminHandler := handler.NewAdminHandler(adminService, auditService, adminRepo)
 
-	branchHandler := handler.NewBranchHandler(branchService, auditService)
-	empHandler := handler.NewEmployeeHandler(empService, storageService, auditService, workRepo)
-	vehicleHandler := handler.NewVehicleHandler(vehicleService, auditService)
-	workHandler := handler.NewWorkHandler(workService, auditService, attendanceService, empRepo)
-	dashHandler := handler.NewDashboardHandler(dashService)
-	reportHandler := handler.NewReportHandler(reportService)
-	auditHandler := handler.NewAuditHandler(auditService)
-	invHandler := handler.NewInventoryHandler(invService, auditService)
-	maintHandler := handler.NewMaintenanceHandler(maintService)
-	investigationHandler := handler.NewInvestigationHandler(investigationService, empRepo)
-	attendanceHandler := handler.NewAttendanceHandler(attendanceService, auditService, empRepo)
-	custodyHandler := handler.NewCustodyHandler(custodyService)
-	settingHandler := handler.NewSettingHandler(settingService, auditService)
-	fuelLogHandler := handler.NewFuelLogHandler(fuelLogService, auditService)
-	violationHandler := handler.NewTrafficViolationHandler(violationService, auditService)
-	maintRequestHandler := handler.NewMaintenanceRequestHandler(maintRequestService, auditService)
-	docHandler := handler.NewEmployeeDocumentHandler(docService)
-	bankHandler := handler.NewEmployeeBankAccountHandler(bankService)
-	leaveHandler := handler.NewLeaveRequestHandler(leaveService, auditService)
-	ticketHandler := handler.NewSupportTicketHandler(ticketService, auditService)
-	notifHandler := handler.NewNotificationHandler(notifService)
-	archiveHandler := handler.NewArchiveHandler(archiveService, auditService)
-	targetHandler := handler.NewTargetHandler(targetService, excelImportService)
+	// ---------------------------------------------------------
+	// Initialize Bounded Context Modules (Modular Monolith Architecture)
+	// ---------------------------------------------------------
+	authModule := auth.NewModule(db, cfg)
+	systemModule := system.NewModule(db)
+	ticketModule := ticket.NewModule(db, nil, nil)
+	fleetModule := fleet.NewModule(db, storageService, auditService)
+	inventoryModule := inventory.NewModule(db)
+	maintenanceModule := maintenance.NewModule(db)
+	custodyModule := custody.NewModule(db)
+	hrLegalModule := hr_legal.NewModule(db)
+	attendanceModule := attendance.NewModule(db)
+	workModule := work.NewModule(db, storageService)
+	targetModule := target.NewModule(db)
+	employeeModule := employee.NewModule(db, nil)
 
 	// Set Gin to release mode in production
 	ginMode := os.Getenv("GIN_MODE")
@@ -153,7 +103,7 @@ func main() {
 	// Setup Gin Router
 	r := gin.New()
 
-	// CORS â€” restrict to allowed origins (configurable)
+	// CORS — restrict to allowed origins (configurable)
 	corsConfig := cors.DefaultConfig()
 	rawOrigins := strings.Split(cfg.AllowedOrigins, ",")
 	allowedOrigins := make([]string, 0, len(rawOrigins))
@@ -302,275 +252,31 @@ func main() {
 		})
 	})
 
-	// Auth routes
-	authRoutes := r.Group("/api/v1")
-	{
-		authRoutes.POST("/login", middleware.StrictLoginLimiter(), authHandler.Login)
-		authRoutes.POST("/auth/login", middleware.StrictLoginLimiter(), authHandler.Login)
-		authRoutes.POST("/refresh", authHandler.RefreshToken)
-		authRoutes.POST("/auth/refresh", authHandler.RefreshToken)
-		authRoutes.POST("/auth/google/login", middleware.StrictLoginLimiter(), authHandler.GoogleLogin)
-		authRoutes.POST("/auth/request-otp", middleware.StrictLoginLimiter(), otpHandler.RequestOTP)
-		authRoutes.POST("/auth/verify-otp", middleware.StrictLoginLimiter(), otpHandler.VerifyOTP)
-	}
+	// ---------------------------------------------------------
+	// 1. Unauthenticated Public Routes
+	// ---------------------------------------------------------
+	authModule.RegisterPublicRoutes(r)
+	systemModule.RegisterPublicRoutes(r)
+	hrLegalModule.RegisterPublicRoutes(r)
 
-	// Fallback refresh routes for compatibility with various client prefixes
-	r.POST("/api/refresh", authHandler.RefreshToken)
-	r.POST("/auth/refresh", authHandler.RefreshToken)
-
-	// Public settings (no auth required) — used by login page
-	r.GET("/api/v1/settings/public", settingHandler.GetPublicSettings)
-
-	// Public document & investigation access for QR code scanner (no auth required)
-	r.GET("/api/v1/public/doc/:id", investigationHandler.GetPublicByID)
-	r.GET("/api/v1/public/investigations/:id", investigationHandler.GetPublicByID)
-
-	// Protected Routes (JWT Required)
+	// ---------------------------------------------------------
+	// 2. Protected Authenticated Routes (JWT Required)
+	// ---------------------------------------------------------
 	protected := r.Group("/api/v1")
 	protected.Use(middleware.AuthMiddleware(cfg.JWTSecret, adminRepo, empRepo))
 	{
-		// Current authenticated user (real-time branch from DB)
-		protected.GET("/me", authHandler.Me)
-		protected.POST("/auth/google/link", authHandler.LinkGoogle)
-		protected.POST("/auth/google/unlink", authHandler.UnlinkGoogle)
-
-		// Employee Routes + file upload (now secured)
-		protected.POST("/employees", empHandler.Create)
-		protected.GET("/employees", empHandler.GetAll)
-		protected.GET("/employees/search", empHandler.Search)
-		protected.GET("/employees/working", empHandler.GetWorking)
-		protected.GET("/employees/:id", empHandler.GetByID)
-		protected.PUT("/employees/:id", empHandler.Update)
-		protected.DELETE("/employees/:id", empHandler.Delete)
-		protected.POST("/employees/batch-oil-setup", empHandler.BatchSetOilChange)
-		protected.POST("/employees/me/change-password", empHandler.ChangeMyPassword)
-		protected.POST("/employees/me/phone", empHandler.SetMyPhone)
-		protected.POST("/employees/me/location", empHandler.SetMyLocation)
-		protected.GET("/employees/locations", empHandler.GetLocations)
-		protected.PUT("/employees/:id/phone", empHandler.SetPhone)
-		protected.POST("/employees/:id/reset-password", empHandler.ResetPassword)
-		protected.GET("/employees/:id/barcode", empHandler.GetBarcode)
-		protected.GET("/employees/:id/qrcode", empHandler.GetQRCode)
-		protected.GET("/employees/:id/print-card", empHandler.GetPrintCard)
-		protected.POST("/upload", empHandler.UploadImage)
-		protected.POST("/upload-file", empHandler.UploadFile)
-
-		// Work Sessions
-		protected.POST("/work/start", workHandler.StartWork)
-		protected.POST("/work/end", workHandler.EndWork)
-		protected.PUT("/work/:id", workHandler.UpdateWorkSession)
-		protected.PUT("/work/:id/review", workHandler.ReviewWorkSession)
-		protected.PUT("/work/sessions/:id/review", workHandler.ReviewWorkSession)
-		protected.GET("/work/sessions/:id", workHandler.GetSessionByID)
-		protected.GET("/work/active", workHandler.GetActiveSession)
-		protected.GET("/work/last-km", workHandler.GetLastKM)
-		protected.POST("/work/scan-plate", workHandler.ScanPlate)
-		protected.GET("/work/today-count", workHandler.TodayCount)
-		protected.GET("/work/check-oil", workHandler.CheckOilChange)
-
-		// Vehicles Management (ط§ظ„ط¯ط¨ط§ط¨ط§طھ ظˆط§ظ„ظ…ط±ظƒط¨ط§طھ)
-		protected.GET("/vehicles", vehicleHandler.GetAll)
-		protected.POST("/vehicles", vehicleHandler.Create)
-		protected.GET("/vehicles/check-km", vehicleHandler.CheckKM)
-		protected.GET("/vehicles/:id", vehicleHandler.GetByID)
-		protected.PUT("/vehicles/:id", vehicleHandler.Update)
-		protected.DELETE("/vehicles/:id", vehicleHandler.Delete)
-		protected.POST("/vehicles/:id/oil-change", vehicleHandler.RecordOilChange)
-
-		// Inventory Management
-		protected.GET("/inventory/items", invHandler.GetItems)
-		protected.GET("/inventory/items/:id", invHandler.GetItemByID)
-		protected.GET("/inventory/barcode", invHandler.FindByBarcode)
-		protected.POST("/inventory/items", invHandler.CreateItem)
-		protected.PUT("/inventory/items/:id", invHandler.UpdateItem)
-		protected.DELETE("/inventory/items/:id", invHandler.DeleteItem)
-		protected.POST("/inventory/add-stock", invHandler.AddStock)
-		protected.POST("/inventory/remove-stock", invHandler.RemoveStock)
-		protected.POST("/inventory/dispense-oil", invHandler.DispenseOil)
-		protected.GET("/inventory/transactions", invHandler.GetTransactions)
-		protected.DELETE("/inventory/transactions", invHandler.DeleteAllTransactions)
-		protected.GET("/inventory/purchases", invHandler.GetPurchaseInvoices)
-		protected.GET("/inventory/purchases/:id", invHandler.GetPurchaseInvoiceByID)
-		protected.POST("/inventory/purchases", invHandler.CreatePurchaseInvoice)
-		protected.DELETE("/inventory/purchases/:id", invHandler.DeletePurchaseInvoice)
-
-		// Maintenance
-		protected.GET("/maintenance/logs", maintHandler.GetAllLogs)
-		protected.GET("/maintenance/employee-logs", maintHandler.GetEmployeeLogs)
-
-		// Investigation
-		protected.POST("/investigations", investigationHandler.Create)
-		protected.GET("/investigations", investigationHandler.GetAll)
-		protected.GET("/investigations/pending-count", investigationHandler.PendingCount)
-		protected.GET("/investigations/:id", investigationHandler.GetByID)
-		protected.PUT("/investigations/:id", investigationHandler.Update)
-		protected.POST("/investigations/:id/approve", investigationHandler.Approve)
-
-		// Notifications
-		protected.GET("/notifications", notifHandler.GetMyNotifications)
-		protected.PUT("/notifications/read-all", notifHandler.MarkAllAsRead)
-		protected.PUT("/notifications/:id/read", notifHandler.MarkAsRead)
-
-		// Broadcast & Survey Notifications (الإشعارات الجماعية والاستبيانات لجميع الهواتف)
-		protected.POST("/notifications/broadcast", notifHandler.SendBroadcast)
-		protected.GET("/notifications/broadcasts", notifHandler.GetBroadcasts)
-		protected.DELETE("/notifications/broadcasts/:id", notifHandler.DeleteBroadcast)
-		protected.GET("/notifications/broadcasts/:id/votes", notifHandler.GetBroadcastVotes)
-		protected.GET("/notifications/employee/broadcasts", notifHandler.GetEmployeeBroadcasts)
-		protected.GET("/notifications/employee/unread", notifHandler.GetEmployeeUnreadBroadcasts)
-		protected.POST("/notifications/employee/read/:id", notifHandler.MarkEmployeeBroadcastRead)
-		protected.POST("/notifications/employee/read-all", notifHandler.MarkAllEmployeeBroadcastsRead)
-		protected.POST("/notifications/employee/vote/:id", notifHandler.SubmitVote)
-		protected.POST("/employees/me/push-token", notifHandler.SaveEmployeePushToken)
-
-		// Attendance
-		protected.GET("/attendance", attendanceHandler.GetAttendance)
-		protected.POST("/attendance/:employee_id", attendanceHandler.ToggleAttendance)
-
-		// Custody (ط§ظ„ط¹ظ‡ط¯ط©)
-		protected.GET("/custody", custodyHandler.List)
-		protected.POST("/custody", custodyHandler.Create)
-		protected.POST("/custody/add-amount", custodyHandler.AddAmount)
-		protected.GET("/custody/logs", custodyHandler.GetLogs)
-		protected.DELETE("/custody/logs/:id", custodyHandler.DeleteLog)
-		protected.POST("/custody/:id/expenses", custodyHandler.AddExpense)
-		protected.DELETE("/custody/expenses/:id", custodyHandler.DeleteExpense)
-
-		// Analytics & Reports
-		protected.GET("/dashboard", dashHandler.GetStats)
-		protected.GET("/reports", reportHandler.GetReports)
-		protected.GET("/reports/export", reportHandler.ExportReports)
-		protected.GET("/reports/daily", reportHandler.GetDailyReport)
-		protected.GET("/reports/daily/export", reportHandler.ExportDailyReport)
-
-		// Audit Logs
-		protected.GET("/audit-logs", auditHandler.GetLogs)
-		protected.DELETE("/audit-logs/clear", auditHandler.ClearLogs)
-		protected.DELETE("/audit-logs/bulk", auditHandler.BulkDeleteLogs)
-		protected.DELETE("/audit-logs/:id", auditHandler.DeleteLog)
-
-		// User Management (Admins)
-		protected.GET("/users", adminHandler.GetAll)
-		protected.POST("/users", adminHandler.Create)
-		protected.PUT("/users/:id", adminHandler.Update)
-		protected.DELETE("/users/:id", adminHandler.Delete)
-		protected.POST("/users/change-password", adminHandler.ChangePassword)
-
-		// Roles & Permissions Management
-		protected.GET("/roles", roleHandler.GetAll)
-		protected.POST("/roles", roleHandler.Create)
-		protected.GET("/roles/:id", roleHandler.GetByID)
-		protected.PUT("/roles/:id", roleHandler.Update)
-		protected.DELETE("/roles/:id", roleHandler.Delete)
-		protected.GET("/permissions", roleHandler.GetPermissions)
-
-		// Branch Management
-		protected.GET("/branches", branchHandler.GetAll)
-		protected.GET("/branches/:id", branchHandler.GetByID)
-		protected.POST("/branches", branchHandler.Create)
-		protected.PUT("/branches/:id", branchHandler.Update)
-		protected.DELETE("/branches/:id", branchHandler.Delete)
-
-		// Settings Management
-		protected.GET("/settings", settingHandler.GetSettings)
-		protected.PUT("/settings", settingHandler.UpdateSettings)
-
-		// 1. Fuel Logs (ط³ط¬ظ„ط§طھ ط§ظ„ظˆظ‚ظˆط¯)
-		protected.GET("/fuel-logs", fuelLogHandler.GetAll)
-		protected.POST("/fuel-logs", fuelLogHandler.Create)
-		protected.PUT("/fuel-logs/:id", fuelLogHandler.Update)
-		protected.DELETE("/fuel-logs/:id", fuelLogHandler.Delete)
-
-		// 2. Traffic Violations (ط§ظ„ظ…ط®ط§ظ„ظپط§طھ ط§ظ„ظ…ط±ظˆط±ظٹط©)
-		protected.GET("/violations", violationHandler.GetAll)
-		protected.POST("/violations", violationHandler.Create)
-		protected.PUT("/violations/:id", violationHandler.Update)
-		protected.DELETE("/violations/:id", violationHandler.Delete)
-
-		// 3. Maintenance Requests (ط·ظ„ط¨ط§طھ طµظٹط§ظ†ط© ط§ظ„ظ…ط±ظƒط¨ط§طھ)
-		protected.GET("/maintenance-requests", maintRequestHandler.GetAll)
-		protected.POST("/maintenance-requests", maintRequestHandler.Create)
-		protected.PUT("/maintenance-requests/:id", maintRequestHandler.Update)
-		protected.DELETE("/maintenance-requests/:id", maintRequestHandler.Delete)
-
-		// 4. Employee Documents (المستندات والرخص)
-		protected.GET("/documents", docHandler.GetAll)
-		protected.GET("/documents/expiring", docHandler.GetExpiringSoon)
-		protected.GET("/documents/:id", docHandler.GetByID)
-		protected.POST("/documents", docHandler.Create)
-		protected.PUT("/documents/:id", docHandler.Update)
-		protected.DELETE("/documents/:id", docHandler.Delete)
-
-		// 5. Employee Bank Accounts (ط§ظ„ط­ط³ط§ط¨ط§طھ ط§ظ„ط¨ظ†ظƒظٹط©)
-		protected.GET("/bank-accounts", bankHandler.GetAll)
-		protected.POST("/bank-accounts", bankHandler.Create)
-		protected.PUT("/bank-accounts/:id", bankHandler.Update)
-		protected.DELETE("/bank-accounts/:id", bankHandler.Delete)
-
-		// 6. Leave Requests (ط·ظ„ط¨ط§طھ ط§ظ„ط¥ط¬ط§ط²ط§طھ)
-		protected.GET("/leaves", leaveHandler.GetAll)
-		protected.POST("/leaves", leaveHandler.Create)
-		protected.PUT("/leaves/:id/status", leaveHandler.UpdateStatus)
-		protected.DELETE("/leaves/:id", leaveHandler.Delete)
-
-		// 7. Support Tickets (تذاكر الدعم والشكاوى)
-		protected.GET("/tickets", ticketHandler.GetAll)
-		protected.POST("/tickets", ticketHandler.Create)
-		protected.PUT("/tickets/:id", ticketHandler.Update)
-		protected.DELETE("/tickets/:id", ticketHandler.Delete)
-
-		// 8. Archive & Trash Management (سجل الأرشيف والمحذوفات)
-		protected.GET("/archive", archiveHandler.GetArchived)
-		protected.POST("/archive/restore", archiveHandler.Restore)
-		protected.DELETE("/archive/permanent", archiveHandler.PermanentDelete)
-		protected.POST("/archive/restore-bulk", archiveHandler.BulkRestore)
-		protected.DELETE("/archive/permanent-bulk", archiveHandler.BulkPermanentDelete)
-
-		// 9. OTP & Device Verification (رموز التحقق وتوثيق الأجهزة)
-		protected.GET("/otp-requests", otpHandler.GetOTPList)
-		protected.POST("/otp-requests/:id/cancel", otpHandler.CancelOTP)
-
-		// 10. Identifier Target & Excel Import System (نظام إدارة ومتابعة تارچت المعرفين)
-		targetRoutes := protected.Group("/target")
-		{
-			// Read & Dashboard access for Admin and Supervisor
-			targetRoutes.GET("/dashboard", targetHandler.GetDashboardSummary)
-			targetRoutes.GET("/identifiers", targetHandler.ListIdentifiers)
-			targetRoutes.GET("/identifiers/:id", targetHandler.GetIdentifierDetails)
-			targetRoutes.GET("/drivers", targetHandler.ListDrivers)
-			targetRoutes.GET("/alerts", targetHandler.ListAlerts)
-			targetRoutes.PATCH("/alerts/resolve-all", targetHandler.ResolveAllAlerts)
-			targetRoutes.PATCH("/alerts/:id/resolve", targetHandler.ResolveAlert)
-			targetRoutes.GET("/settings", targetHandler.GetTargetSettings)
-			targetRoutes.GET("/batches", targetHandler.ListImportBatches)
-
-			// Admin-only management routes
-			adminTarget := targetRoutes.Group("")
-			adminTarget.Use(middleware.RequireRoles("ADMIN", "SUPER_ADMIN"))
-			{
-				adminTarget.POST("/import/preview", targetHandler.PreviewExcelImport)
-				adminTarget.POST("/import/confirm", targetHandler.ConfirmExcelImport)
-				adminTarget.DELETE("/batches/:id", targetHandler.DeleteImportBatch)
-				adminTarget.DELETE("/batches/date/:orderDate", targetHandler.DeleteSheetByDate)
-				adminTarget.POST("/identifiers", targetHandler.CreateIdentifier)
-				adminTarget.PUT("/identifiers/:id", targetHandler.UpdateIdentifier)
-				adminTarget.DELETE("/identifiers", targetHandler.DeleteAllIdentifiers)
-				adminTarget.DELETE("/identifiers/wipe-all", targetHandler.DeleteAllIdentifiers)
-				adminTarget.DELETE("/identifiers/:id", targetHandler.DeleteIdentifier)
-				adminTarget.PUT("/settings", targetHandler.UpdateTargetSettings)
-			}
-		}
-
-		// Alias for /api/v1/admin/import/excel and target imports
-		adminImport := protected.Group("/admin/target/import")
-		adminImport.Use(middleware.RequireRoles("ADMIN", "SUPER_ADMIN"))
-		{
-			adminImport.POST("/preview", targetHandler.PreviewExcelImport)
-			adminImport.POST("/confirm", targetHandler.ConfirmExcelImport)
-			adminImport.GET("/batches", targetHandler.ListImportBatches)
-			adminImport.DELETE("/batches/:id", targetHandler.DeleteImportBatch)
-			adminImport.DELETE("/batches/date/:orderDate", targetHandler.DeleteSheetByDate)
-		}
+		authModule.RegisterRoutes(protected)
+		employeeModule.RegisterRoutes(protected)
+		workModule.RegisterRoutes(protected)
+		fleetModule.RegisterRoutes(protected)
+		inventoryModule.RegisterRoutes(protected)
+		maintenanceModule.RegisterRoutes(protected)
+		attendanceModule.RegisterRoutes(protected)
+		custodyModule.RegisterRoutes(protected)
+		hrLegalModule.RegisterRoutes(protected)
+		ticketModule.RegisterRoutes(protected)
+		targetModule.RegisterRoutes(protected)
+		systemModule.RegisterRoutes(protected)
 	}
 
 	// Create HTTP server with timeouts
