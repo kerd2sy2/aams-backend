@@ -89,7 +89,7 @@ func (a *gormEmployeeAdapter) UpdateEmployeeOnEndWork(ctx context.Context, id uu
 	}).Error
 }
 
-func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context, empID uuid.UUID, sessionID uuid.UUID, ordersCount int, fuelCost float64) error {
+func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context, empID uuid.UUID, sessionID uuid.UUID, ordersCount int, fuelCost float64, supervisorName string) error {
 	var emp struct {
 		Name      string     `gorm:"column:name"`
 		Language  string     `gorm:"column:language"`
@@ -100,21 +100,44 @@ func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context,
 		return err
 	}
 
+	cleanSupervisor := strings.TrimSpace(supervisorName)
+	supervisorLabel := "المشرف"
+	if cleanSupervisor != "" {
+		supervisorLabel = cleanSupervisor
+	}
+
+	fuelFormatted := fmt.Sprintf("%.2f ريال", fuelCost)
+	if fuelCost == float64(int(fuelCost)) {
+		fuelFormatted = fmt.Sprintf("%d ريال", int(fuelCost))
+	}
+
 	lang := strings.ToLower(strings.TrimSpace(emp.Language))
 	var title, body string
 	switch lang {
 	case "en":
-		title = "Shift Approved ✅"
-		body = fmt.Sprintf("Supervisor approved your shift: %d Orders | Fuel: %.2f SAR", ordersCount, fuelCost)
+		title = "Approved"
+		fuelEn := fmt.Sprintf("%.2f SAR", fuelCost)
+		if fuelCost == float64(int(fuelCost)) {
+			fuelEn = fmt.Sprintf("%d SAR", int(fuelCost))
+		}
+		body = fmt.Sprintf("Supervisor %s approved your orders\n%d Orders\nFuel: %s", supervisorLabel, ordersCount, fuelEn)
 	case "bn":
-		title = "শিফট অনুমোদিত হয়েছে ✅"
-		body = fmt.Sprintf("সুপারভাইজার আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", ordersCount, fuelCost)
+		title = "অনুমোদিত"
+		fuelBn := fmt.Sprintf("%.2f SAR", fuelCost)
+		if fuelCost == float64(int(fuelCost)) {
+			fuelBn = fmt.Sprintf("%d SAR", int(fuelCost))
+		}
+		body = fmt.Sprintf("সুপারভাইজার %s আপনার অর্ডার অনুমোদন করেছেন\n%d টি অর্ডার\nজ্বালানী: %s", supervisorLabel, ordersCount, fuelBn)
 	case "ur":
-		title = "شفت کی تصدیق ہو گئی ✅"
-		body = fmt.Sprintf("نگران نے آپ کے آرڈرز کی تصدیق کر دی: %d آرڈرز | ایندھن: %.2f ريال", ordersCount, fuelCost)
+		title = "تصدیق ہو گئی"
+		fuelUr := fmt.Sprintf("%.2f ريال", fuelCost)
+		if fuelCost == float64(int(fuelCost)) {
+			fuelUr = fmt.Sprintf("%d ريال", int(fuelCost))
+		}
+		body = fmt.Sprintf("نگران %s نے آپ کے آرڈرز کی تصدیق کر دی\n%d آرڈرز\nایندھن: %s", supervisorLabel, ordersCount, fuelUr)
 	default: // "ar"
-		title = "تمت المصادقة على شفت العمل ✅"
-		body = fmt.Sprintf("وافق المشرف على طلباتك: %d طلب | بنزين: %.2f ريال", ordersCount, fuelCost)
+		title = "تمت المصادقة"
+		body = fmt.Sprintf("وافق المشرف %s على طلباتك\n%d طلب\nبنزين: %s", supervisorLabel, ordersCount, fuelFormatted)
 	}
 
 	// 1. Save in-app notification in DB

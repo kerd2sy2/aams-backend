@@ -591,10 +591,10 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 		Scan(&distSum)
 	resp.TodayDistance = distSum.Total
 
-	// Today's Fuel Cost Sum
+	// Today's Fuel Cost Sum (only reviewed sessions approved by supervisor)
 	var fuelSum struct{ Total float64 }
 	baseQuery().Select("COALESCE(SUM(work_sessions.fuel_cost), 0) as total").
-		Where("work_sessions.start_time >= ?", startOfDay).
+		Where("work_sessions.start_time >= ? AND work_sessions.is_reviewed = ?", startOfDay, true).
 		Scan(&fuelSum)
 	resp.TodayFuelCost = fuelSum.Total
 
@@ -651,8 +651,8 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 		dayMap[key].dist += s.Distance
 		if s.IsReviewed {
 			dayMap[key].ord += float64(s.Orders)
+			dayMap[key].fuel += s.Fuel
 		}
-		dayMap[key].fuel += s.Fuel
 	}
 
 	// Last 7 days for distance & fuel
@@ -738,9 +738,11 @@ func (r *gormSystemRepository) GetDailyReport(ctx context.Context, dateStr strin
 	}
 
 	for _, row := range rows {
-		resp.TotalOrders += row.OrdersCount
-		resp.TotalKM += row.Distance
-		resp.TotalFuel += row.FuelCost
+		if row.IsReviewed {
+			resp.TotalOrders += row.OrdersCount
+			resp.TotalKM += row.Distance
+			resp.TotalFuel += row.FuelCost
+		}
 		resp.TotalSessions++
 
 		dur := "0 ساعة"

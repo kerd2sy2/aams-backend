@@ -34,7 +34,7 @@ type ExternalEmployeeProvider interface {
 	GetEmployee(ctx context.Context, id uuid.UUID) (*EmployeeData, error)
 	UpdateEmployeeOnStartWork(ctx context.Context, id uuid.UUID, appID, appType, motorcycleNumber string) error
 	UpdateEmployeeOnEndWork(ctx context.Context, id uuid.UUID, addedDistance float64, totalOrders int) error
-	SendShiftApprovalNotification(ctx context.Context, empID uuid.UUID, sessionID uuid.UUID, ordersCount int, fuelCost float64) error
+	SendShiftApprovalNotification(ctx context.Context, empID uuid.UUID, sessionID uuid.UUID, ordersCount int, fuelCost float64, supervisorName string) error
 }
 
 type VehicleData struct {
@@ -298,7 +298,7 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 	}
 
 	if isSupervisor && session.EmployeeID != nil && s.empProvider != nil {
-		_ = s.empProvider.SendShiftApprovalNotification(ctx, *session.EmployeeID, session.ID, session.OrdersCount, session.FuelCost)
+		_ = s.empProvider.SendShiftApprovalNotification(ctx, *session.EmployeeID, session.ID, session.OrdersCount, session.FuelCost, reviewerName)
 	}
 
 	return session, nil
@@ -377,7 +377,7 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 		if session.OrdersCount > 0 {
 			_ = s.empProvider.UpdateEmployeeOnEndWork(ctx, *session.EmployeeID, 0, session.OrdersCount)
 		}
-		_ = s.empProvider.SendShiftApprovalNotification(ctx, *session.EmployeeID, session.ID, session.OrdersCount, session.FuelCost)
+		_ = s.empProvider.SendShiftApprovalNotification(ctx, *session.EmployeeID, session.ID, session.OrdersCount, session.FuelCost, reviewerName)
 	}
 
 	return session, nil
