@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -20,6 +21,17 @@ func NewWorkHandler(svc service.WorkService) *WorkHandler {
 }
 
 func getAdminInfo(c *gin.Context) (*uuid.UUID, string) {
+	// If the authenticated user is an employee / courier, they are NOT an admin or supervisor
+	if isEmp, exists := c.Get("is_employee"); exists {
+		if b, ok := isEmp.(bool); ok && b {
+			return nil, ""
+		}
+	}
+	role := strings.ToUpper(c.GetString("admin_role"))
+	if role == "DRIVER" || role == "EMPLOYEE" {
+		return nil, ""
+	}
+
 	var adminID *uuid.UUID
 	if idVal, exists := c.Get("admin_id"); exists && idVal != nil {
 		if id, ok := idVal.(uuid.UUID); ok && id != uuid.Nil {
@@ -104,6 +116,10 @@ func (h *WorkHandler) ReviewWorkSession(c *gin.Context) {
 	}
 
 	adminID, adminName := getAdminInfo(c)
+	if adminID == nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: هذه العملية مخصصة للمشرفين فقط"})
+		return
+	}
 	session, err := h.svc.ReviewSession(c.Request.Context(), sessionID, req, adminID, adminName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
