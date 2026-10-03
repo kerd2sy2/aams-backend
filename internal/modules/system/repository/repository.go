@@ -805,5 +805,49 @@ func (r *gormSystemRepository) GetReports(ctx context.Context, filter dto.Report
 
 	var results []map[string]interface{}
 	err := query.Order("work_sessions.start_time DESC").Offset(offset).Limit(limit).Find(&results).Error
-	return results, total, err
+	if err != nil {
+		return nil, 0, err
+	}
+
+	for i := range results {
+		results[i]["working_duration"] = "—"
+		startTimeVal := results[i]["start_time"]
+		endTimeVal := results[i]["end_time"]
+		if startTimeVal != nil {
+			var startTime time.Time
+			switch t := startTimeVal.(type) {
+			case time.Time:
+				startTime = t
+			case string:
+				startTime, _ = time.Parse(time.RFC3339, t)
+			}
+			if !startTime.IsZero() {
+				if endTimeVal != nil {
+					var endTime time.Time
+					switch t := endTimeVal.(type) {
+					case time.Time:
+						endTime = t
+					case string:
+						endTime, _ = time.Parse(time.RFC3339, t)
+					}
+					if !endTime.IsZero() {
+						d := endTime.Sub(startTime)
+						hours := int(d.Hours())
+						minutes := int(d.Minutes()) % 60
+						if hours > 0 && minutes > 0 {
+							results[i]["working_duration"] = fmt.Sprintf("%d س و %d د", hours, minutes)
+						} else if hours > 0 {
+							results[i]["working_duration"] = fmt.Sprintf("%d س", hours)
+						} else {
+							results[i]["working_duration"] = fmt.Sprintf("%d د", minutes)
+						}
+					}
+				} else {
+					results[i]["working_duration"] = "قائم الآن"
+				}
+			}
+		}
+	}
+
+	return results, total, nil
 }

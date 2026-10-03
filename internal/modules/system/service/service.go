@@ -63,7 +63,7 @@ func (s *reportService) ExportReports(ctx context.Context, filter dto.ReportFilt
 	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM for Excel
 	w := csv.NewWriter(buf)
 
-	_ = w.Write([]string{"المعرف", "المندوب", "الهوية", "الفرع", "التاريخ", "الطلبات", "المسافة (كم)", "تكلفة الوقود", "الحالة"})
+	_ = w.Write([]string{"المعرف", "المندوب", "الهوية", "الفرع", "التاريخ", "الطلبات", "المسافة (كم)", "تكلفة الوقود", "مدة العمل", "الحالة"})
 	for _, r := range rows {
 		_ = w.Write([]string{
 			fmt.Sprintf("%v", r["id"]),
@@ -74,6 +74,7 @@ func (s *reportService) ExportReports(ctx context.Context, filter dto.ReportFilt
 			fmt.Sprintf("%v", r["orders_count"]),
 			fmt.Sprintf("%v", r["distance"]),
 			fmt.Sprintf("%v", r["fuel_cost"]),
+			fmt.Sprintf("%v", r["working_duration"]),
 			fmt.Sprintf("%v", r["status"]),
 		})
 	}
