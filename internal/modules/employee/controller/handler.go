@@ -114,7 +114,7 @@ func (h *EmployeeHandler) Search(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": emps})
+	c.JSON(http.StatusOK, emps)
 }
 
 func (h *EmployeeHandler) GetWorking(c *gin.Context) {
@@ -125,7 +125,7 @@ func (h *EmployeeHandler) GetWorking(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": emps})
+	c.JSON(http.StatusOK, emps)
 }
 
 func (h *EmployeeHandler) GetByID(c *gin.Context) {
@@ -142,7 +142,7 @@ func (h *EmployeeHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": emp})
+	c.JSON(http.StatusOK, emp)
 }
 
 func (h *EmployeeHandler) Update(c *gin.Context) {

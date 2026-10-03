@@ -43,10 +43,7 @@ func (h *WorkHandler) StartWork(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "تم بدء الشفت بنجاح",
-		"data":    session,
-	})
+	c.JSON(http.StatusOK, session)
 }
 
 func (h *WorkHandler) EndWork(c *gin.Context) {
@@ -65,10 +62,7 @@ func (h *WorkHandler) EndWork(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "تم إنهاء الشفت بنجاح",
-		"data":    session,
-	})
+	c.JSON(http.StatusOK, session)
 }
 
 func (h *WorkHandler) UpdateWorkSession(c *gin.Context) {
@@ -92,10 +86,7 @@ func (h *WorkHandler) UpdateWorkSession(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "تم تعديل الشفت بنجاح",
-		"data":    session,
-	})
+	c.JSON(http.StatusOK, session)
 }
 
 func (h *WorkHandler) ReviewWorkSession(c *gin.Context) {
@@ -119,10 +110,7 @@ func (h *WorkHandler) ReviewWorkSession(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "تم مراجعة الشفت بنجاح",
-		"data":    session,
-	})
+	c.JSON(http.StatusOK, session)
 }
 
 func (h *WorkHandler) GetSessionByID(c *gin.Context) {
@@ -139,7 +127,7 @@ func (h *WorkHandler) GetSessionByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": session})
+	c.JSON(http.StatusOK, session)
 }
 
 func (h *WorkHandler) GetActiveSession(c *gin.Context) {
@@ -151,30 +139,34 @@ func (h *WorkHandler) GetActiveSession(c *gin.Context) {
 	}
 
 	session, err := h.svc.GetActiveSession(c.Request.Context(), empID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err != nil || session == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "لا يوجد شفت نشط حالياً"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": session})
+	c.JSON(http.StatusOK, session)
 }
 
 func (h *WorkHandler) GetLastKM(c *gin.Context) {
 	empIDStr := c.Query("employee_id")
-	empID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
-		return
-	}
+	empID, _ := uuid.Parse(empIDStr)
 
 	motorcycleNumber := c.Query("motorcycle_number")
+	if motorcycleNumber == "" {
+		motorcycleNumber = c.Query("plate")
+	}
+
 	resp, err := h.svc.GetLastSessionOrVehicleKM(c.Request.Context(), empID, motorcycleNumber)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusOK, gin.H{
+			"last_end_km":        0,
+			"last_start_km":      0,
+			"is_odometer_broken": false,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": resp})
+	c.JSON(http.StatusOK, resp)
 }
 
 func (h *WorkHandler) ScanPlate(c *gin.Context) {
@@ -209,16 +201,12 @@ func (h *WorkHandler) TodayCount(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"count": count})
+	c.JSON(http.StatusOK, gin.H{"count": count, "today_count": count})
 }
 
 func (h *WorkHandler) CheckOilChange(c *gin.Context) {
 	empIDStr := c.Query("employee_id")
-	empID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
-		return
-	}
+	empID, _ := uuid.Parse(empIDStr)
 
 	motorcycleNumber := c.Query("motorcycle_number")
 	res, err := h.svc.CheckOilChange(c.Request.Context(), empID, motorcycleNumber)
@@ -227,5 +215,6 @@ func (h *WorkHandler) CheckOilChange(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	c.JSON(http.StatusOK, res)
 }
+

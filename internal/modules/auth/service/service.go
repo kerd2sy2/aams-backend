@@ -218,14 +218,16 @@ func (s *authService) GetAdminByID(ctx context.Context, id uuid.UUID) (*contract
 		_ = json.Unmarshal([]byte(a.Permissions), &perms)
 	}
 	return &contracts.AdminDTO{
-		ID:          a.ID,
-		Email:       a.Email,
-		Username:    a.Username,
-		Name:        a.Name,
-		Role:        a.Role,
-		BranchID:    a.BranchID,
-		BranchName:  branchName,
-		Permissions: perms,
+		ID:           a.ID,
+		Email:        a.Email,
+		Username:     a.Username,
+		Name:         a.Name,
+		Role:         a.Role,
+		BranchID:     a.BranchID,
+		BranchName:   branchName,
+		Permissions:  perms,
+		GoogleEmail:  a.GoogleEmail,
+		GoogleAvatar: a.GoogleAvatar,
 	}, nil
 }
 

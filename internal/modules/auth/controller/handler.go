@@ -68,6 +68,13 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if empVal, exists := c.Get("employee"); exists && empVal != nil {
+			c.JSON(http.StatusOK, empVal)
+			return
+		}
+	}
+
 	adminIDVal, exists := c.Get("admin_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
@@ -81,7 +88,20 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"user": adminDTO})
+	c.JSON(http.StatusOK, gin.H{
+		"user":             adminDTO,
+		"id":               adminDTO.ID,
+		"name":             adminDTO.Name,
+		"email":            adminDTO.Email,
+		"username":         adminDTO.Username,
+		"role":             adminDTO.Role,
+		"permissions":      adminDTO.Permissions,
+		"branch_id":        adminDTO.BranchID,
+		"branch_name":      adminDTO.BranchName,
+		"is_google_linked": adminDTO.GoogleEmail != "",
+		"google_email":     adminDTO.GoogleEmail,
+		"google_avatar":    adminDTO.GoogleAvatar,
+	})
 }
 
 func (h *AuthHandler) LinkGoogle(c *gin.Context) {

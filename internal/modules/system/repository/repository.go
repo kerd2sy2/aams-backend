@@ -597,11 +597,11 @@ func (r *gormSystemRepository) GetDailyReport(ctx context.Context, dateStr strin
 	query := r.db.WithContext(ctx).Table("work_sessions").
 		Select("work_sessions.*, employees.name as employee_name, employees.key_number, branches.name as branch_name").
 		Joins("LEFT JOIN employees ON employees.id = work_sessions.employee_id").
-		Joins("LEFT JOIN branches ON branches.id = work_sessions.branch_id").
+		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
 		Where("DATE(work_sessions.start_time) = ?", dateStr)
 
 	if branchID != nil {
-		query = query.Where("work_sessions.branch_id = ?", *branchID)
+		query = query.Where("employees.branch_id = ?", *branchID)
 	}
 
 	var rows []struct {
@@ -664,10 +664,10 @@ func (r *gormSystemRepository) GetReports(ctx context.Context, filter dto.Report
 	query := r.db.WithContext(ctx).Table("work_sessions").
 		Select("work_sessions.*, employees.name as employee_name, employees.national_id, employees.key_number, branches.name as branch_name").
 		Joins("LEFT JOIN employees ON employees.id = work_sessions.employee_id").
-		Joins("LEFT JOIN branches ON branches.id = work_sessions.branch_id")
+		Joins("LEFT JOIN branches ON branches.id = employees.branch_id")
 
 	if filter.BranchID != nil {
-		query = query.Where("work_sessions.branch_id = ?", *filter.BranchID)
+		query = query.Where("employees.branch_id = ?", *filter.BranchID)
 	}
 	if filter.StartDate != "" {
 		query = query.Where("work_sessions.start_time >= ?", filter.StartDate)
