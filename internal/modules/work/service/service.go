@@ -34,6 +34,7 @@ type ExternalEmployeeProvider interface {
 	GetEmployee(ctx context.Context, id uuid.UUID) (*EmployeeData, error)
 	UpdateEmployeeOnStartWork(ctx context.Context, id uuid.UUID, appID, appType, motorcycleNumber string) error
 	UpdateEmployeeOnEndWork(ctx context.Context, id uuid.UUID, addedDistance float64, totalOrders int) error
+	SendShiftApprovalNotification(ctx context.Context, empID uuid.UUID, sessionID uuid.UUID, ordersCount int, fuelCost float64) error
 }
 
 type VehicleData struct {
@@ -296,6 +297,10 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 		return nil, fmt.Errorf("فشل في إنهاء الشفت: %w", err)
 	}
 
+	if isSupervisor && session.EmployeeID != nil && s.empProvider != nil {
+		_ = s.empProvider.SendShiftApprovalNotification(ctx, *session.EmployeeID, session.ID, session.OrdersCount, session.FuelCost)
+	}
+
 	return session, nil
 }
 
@@ -367,9 +372,12 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 		return nil, err
 	}
 
-	// If session wasn't previously reviewed and is now approved, credit orders to employee
-	if !wasReviewed && session.IsReviewed && s.empProvider != nil && session.EmployeeID != nil && session.OrdersCount > 0 {
-		_ = s.empProvider.UpdateEmployeeOnEndWork(ctx, *session.EmployeeID, 0, session.OrdersCount)
+	// If session wasn't previously reviewed and is now approved, credit orders to employee and notify
+	if !wasReviewed && session.IsReviewed && s.empProvider != nil && session.EmployeeID != nil {
+		if session.OrdersCount > 0 {
+			_ = s.empProvider.UpdateEmployeeOnEndWork(ctx, *session.EmployeeID, 0, session.OrdersCount)
+		}
+		_ = s.empProvider.SendShiftApprovalNotification(ctx, *session.EmployeeID, session.ID, session.OrdersCount, session.FuelCost)
 	}
 
 	return session, nil

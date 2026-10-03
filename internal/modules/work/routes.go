@@ -3,6 +3,7 @@ package work
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"delivery-backend/internal/modules/work/controller"
 	"delivery-backend/internal/modules/work/repository"
 	"delivery-backend/internal/modules/work/service"
+	legacyService "delivery-backend/internal/service"
 )
 
 type gormEmployeeAdapter struct {
@@ -85,6 +87,62 @@ func (a *gormEmployeeAdapter) UpdateEmployeeOnEndWork(ctx context.Context, id uu
 		"total_distance":  gorm.Expr("total_distance + ?", addedDistance),
 		"total_orders":    gorm.Expr("total_orders + ?", totalOrders),
 	}).Error
+}
+
+func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context, empID uuid.UUID, sessionID uuid.UUID, ordersCount int, fuelCost float64) error {
+	var emp struct {
+		Name      string     `gorm:"column:name"`
+		Language  string     `gorm:"column:language"`
+		PushToken string     `gorm:"column:push_token"`
+		BranchID  *uuid.UUID `gorm:"column:branch_id"`
+	}
+	if err := a.db.WithContext(ctx).Table("employees").Where("id = ? AND deleted_at IS NULL", empID).First(&emp).Error; err != nil {
+		return err
+	}
+
+	lang := strings.ToLower(strings.TrimSpace(emp.Language))
+	var title, body string
+	switch lang {
+	case "en":
+		title = "Shift Approved ✅"
+		body = fmt.Sprintf("Supervisor approved your shift: %d Orders | Fuel: %.2f SAR", ordersCount, fuelCost)
+	case "bn":
+		title = "শিফট অনুমোদিত হয়েছে ✅"
+		body = fmt.Sprintf("সুপারভাইজার আপনার শিফট অনুমোদন করেছেন: %d টি অর্ডার | জ্বালানী: %.2f SAR", ordersCount, fuelCost)
+	case "ur":
+		title = "شفت کی تصدیق ہو گئی ✅"
+		body = fmt.Sprintf("نگران نے آپ کے آرڈرز کی تصدیق کر دی: %d آرڈرز | ایندھن: %.2f ريال", ordersCount, fuelCost)
+	default: // "ar"
+		title = "تمت المصادقة على شفت العمل ✅"
+		body = fmt.Sprintf("وافق المشرف على طلباتك: %d طلب | بنزين: %.2f ريال", ordersCount, fuelCost)
+	}
+
+	// 1. Save in-app notification in DB
+	_ = a.db.WithContext(ctx).Table("notifications").Create(map[string]interface{}{
+		"id":          uuid.New(),
+		"employee_id": empID,
+		"branch_id":   emp.BranchID,
+		"title":       title,
+		"body":        body,
+		"type":        "SESSION_APPROVED",
+		"status":      "unread",
+		"created_at":  time.Now(),
+		"updated_at":  time.Now(),
+	}).Error
+
+	// 2. Send push notification to courier's phone
+	if emp.PushToken != "" {
+		token := emp.PushToken
+		sid := sessionID.String()
+		go legacyService.SendFCMBroadcast([]string{token}, title, body, map[string]string{
+			"type":        "SESSION_APPROVED",
+			"sessionId":   sid,
+			"session_id":  sid,
+			"ordersCount": fmt.Sprintf("%d", ordersCount),
+			"fuelCost":    fmt.Sprintf("%.2f", fuelCost),
+		})
+	}
+	return nil
 }
 
 type gormVehicleAdapter struct {

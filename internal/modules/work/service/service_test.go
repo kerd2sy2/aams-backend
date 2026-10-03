@@ -105,6 +105,10 @@ func (m *mockEmployeeProvider) UpdateEmployeeOnEndWork(ctx context.Context, id u
 	return nil
 }
 
+func (m *mockEmployeeProvider) SendShiftApprovalNotification(ctx context.Context, empID uuid.UUID, sessionID uuid.UUID, ordersCount int, fuelCost float64) error {
+	return nil
+}
+
 type mockVehicleProvider struct{}
 
 func (v *mockVehicleProvider) GetVehicleLastKM(ctx context.Context, plateNumber string) (float64, error) {
