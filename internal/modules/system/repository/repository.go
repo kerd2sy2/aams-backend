@@ -531,6 +531,9 @@ func (r *gormSystemRepository) getTableName(itemType string) string {
 // ---------------- Dashboard & Stats ----------------
 
 func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *uuid.UUID) (*dto.DashboardStatsResponse, error) {
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
 	resp := &dto.DashboardStatsResponse{
 		DistanceChart:    make([]dto.ChartDataPoint, 0),
 		OrdersChart:      make([]dto.ChartDataPoint, 0),
@@ -544,7 +547,7 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 		empQuery = empQuery.Where("branch_id = ?", *branchID)
 	}
 	empQuery.Count(&resp.TotalEmployees)
-	empQuery.Where("status = ?", "working").Count(&resp.ActiveEmployees)
+	empQuery.Where("is_working = ?", true).Count(&resp.ActiveEmployees)
 
 	// 2. Vehicle counts
 	vehQuery := r.db.WithContext(ctx).Table("vehicles").Where("deleted_at IS NULL")
@@ -554,24 +557,128 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 	vehQuery.Count(&resp.TotalMotorcycles)
 	vehQuery.Where("status = ?", "WORKING").Count(&resp.ActiveMotorcycles)
 
-	// 3. Today's work sessions
-	todayStart := time.Now().Truncate(24 * time.Hour)
-	sessionQuery := r.db.WithContext(ctx).Table("work_sessions").Where("start_time >= ?", todayStart)
+	// 3. Work sessions base query helper
+	baseQuery := func() *gorm.DB {
+		q := r.db.WithContext(ctx).Table("work_sessions")
+		if branchID != nil {
+			q = q.Joins("JOIN employees ON employees.id = work_sessions.employee_id").
+				Where("employees.branch_id = ?", *branchID)
+		}
+		return q
+	}
+
+	// Today unique employees worked
+	baseQuery().Where("work_sessions.start_time >= ?", startOfDay).Distinct("work_sessions.employee_id").Count(&resp.TodayEmployees)
+
+	// Currently active working sessions
+	baseQuery().Where("work_sessions.status = ?", "ACTIVE").Count(&resp.WorkingEmployees)
+
+	// Finished shifts today
+	baseQuery().Where("work_sessions.start_time >= ? AND work_sessions.status = ?", startOfDay, "COMPLETED").Count(&resp.FinishedEmployees)
+
+	// Today's Orders Sum (only reviewed or all completed)
+	var ordersSum struct{ Total int64 }
+	baseQuery().Select("COALESCE(SUM(work_sessions.orders_count), 0) as total").
+		Where("work_sessions.start_time >= ?", startOfDay).
+		Scan(&ordersSum)
+	resp.TodayOrders = ordersSum.Total
+
+	// Today's Distance Sum
+	var distSum struct{ Total float64 }
+	baseQuery().Select("COALESCE(SUM(work_sessions.distance), 0) as total").
+		Where("work_sessions.start_time >= ?", startOfDay).
+		Scan(&distSum)
+	resp.TodayDistance = distSum.Total
+
+	// Today's Fuel Cost Sum
+	var fuelSum struct{ Total float64 }
+	baseQuery().Select("COALESCE(SUM(work_sessions.fuel_cost), 0) as total").
+		Where("work_sessions.start_time >= ?", startOfDay).
+		Scan(&fuelSum)
+	resp.TodayFuelCost = fuelSum.Total
+
+	// Average Working Hours today
+	var completedRows []struct {
+		StartTime time.Time  `gorm:"column:start_time"`
+		EndTime   *time.Time `gorm:"column:end_time"`
+	}
+	baseQuery().Select("work_sessions.start_time, work_sessions.end_time").
+		Where("work_sessions.start_time >= ? AND work_sessions.status = ?", startOfDay, "COMPLETED").
+		Scan(&completedRows)
+	if len(completedRows) > 0 {
+		var totalHours float64
+		for _, s := range completedRows {
+			if s.EndTime != nil {
+				totalHours += s.EndTime.Sub(s.StartTime).Hours()
+			}
+		}
+		resp.AvgWorkingHours = totalHours / float64(len(completedRows))
+	}
+
+	// 4. Chart Data
+	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
+
+	type sessionAgg struct {
+		StartTime time.Time `gorm:"column:start_time"`
+		Distance  float64   `gorm:"column:distance"`
+		Orders    int       `gorm:"column:orders_count"`
+		Fuel      float64   `gorm:"column:fuel_cost"`
+	}
+	var aggSessions []sessionAgg
+	chartQ := r.db.WithContext(ctx).Table("work_sessions").
+		Select("work_sessions.start_time, work_sessions.distance, work_sessions.orders_count, work_sessions.fuel_cost").
+		Where("work_sessions.start_time >= ?", firstOfMonth)
 	if branchID != nil {
-		sessionQuery = sessionQuery.Where("branch_id = ?", *branchID)
+		chartQ = chartQ.Joins("JOIN employees ON employees.id = work_sessions.employee_id").
+			Where("employees.branch_id = ?", *branchID)
+	}
+	chartQ.Scan(&aggSessions)
+
+	type dayTotals struct {
+		dist float64
+		ord  float64
+		fuel float64
+	}
+	dayMap := make(map[string]*dayTotals, 31)
+	for _, s := range aggSessions {
+		key := s.StartTime.Format("2006-01-02")
+		if dayMap[key] == nil {
+			dayMap[key] = &dayTotals{}
+		}
+		dayMap[key].dist += s.Distance
+		dayMap[key].ord += float64(s.Orders)
+		dayMap[key].fuel += s.Fuel
 	}
 
-	var sessionStats struct {
-		Orders   int64   `gorm:"column:orders"`
-		Distance float64 `gorm:"column:distance"`
-		Fuel     float64 `gorm:"column:fuel"`
+	// Last 7 days for distance & fuel
+	for i := 6; i >= 0; i-- {
+		day := now.AddDate(0, 0, -i)
+		dayStr := day.Format("2006-01-02")
+		totals := dayMap[dayStr]
+		var dist, fuel float64
+		if totals != nil {
+			dist = totals.dist
+			fuel = totals.fuel
+		}
+		resp.DistanceChart = append(resp.DistanceChart, dto.ChartDataPoint{Date: dayStr, Value: dist})
+		resp.FuelCostChart = append(resp.FuelCostChart, dto.ChartDataPoint{Date: dayStr, Value: fuel})
 	}
-	sessionQuery.Select("COALESCE(SUM(orders_count), 0) as orders, COALESCE(SUM(distance), 0) as distance, COALESCE(SUM(fuel_cost), 0) as fuel").Scan(&sessionStats)
-	resp.TodayOrders = sessionStats.Orders
-	resp.TodayDistance = sessionStats.Distance
-	resp.TodayFuelCost = sessionStats.Fuel
 
-	// 4. Latest activities
+	// Full month for orders
+	monthDays := lastOfMonth.Day()
+	for i := 1; i <= monthDays; i++ {
+		day := time.Date(now.Year(), now.Month(), i, 0, 0, 0, 0, now.Location())
+		dayStr := day.Format("2006-01-02")
+		totals := dayMap[dayStr]
+		var ord float64
+		if totals != nil {
+			ord = totals.ord
+		}
+		resp.OrdersChart = append(resp.OrdersChart, dto.ChartDataPoint{Date: dayStr, Value: ord})
+	}
+
+	// 5. Latest activities
 	latestLogs, _ := r.GetLatestAuditLogs(ctx, 10, branchID)
 	for _, l := range latestLogs {
 		resp.LatestActivities = append(resp.LatestActivities, dto.AuditLogResponse{

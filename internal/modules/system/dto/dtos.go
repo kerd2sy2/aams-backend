@@ -9,6 +9,9 @@ import (
 // Dashboard DTOs
 type DashboardStatsResponse struct {
 	TotalEmployees    int64              `json:"total_employees"`
+	TodayEmployees    int64              `json:"today_employees"`
+	WorkingEmployees  int64              `json:"working_employees"`
+	FinishedEmployees int64              `json:"finished_employees"`
 	ActiveEmployees   int64              `json:"active_employees"`
 	TotalMotorcycles  int64              `json:"total_motorcycles"`
 	ActiveMotorcycles int64              `json:"active_motorcycles"`
