@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -508,6 +509,7 @@ func (h *NotificationHandler) SaveEmployeePushToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات غير صالحة"})
 		return
 	}
+	log.Printf("[PushToken] employee=%s language=%q has_token=%t", empID, req.Language, req.PushToken != "")
 
 	if err := h.svc.SaveEmployeePushToken(c.Request.Context(), empID, req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل حفظ رمز الإشعارات واللغة"})
