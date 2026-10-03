@@ -509,6 +509,15 @@ func (h *HRLegalHandler) GetAllViolations(c *gin.Context) {
 		return
 	}
 
+	// If the authenticated user is an employee (delegate), FORCE filter to strictly their own employee_id
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if empIDVal, exists := c.Get("employee_id"); exists {
+			if empID, ok := empIDVal.(uuid.UUID); ok {
+				filter.EmployeeID = &empID
+			}
+		}
+	}
+
 	list, total, totalAmount, deductedAmount, err := h.svc.GetAllViolations(c.Request.Context(), filter, getBranchID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

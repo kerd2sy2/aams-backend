@@ -211,8 +211,8 @@ type UpdateTrafficViolationRequest struct {
 }
 
 type TrafficViolationFilter struct {
-	BranchID   *uuid.UUID `form:"-"`
-	EmployeeID *uuid.UUID `form:"-"`
+	BranchID   *uuid.UUID `form:"branch_id"`
+	EmployeeID *uuid.UUID `form:"employee_id"`
 	Status     string     `form:"status"`
 	Search     string     `form:"search"`
 	StartDate  string     `form:"start_date"`
@@ -258,8 +258,8 @@ type UpdateFuelLogRequest struct {
 }
 
 type FuelLogFilter struct {
-	BranchID   *uuid.UUID `form:"-"`
-	EmployeeID *uuid.UUID `form:"-"`
+	BranchID   *uuid.UUID `form:"branch_id"`
+	EmployeeID *uuid.UUID `form:"employee_id"`
 	Plate      string     `form:"plate"`
 	StartDate  string     `form:"start_date"`
 	EndDate    string     `form:"end_date"`

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -322,14 +321,7 @@ func (r *gormHRLegalRepository) FindViolations(ctx context.Context, filter dto.T
 	db := r.db.WithContext(ctx).Model(&domain.TrafficViolation{})
 
 	if filter.EmployeeID != nil {
-		var emp struct {
-			MotorcycleNumber string `gorm:"column:motorcycle_number"`
-		}
-		if err := r.db.WithContext(ctx).Table("employees").Select("motorcycle_number").Where("id = ? AND deleted_at IS NULL", *filter.EmployeeID).First(&emp).Error; err == nil && strings.TrimSpace(emp.MotorcycleNumber) != "" {
-			db = db.Where("traffic_violations.employee_id = ? OR (traffic_violations.employee_id IS NULL AND traffic_violations.vehicle_plate = ?)", *filter.EmployeeID, strings.TrimSpace(emp.MotorcycleNumber))
-		} else {
-			db = db.Where("traffic_violations.employee_id = ?", *filter.EmployeeID)
-		}
+		db = db.Where("traffic_violations.employee_id = ?", *filter.EmployeeID)
 	} else if filter.BranchID != nil {
 		db = db.Where("traffic_violations.branch_id = ?", *filter.BranchID)
 	}
