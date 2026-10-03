@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,7 +43,7 @@ type SystemRepository interface {
 	MarkAllEmployeeBroadcastsRead(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, registeredAt time.Time) error
 	SubmitVote(ctx context.Context, vote *domain.BroadcastVote) error
 	FindVotesForBroadcast(ctx context.Context, broadcastID uuid.UUID) ([]dto.BroadcastVoteItemDTO, error)
-	UpdateEmployeePushToken(ctx context.Context, empID uuid.UUID, token string) error
+	UpdateEmployeePushToken(ctx context.Context, empID uuid.UUID, token, language string) error
 
 	// Archive
 	GetArchivedItems(ctx context.Context, filter dto.ArchiveFilter) ([]dto.ArchivedItemDTO, int64, dto.ArchiveStatsDTO, error)
@@ -414,8 +415,19 @@ func (r *gormSystemRepository) FindVotesForBroadcast(ctx context.Context, broadc
 	return result, nil
 }
 
-func (r *gormSystemRepository) UpdateEmployeePushToken(ctx context.Context, empID uuid.UUID, token string) error {
-	return r.db.WithContext(ctx).Table("employees").Where("id = ?", empID).Update("push_token", token).Error
+func (r *gormSystemRepository) UpdateEmployeePushToken(ctx context.Context, empID uuid.UUID, token, language string) error {
+	updates := map[string]interface{}{}
+	if strings.TrimSpace(token) != "" {
+		updates["push_token"] = strings.TrimSpace(token)
+	}
+	cleanLang := strings.ToLower(strings.TrimSpace(language))
+	if cleanLang != "" {
+		updates["language"] = cleanLang
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Table("employees").Where("id = ?", empID).Updates(updates).Error
 }
 
 // ---------------- Archive & Trash ----------------

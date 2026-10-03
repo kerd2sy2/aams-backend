@@ -349,7 +349,7 @@ func (s *notificationService) SubmitVote(ctx context.Context, empID uuid.UUID, b
 }
 
 func (s *notificationService) SaveEmployeePushToken(ctx context.Context, empID uuid.UUID, req dto.PushTokenRequest) error {
-	return s.repo.UpdateEmployeePushToken(ctx, empID, req.PushToken)
+	return s.repo.UpdateEmployeePushToken(ctx, empID, req.PushToken, req.Language)
 }
 
 // ---------------- Archive Service ----------------

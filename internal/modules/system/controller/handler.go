@@ -478,25 +478,43 @@ func (h *NotificationHandler) SubmitVote(c *gin.Context) {
 }
 
 func (h *NotificationHandler) SaveEmployeePushToken(c *gin.Context) {
-	empIDVal, exists := c.Get("employee_id")
-	if !exists {
+	var empID uuid.UUID
+	if empIDVal, exists := c.Get("employee_id"); exists {
+		if id, ok := empIDVal.(uuid.UUID); ok && id != uuid.Nil {
+			empID = id
+		}
+	}
+	if empID == uuid.Nil {
+		if qID := c.Query("employee_id"); qID != "" {
+			if id, err := uuid.Parse(qID); err == nil && id != uuid.Nil {
+				empID = id
+			}
+		}
+	}
+	if empID == uuid.Nil {
+		if aIDVal, exists := c.Get("admin_id"); exists {
+			if id, ok := aIDVal.(uuid.UUID); ok && id != uuid.Nil {
+				empID = id
+			}
+		}
+	}
+	if empID == uuid.Nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
 		return
 	}
-	empID, _ := empIDVal.(uuid.UUID)
 
 	var req dto.PushTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "رمز الإشعارات مطلوب"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات غير صالحة"})
 		return
 	}
 
 	if err := h.svc.SaveEmployeePushToken(c.Request.Context(), empID, req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل حفظ رمز الإشعارات"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل حفظ رمز الإشعارات واللغة"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "تم حفظ رمز الإشعارات بنجاح"})
+	c.JSON(http.StatusOK, gin.H{"message": "تم حفظ رمز الإشعارات واللغة بنجاح"})
 }
 
 // ---------------- Archive Handler ----------------
