@@ -509,7 +509,21 @@ func (h *HRLegalHandler) GetAllViolations(c *gin.Context) {
 		return
 	}
 
-	// If the authenticated user is an employee (delegate), FORCE filter to strictly their own employee_id
+	// 1. Explicitly parse employee_id if provided in query
+	if empStr := c.Query("employee_id"); empStr != "" {
+		if parsed, err := uuid.Parse(empStr); err == nil {
+			filter.EmployeeID = &parsed
+		}
+	}
+
+	// 2. Explicitly parse branch_id if provided in query
+	if branchStr := c.Query("branch_id"); branchStr != "" {
+		if parsed, err := uuid.Parse(branchStr); err == nil {
+			filter.BranchID = &parsed
+		}
+	}
+
+	// 3. If the authenticated user is an employee (delegate), FORCE filter to strictly their own employee_id
 	if isEmp, _ := c.Get("is_employee"); isEmp == true {
 		if empIDVal, exists := c.Get("employee_id"); exists {
 			if empID, ok := empIDVal.(uuid.UUID); ok {
