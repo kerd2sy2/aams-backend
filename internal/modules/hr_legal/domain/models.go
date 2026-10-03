@@ -162,3 +162,13 @@ func (f *FuelLog) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+type EmployeeInfo struct {
+	ID               uuid.UUID  `gorm:"column:id"`
+	Name             string     `gorm:"column:name"`
+	Language         string     `gorm:"column:language"`
+	PushToken        string     `gorm:"column:push_token"`
+	BranchID         *uuid.UUID `gorm:"column:branch_id"`
+	MotorcycleNumber string     `gorm:"column:motorcycle_number"`
+}
+

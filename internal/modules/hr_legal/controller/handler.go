@@ -509,16 +509,19 @@ func (h *HRLegalHandler) GetAllViolations(c *gin.Context) {
 		return
 	}
 
-	list, total, err := h.svc.GetAllViolations(c.Request.Context(), filter, getBranchID(c))
+	list, total, totalAmount, deductedAmount, err := h.svc.GetAllViolations(c.Request.Context(), filter, getBranchID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"data":  list,
-		"total": total,
-		"page":  filter.Page,
-		"limit": filter.GetEffectiveLimit(),
+		"data":            list,
+		"total":           total,
+		"total_amount":    totalAmount,
+		"deducted_amount": deductedAmount,
+		"total_count":     total,
+		"page":            filter.Page,
+		"limit":           filter.GetEffectiveLimit(),
 	})
 }
 

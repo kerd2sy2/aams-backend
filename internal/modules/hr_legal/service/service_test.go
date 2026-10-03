@@ -221,13 +221,30 @@ func (m *mockHRLegalRepo) FindViolationByID(ctx context.Context, id uuid.UUID) (
 	return v, nil
 }
 
-func (m *mockHRLegalRepo) FindViolations(ctx context.Context, filter dto.TrafficViolationFilter) ([]domain.TrafficViolation, int64, error) {
+func (m *mockHRLegalRepo) FindViolations(ctx context.Context, filter dto.TrafficViolationFilter) ([]domain.TrafficViolation, int64, float64, float64, error) {
 	var list []domain.TrafficViolation
+	var totalAmt, dedAmt float64
 	for _, v := range m.violations {
 		list = append(list, *v)
+		totalAmt += v.Amount
+		dedAmt += v.PaidAmount
 	}
-	return list, int64(len(list)), nil
+	return list, int64(len(list)), totalAmt, dedAmt, nil
 }
+
+func (m *mockHRLegalRepo) GetEmployeeInfo(ctx context.Context, empID uuid.UUID) (*domain.EmployeeInfo, error) {
+	return &domain.EmployeeInfo{
+		ID:        empID,
+		Name:      "Test Employee",
+		Language:  "ar",
+		PushToken: "test_token",
+	}, nil
+}
+
+func (m *mockHRLegalRepo) SaveNotification(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, title, body, notifType string) error {
+	return nil
+}
+
 
 // 6. Fuel Log
 func (m *mockHRLegalRepo) CreateFuelLog(ctx context.Context, log *domain.FuelLog) error {

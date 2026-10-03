@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,7 +50,9 @@ type HRLegalRepository interface {
 	UpdateViolation(ctx context.Context, v *domain.TrafficViolation) error
 	DeleteViolation(ctx context.Context, id uuid.UUID) error
 	FindViolationByID(ctx context.Context, id uuid.UUID) (*domain.TrafficViolation, error)
-	FindViolations(ctx context.Context, filter dto.TrafficViolationFilter) ([]domain.TrafficViolation, int64, error)
+	FindViolations(ctx context.Context, filter dto.TrafficViolationFilter) ([]domain.TrafficViolation, int64, float64, float64, error)
+	GetEmployeeInfo(ctx context.Context, empID uuid.UUID) (*domain.EmployeeInfo, error)
+	SaveNotification(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, title, body, notifType string) error
 
 	// Fuel Log
 	CreateFuelLog(ctx context.Context, log *domain.FuelLog) error
@@ -310,28 +313,53 @@ func (r *gormHRLegalRepository) FindViolationByID(ctx context.Context, id uuid.U
 	return &v, nil
 }
 
-func (r *gormHRLegalRepository) FindViolations(ctx context.Context, filter dto.TrafficViolationFilter) ([]domain.TrafficViolation, int64, error) {
+func (r *gormHRLegalRepository) FindViolations(ctx context.Context, filter dto.TrafficViolationFilter) ([]domain.TrafficViolation, int64, float64, float64, error) {
 	var list []domain.TrafficViolation
 	var total int64
+	var totalAmount float64
+	var deductedAmount float64
+
 	db := r.db.WithContext(ctx).Model(&domain.TrafficViolation{})
 
-	if filter.BranchID != nil {
-		db = db.Where("branch_id = ?", *filter.BranchID)
-	}
 	if filter.EmployeeID != nil {
-		db = db.Where("employee_id = ?", *filter.EmployeeID)
+		var emp struct {
+			MotorcycleNumber string `gorm:"column:motorcycle_number"`
+		}
+		if err := r.db.WithContext(ctx).Table("employees").Select("motorcycle_number").Where("id = ? AND deleted_at IS NULL", *filter.EmployeeID).First(&emp).Error; err == nil && strings.TrimSpace(emp.MotorcycleNumber) != "" {
+			db = db.Where("traffic_violations.employee_id = ? OR (traffic_violations.employee_id IS NULL AND traffic_violations.vehicle_plate = ?)", *filter.EmployeeID, strings.TrimSpace(emp.MotorcycleNumber))
+		} else {
+			db = db.Where("traffic_violations.employee_id = ?", *filter.EmployeeID)
+		}
+	} else if filter.BranchID != nil {
+		db = db.Where("traffic_violations.branch_id = ?", *filter.BranchID)
 	}
+
 	if filter.Status != "" {
-		db = db.Where("status = ?", filter.Status)
+		db = db.Where("traffic_violations.status = ?", filter.Status)
+	}
+	if filter.StartDate != "" {
+		db = db.Where("traffic_violations.violation_date >= ?", filter.StartDate+" 00:00:00")
+	}
+	if filter.EndDate != "" {
+		db = db.Where("traffic_violations.violation_date <= ?", filter.EndDate+" 23:59:59")
 	}
 	if filter.Search != "" {
 		s := "%" + filter.Search + "%"
-		db = db.Where("violation_number ILIKE ? OR vehicle_plate ILIKE ? OR reason ILIKE ?", s, s, s)
+		db = db.Where("traffic_violations.violation_number ILIKE ? OR traffic_violations.vehicle_plate ILIKE ? OR traffic_violations.reason ILIKE ?", s, s, s)
 	}
 
 	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, err
+		return nil, 0, 0, 0, err
 	}
+
+	type Sums struct {
+		TotalAmount    float64 `gorm:"column:total_amount"`
+		DeductedAmount float64 `gorm:"column:deducted_amount"`
+	}
+	var sums Sums
+	_ = db.Select("COALESCE(SUM(amount), 0) AS total_amount, COALESCE(SUM(paid_amount), 0) AS deducted_amount").Scan(&sums).Error
+	totalAmount = sums.TotalAmount
+	deductedAmount = sums.DeductedAmount
 
 	limit := filter.GetEffectiveLimit()
 	page := filter.Page
@@ -340,9 +368,33 @@ func (r *gormHRLegalRepository) FindViolations(ctx context.Context, filter dto.T
 	}
 	offset := (page - 1) * limit
 
-	err := db.Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
-	return list, total, err
+	err := db.Order("traffic_violations.violation_date DESC, traffic_violations.created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
+	return list, total, totalAmount, deductedAmount, err
 }
+
+func (r *gormHRLegalRepository) GetEmployeeInfo(ctx context.Context, empID uuid.UUID) (*domain.EmployeeInfo, error) {
+	var emp domain.EmployeeInfo
+	err := r.db.WithContext(ctx).Table("employees").Where("id = ? AND deleted_at IS NULL", empID).First(&emp).Error
+	if err != nil {
+		return nil, err
+	}
+	return &emp, nil
+}
+
+func (r *gormHRLegalRepository) SaveNotification(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, title, body, notifType string) error {
+	return r.db.WithContext(ctx).Table("notifications").Create(map[string]interface{}{
+		"id":          uuid.New(),
+		"employee_id": empID,
+		"branch_id":   branchID,
+		"title":       title,
+		"body":        body,
+		"type":        notifType,
+		"status":      "unread",
+		"created_at":  time.Now(),
+		"updated_at":  time.Now(),
+	}).Error
+}
+
 
 // 6. Fuel Log
 func (r *gormHRLegalRepository) CreateFuelLog(ctx context.Context, log *domain.FuelLog) error {

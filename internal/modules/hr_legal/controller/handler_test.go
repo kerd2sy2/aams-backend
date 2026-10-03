@@ -149,8 +149,8 @@ func (m *mockHRLegalService) GetViolationByID(ctx context.Context, id uuid.UUID)
 	return nil, nil
 }
 
-func (m *mockHRLegalService) GetAllViolations(ctx context.Context, filter dto.TrafficViolationFilter, adminBranchID *uuid.UUID) ([]domain.TrafficViolation, int64, error) {
-	return nil, 0, nil
+func (m *mockHRLegalService) GetAllViolations(ctx context.Context, filter dto.TrafficViolationFilter, adminBranchID *uuid.UUID) ([]domain.TrafficViolation, int64, float64, float64, error) {
+	return nil, 0, 0, 0, nil
 }
 
 func (m *mockHRLegalService) CreateFuelLog(ctx context.Context, req dto.CreateFuelLogRequest, adminBranchID *uuid.UUID) (*domain.FuelLog, error) {
