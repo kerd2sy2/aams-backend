@@ -36,8 +36,21 @@ type ExternalEmployeeProvider interface {
 	UpdateEmployeeOnEndWork(ctx context.Context, id uuid.UUID, addedDistance float64, totalOrders int) error
 }
 
+type VehicleData struct {
+	ID                uuid.UUID
+	PlateNumber       string
+	VehicleType       string
+	CurrentKM         float64
+	LastOilChangeKM   float64
+	TotalDistance     float64
+	IsOdometerBroken  bool
+	RegistrationImage string
+	Status            string
+}
+
 type ExternalVehicleProvider interface {
 	GetVehicleLastKM(ctx context.Context, plateNumber string) (float64, error)
+	GetVehicleInfo(ctx context.Context, plateNumber string) (*VehicleData, error)
 	UpdateVehicleKM(ctx context.Context, plateNumber string, km float64) error
 	HasActiveMaintenance(ctx context.Context, motorcycleNumber string) (bool, error)
 }
@@ -103,28 +116,51 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 		return nil, errors.New("الموظف لديه شفت عمل نشط بالفعل حالياً")
 	}
 
+	motorcycleNumber := emp.MotorcycleNumber
+	if req.MotorcycleNumber != "" {
+		motorcycleNumber = req.MotorcycleNumber
+	}
+
 	vehicleType := emp.VehicleType
 	if req.VehicleType != "" {
 		vehicleType = req.VehicleType
 	}
 
-	distanceSinceOil := emp.TotalDistance - emp.LastOilChangeDistance
-	interval := oilChangeInterval(vehicleType)
-	if distanceSinceOil >= interval {
-		return nil, fmt.Errorf("يجب تغيير الزيت أولاً! المسافة المقطوعة منذ آخر تغيير زيت: %.0f كم (الحد الأقصى %.0f كم)", distanceSinceOil, interval)
+	// 1. Vehicle-based Oil Check: Calculate oil based on motorcycle rather than employee
+	var vehicleInfo *VehicleData
+	if motorcycleNumber != "" && s.vehicleProvider != nil {
+		vehicleInfo, _ = s.vehicleProvider.GetVehicleInfo(ctx, motorcycleNumber)
 	}
 
-	appID := emp.ApplicationID
-	if req.ApplicationID != "" {
-		appID = req.ApplicationID
-	}
-	appType := emp.ApplicationType
-	if req.ApplicationType != "" {
-		appType = req.ApplicationType
-	}
-	motorcycleNumber := emp.MotorcycleNumber
-	if req.MotorcycleNumber != "" {
-		motorcycleNumber = req.MotorcycleNumber
+	if vehicleInfo != nil {
+		if vehicleInfo.VehicleType != "" {
+			vehicleType = vehicleInfo.VehicleType
+		}
+		interval := oilChangeInterval(vehicleType)
+
+		currKM := vehicleInfo.CurrentKM
+		if req.StartKM > currKM {
+			currKM = req.StartKM
+		}
+
+		distanceSinceOil := currKM - vehicleInfo.LastOilChangeKM
+		if distanceSinceOil < 0 {
+			distanceSinceOil = 0
+		}
+
+		if distanceSinceOil >= interval {
+			return nil, fmt.Errorf("يجب تغيير زيت الدباب (%s) أولاً! المسافة المقطوعة منذ آخر تغيير زيت: %.0f كم (الحد الأقصى %.0f كم)", motorcycleNumber, distanceSinceOil, interval)
+		}
+	} else if motorcycleNumber == "" {
+		// Fallback for employee with no bike assigned
+		distanceSinceOil := emp.TotalDistance - emp.LastOilChangeDistance
+		if distanceSinceOil < 0 {
+			distanceSinceOil = 0
+		}
+		interval := oilChangeInterval(vehicleType)
+		if distanceSinceOil >= interval {
+			return nil, fmt.Errorf("يجب تغيير الزيت أولاً! المسافة المقطوعة منذ آخر تغيير زيت: %.0f كم (الحد الأقصى %.0f كم)", distanceSinceOil, interval)
+		}
 	}
 
 	startImg := req.StartKMImage
@@ -139,6 +175,15 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 		if savedUrl, err := s.storage.SaveBase64Image(startPlateImg, "plates"); err == nil && savedUrl != "" {
 			startPlateImg = savedUrl
 		}
+	}
+
+	appID := emp.ApplicationID
+	if req.ApplicationID != "" {
+		appID = req.ApplicationID
+	}
+	appType := emp.ApplicationType
+	if req.ApplicationType != "" {
+		appType = req.ApplicationType
 	}
 
 	session := &domain.WorkSession{
@@ -325,19 +370,44 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 	lastSession, _ := s.repo.FindLastCompletedSession(ctx, empID)
 	if lastSession != nil {
 		resp.LastKM = lastSession.EndKM
+		resp.LastEndKM = lastSession.EndKM
+		resp.LastStartKM = lastSession.StartKM
 		resp.MotorcycleNumber = lastSession.MotorcycleNumber
 	}
 
-	if motorcycleNumber != "" && s.vehicleProvider != nil {
-		vKM, err := s.vehicleProvider.GetVehicleLastKM(ctx, motorcycleNumber)
-		if err == nil {
-			resp.VehicleLastKM = vKM
-			if lastSession != nil && lastSession.MotorcycleNumber != motorcycleNumber {
+	targetBike := motorcycleNumber
+	if targetBike == "" && lastSession != nil {
+		targetBike = lastSession.MotorcycleNumber
+	}
+
+	if targetBike != "" && s.vehicleProvider != nil {
+		vInfo, err := s.vehicleProvider.GetVehicleInfo(ctx, targetBike)
+		if err == nil && vInfo != nil {
+			resp.VehicleLastKM = vInfo.CurrentKM
+			resp.LastKM = vInfo.CurrentKM
+			resp.LastEndKM = vInfo.CurrentKM
+			resp.RegistrationImage = vInfo.RegistrationImage
+			resp.IsOdometerBroken = vInfo.IsOdometerBroken
+
+			interval := oilChangeInterval(vInfo.VehicleType)
+			distanceSinceOil := vInfo.CurrentKM - vInfo.LastOilChangeKM
+			if distanceSinceOil < 0 {
+				distanceSinceOil = 0
+			}
+			remaining := interval - distanceSinceOil
+			if remaining < 0 {
+				remaining = 0
+			}
+			resp.DistanceSinceOil = distanceSinceOil
+			resp.RemainingOilKM = remaining
+			resp.NeedsOilChange = distanceSinceOil >= interval
+
+			if lastSession != nil && lastSession.MotorcycleNumber != targetBike {
 				resp.IsDifferentBike = true
 			}
-			if resp.VehicleLastKM > resp.LastKM && resp.LastKM > 0 {
+			if lastSession != nil && resp.VehicleLastKM > lastSession.EndKM && lastSession.EndKM > 0 {
 				resp.HasGap = true
-				resp.GapKM = resp.VehicleLastKM - resp.LastKM
+				resp.GapKM = resp.VehicleLastKM - lastSession.EndKM
 			}
 		}
 	}
@@ -358,8 +428,61 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 		return nil, errors.New("الموظف غير موجود")
 	}
 
+	bike := motorcycleNumber
+	if bike == "" {
+		bike = emp.MotorcycleNumber
+	}
+
+	var vehicleInfo *VehicleData
+	if bike != "" && s.vehicleProvider != nil {
+		vehicleInfo, _ = s.vehicleProvider.GetVehicleInfo(ctx, bike)
+	}
+
+	if vehicleInfo != nil {
+		vType := vehicleInfo.VehicleType
+		if vType == "" {
+			vType = emp.VehicleType
+		}
+		interval := oilChangeInterval(vType)
+		distanceSinceOil := vehicleInfo.CurrentKM - vehicleInfo.LastOilChangeKM
+		if distanceSinceOil < 0 {
+			distanceSinceOil = 0
+		}
+		needsOil := distanceSinceOil >= interval
+		remaining := interval - distanceSinceOil
+		if remaining < 0 {
+			remaining = 0
+		}
+		pct := (distanceSinceOil / interval) * 100
+		if pct > 100 {
+			pct = 100
+		}
+
+		hasMaintenance := false
+		if s.vehicleProvider != nil {
+			hasMaintenance, _ = s.vehicleProvider.HasActiveMaintenance(ctx, bike)
+		}
+
+		return &dto.OilChangeCheckResponse{
+			NeedsOilChange:          needsOil,
+			CurrentDistance:         vehicleInfo.CurrentKM,
+			LastOilChangeDistance:   vehicleInfo.LastOilChangeKM,
+			DistanceSinceOil:        distanceSinceOil,
+			RemainingDistance:       remaining,
+			Percentage:              pct,
+			Interval:                interval,
+			VehicleType:             vType,
+			HasActiveMaintenanceReq: hasMaintenance,
+			LastOilChangeDate:       "",
+		}, nil
+	}
+
+	// Fallback to employee profile if no vehicle is found
 	interval := oilChangeInterval(emp.VehicleType)
 	distanceSinceOil := emp.TotalDistance - emp.LastOilChangeDistance
+	if distanceSinceOil < 0 {
+		distanceSinceOil = 0
+	}
 	needsOil := distanceSinceOil >= interval
 	remaining := interval - distanceSinceOil
 	if remaining < 0 {
@@ -371,8 +494,8 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 	}
 
 	hasMaintenance := false
-	if motorcycleNumber != "" && s.vehicleProvider != nil {
-		hasMaintenance, _ = s.vehicleProvider.HasActiveMaintenance(ctx, motorcycleNumber)
+	if bike != "" && s.vehicleProvider != nil {
+		hasMaintenance, _ = s.vehicleProvider.HasActiveMaintenance(ctx, bike)
 	}
 
 	lastDate := ""

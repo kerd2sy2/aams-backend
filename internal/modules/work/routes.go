@@ -2,6 +2,8 @@ package work
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -83,24 +85,91 @@ type gormVehicleAdapter struct {
 }
 
 func (v *gormVehicleAdapter) GetVehicleLastKM(ctx context.Context, plateNumber string) (float64, error) {
-	var km float64
+	info, err := v.GetVehicleInfo(ctx, plateNumber)
+	if err != nil || info == nil {
+		return 0, err
+	}
+	return info.CurrentKM, nil
+}
+
+func (v *gormVehicleAdapter) GetVehicleInfo(ctx context.Context, plateNumber string) (*service.VehicleData, error) {
+	clean := strings.TrimSpace(plateNumber)
+	if clean == "" {
+		return nil, errors.New("رقم اللوحة فارغ")
+	}
+
+	var row struct {
+		ID                uuid.UUID `gorm:"column:id"`
+		PlateNumber       string    `gorm:"column:plate_number"`
+		VehicleType       string    `gorm:"column:vehicle_type"`
+		CurrentKM         float64   `gorm:"column:current_km"`
+		LastOilChangeKM   float64   `gorm:"column:last_oil_change_km"`
+		TotalDistance     float64   `gorm:"column:total_distance"`
+		IsOdometerBroken  bool      `gorm:"column:is_odometer_broken"`
+		RegistrationImage string    `gorm:"column:registration_image"`
+		Status            string    `gorm:"column:status"`
+	}
+
 	err := v.db.WithContext(ctx).Table("vehicles").
-		Select("COALESCE(current_km, 0)").
-		Where("plate_number = ? AND deleted_at IS NULL", plateNumber).
-		Scan(&km).Error
-	return km, err
+		Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?)", clean, clean+"%", "%"+clean+"%").
+		Order("CASE WHEN TRIM(plate_number) = '" + clean + "' THEN 0 ELSE 1 END").
+		First(&row).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &service.VehicleData{
+		ID:                row.ID,
+		PlateNumber:       row.PlateNumber,
+		VehicleType:       row.VehicleType,
+		CurrentKM:         row.CurrentKM,
+		LastOilChangeKM:   row.LastOilChangeKM,
+		TotalDistance:     row.TotalDistance,
+		IsOdometerBroken:  row.IsOdometerBroken,
+		RegistrationImage: row.RegistrationImage,
+		Status:            row.Status,
+	}, nil
 }
 
 func (v *gormVehicleAdapter) UpdateVehicleKM(ctx context.Context, plateNumber string, km float64) error {
-	return v.db.WithContext(ctx).Table("vehicles").
-		Where("plate_number = ? AND deleted_at IS NULL AND current_km < ?", plateNumber, km).
-		Update("current_km", km).Error
+	clean := strings.TrimSpace(plateNumber)
+	if clean == "" {
+		return nil
+	}
+	var vehicle struct {
+		ID        uuid.UUID `gorm:"column:id"`
+		CurrentKM float64   `gorm:"column:current_km"`
+	}
+	err := v.db.WithContext(ctx).Table("vehicles").
+		Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?)", clean, clean+"%", "%"+clean+"%").
+		Order("CASE WHEN TRIM(plate_number) = '" + clean + "' THEN 0 ELSE 1 END").
+		First(&vehicle).Error
+	if err == nil {
+		delta := km - vehicle.CurrentKM
+		if delta < 0 {
+			delta = 0
+		}
+		updates := map[string]interface{}{}
+		if km > vehicle.CurrentKM {
+			updates["current_km"] = km
+		}
+		if delta > 0 {
+			updates["total_distance"] = gorm.Expr("COALESCE(total_distance, 0) + ?", delta)
+		}
+		if len(updates) > 0 {
+			return v.db.WithContext(ctx).Table("vehicles").
+				Where("id = ?", vehicle.ID).
+				Updates(updates).Error
+		}
+	}
+	return nil
 }
 
 func (v *gormVehicleAdapter) HasActiveMaintenance(ctx context.Context, motorcycleNumber string) (bool, error) {
 	var count int64
+	clean := strings.TrimSpace(motorcycleNumber)
 	err := v.db.WithContext(ctx).Table("maintenance_requests").
-		Where("motorcycle_number = ? AND status IN ?", motorcycleNumber, []string{"pending", "in_progress"}).
+		Where("(TRIM(motorcycle_number) = ? OR motorcycle_number ILIKE ?) AND status IN ?", clean, clean+"%", []string{"pending", "in_progress", "OPEN"}).
 		Count(&count).Error
 	return count > 0, err
 }

@@ -65,10 +65,17 @@ type OilChangeCheckResponse struct {
 }
 
 type LastKMResponse struct {
-	LastKM           float64 `json:"last_km"`
-	VehicleLastKM    float64 `json:"vehicle_last_km"`
-	IsDifferentBike  bool    `json:"is_different_bike"`
-	MotorcycleNumber string  `json:"motorcycle_number"`
-	HasGap           bool    `json:"has_gap"`
-	GapKM            float64 `json:"gap_km"`
+	LastKM            float64 `json:"last_km"`
+	LastEndKM         float64 `json:"last_end_km"`
+	LastStartKM       float64 `json:"last_start_km"`
+	VehicleLastKM     float64 `json:"vehicle_last_km"`
+	IsDifferentBike   bool    `json:"is_different_bike"`
+	MotorcycleNumber  string  `json:"motorcycle_number"`
+	HasGap            bool    `json:"has_gap"`
+	GapKM             float64 `json:"gap_km"`
+	IsOdometerBroken  bool    `json:"is_odometer_broken"`
+	RegistrationImage string  `json:"registration_image"`
+	NeedsOilChange    bool    `json:"needs_oil_change"`
+	RemainingOilKM    float64 `json:"remaining_oil_km"`
+	DistanceSinceOil  float64 `json:"distance_since_oil"`
 }

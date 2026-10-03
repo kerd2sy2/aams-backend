@@ -111,6 +111,16 @@ func (v *mockVehicleProvider) GetVehicleLastKM(ctx context.Context, plateNumber 
 	return 1500, nil
 }
 
+func (v *mockVehicleProvider) GetVehicleInfo(ctx context.Context, plateNumber string) (*service.VehicleData, error) {
+	return &service.VehicleData{
+		PlateNumber:     plateNumber,
+		VehicleType:     "motorcycle",
+		CurrentKM:       1500,
+		LastOilChangeKM: 1500,
+		TotalDistance:   1500,
+	}, nil
+}
+
 func (v *mockVehicleProvider) UpdateVehicleKM(ctx context.Context, plateNumber string, km float64) error {
 	return nil
 }
