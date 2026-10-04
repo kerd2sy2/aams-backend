@@ -19,6 +19,7 @@ type CustodyTotals struct {
 	Fuel       float64 `json:"fuel"`
 	License    float64 `json:"license"`
 	SpareParts float64 `json:"spare_parts"`
+	Advance    float64 `json:"advance"`
 	Other      float64 `json:"other"`
 }
 

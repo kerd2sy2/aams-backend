@@ -57,6 +57,8 @@ func (s *custodyService) toResponse(day *domain.CustodyDay) *dto.CustodyDayRespo
 			resp.Totals.License += e.Amount
 		case "spare_parts":
 			resp.Totals.SpareParts += e.Amount
+		case "advance":
+			resp.Totals.Advance += e.Amount
 		default:
 			resp.Totals.Other += e.Amount
 		}
