@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -176,14 +178,19 @@ func sendExpoPushNotifications(tokens []string, title, body, imgURL string, extr
 		client := &http.Client{Timeout: 10 * time.Second}
 		req, err := http.NewRequest("POST", "https://exp.host/--/api/v2/push/send", bytes.NewBuffer(payloadBytes))
 		if err != nil {
+			log.Printf("[ExpoPush] Error creating request: %v", err)
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
 		resp, err := client.Do(req)
-		if err == nil {
-			defer resp.Body.Close()
+		if err != nil {
+			log.Printf("[ExpoPush] Error sending push to Expo: %v", err)
+			return
 		}
+		defer resp.Body.Close()
+		respBody, _ := io.ReadAll(resp.Body)
+		log.Printf("[ExpoPush] Sent %d notifications | Status: %d | Response: %s", len(tokens), resp.StatusCode, string(respBody))
 	}()
 }
 
