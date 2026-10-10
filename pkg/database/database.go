@@ -87,6 +87,17 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 
 	// Performance indexes for target orders
 	if rawDB, err := db.DB(); err == nil {
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS approved_by char(36)")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS rejected_by char(36)")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS approved_by_name varchar(100)")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS approved_by_username varchar(50)")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS rejected_by_name varchar(100)")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS rejected_by_username varchar(50)")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS approved_at timestamp with time zone")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS rejected_at timestamp with time zone")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS deleted_at timestamp with time zone")
+
 		rawDB.Exec("ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS registration_image text")
 		rawDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS push_token text")
 		rawDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS device_uuid varchar(100)")

@@ -320,14 +320,18 @@ type Investigation struct {
 	IsGuilty           *bool      `gorm:"default:false" json:"is_guilty"`
 	Notes              string     `gorm:"type:text" json:"notes"`
 	DeductionMonth     string     `gorm:"type:varchar(20)" json:"deduction_month"`              // ط´ظ‡ط± ط§ظ„ط®طµظ… ظ…ظ† ط§ظ„ط±ط§طھط¨ (ظ„ط³ظ„ظپط© ط§ظ„ظ†طھ)
-	Status             string     `gorm:"type:varchar(20);default:pending;index" json:"status"` // pending, approved, rejected (ظ„ظ„ط³ظ„ظپط© ظˆط³ظ„ظپط© ط§ظ„ظ†طھ)
-	ApprovedByName     string     `gorm:"type:varchar(100)" json:"approved_by_name"`
-	ApprovedByUsername string     `gorm:"type:varchar(50)" json:"approved_by_username"`
-	RejectedByName     string     `gorm:"type:varchar(100)" json:"rejected_by_name"`
-	RejectedByUsername string     `gorm:"type:varchar(50)" json:"rejected_by_username"`
-	ApprovedAt         *time.Time `json:"approved_at"`
-	RejectedAt         *time.Time `json:"rejected_at"`
-	CreatedAt          time.Time  `json:"created_at"`
+	Status             string         `gorm:"type:varchar(20);default:pending;index" json:"status"`
+	ApprovedBy         *uuid.UUID     `gorm:"type:char(36)" json:"approved_by"`
+	ApprovedByName     string         `gorm:"type:varchar(100)" json:"approved_by_name"`
+	ApprovedByUsername string         `gorm:"type:varchar(50)" json:"approved_by_username"`
+	RejectedBy         *uuid.UUID     `gorm:"type:char(36)" json:"rejected_by"`
+	RejectedByName     string         `gorm:"type:varchar(100)" json:"rejected_by_name"`
+	RejectedByUsername string         `gorm:"type:varchar(50)" json:"rejected_by_username"`
+	ApprovedAt         *time.Time     `json:"approved_at"`
+	RejectedAt         *time.Time     `json:"rejected_at"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 func (i *Investigation) BeforeCreate(tx *gorm.DB) error {
