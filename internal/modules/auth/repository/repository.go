@@ -190,6 +190,33 @@ func (r *gormOTPRepository) Create(ctx context.Context, otp *domain.OTPRequest) 
 	if otp.ID == uuid.Nil {
 		otp.ID = uuid.New()
 	}
+
+	// Auto-lookup employee details by NationalID if not already set
+	if otp.EmployeeID == nil || *otp.EmployeeID == uuid.Nil {
+		var emp struct {
+			ID         uuid.UUID
+			Name       string
+			BranchID   *uuid.UUID
+			BranchName string
+		}
+		if err := r.db.WithContext(ctx).Table("employees").
+			Select("employees.id, employees.name, employees.branch_id, branches.name as branch_name").
+			Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
+			Where("employees.national_id = ?", otp.NationalID).
+			First(&emp).Error; err == nil && emp.ID != uuid.Nil {
+			otp.EmployeeID = &emp.ID
+			if otp.EmployeeName == "" {
+				otp.EmployeeName = emp.Name
+			}
+			if otp.BranchID == nil {
+				otp.BranchID = emp.BranchID
+			}
+			if otp.BranchName == "" {
+				otp.BranchName = emp.BranchName
+			}
+		}
+	}
+
 	return r.db.WithContext(ctx).Create(otp).Error
 }
 
