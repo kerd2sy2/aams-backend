@@ -131,10 +131,25 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		// Fallback to Employee (Field Delegate) login
 		if empMap, empErr := s.adminRepo.FindEmployeeByLogin(ctx, userKey); empErr == nil && empMap != nil {
 			pwdHash, _ := empMap["password_hash"].(string)
-			// If password_hash is set, check password; if empty (not set yet), allow login
+			natID, _ := empMap["national_id"].(string)
+
+			// Calculate default password: last 4 digits of National ID / Iqama
+			last4 := natID
+			if len(last4) >= 4 {
+				last4 = last4[len(last4)-4:]
+			}
+
+			cleanInputPassword := strings.TrimSpace(req.Password)
+
 			if pwdHash != "" {
-				if err := bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(req.Password)); err != nil {
+				// User has changed their password: check against bcrypt hash
+				if err := bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(cleanInputPassword)); err != nil {
 					return nil, errors.New("كلمة المرور غير صحيحة")
+				}
+			} else {
+				// Default password: MUST be last 4 digits of National ID / Iqama
+				if cleanInputPassword != last4 {
+					return nil, errors.New("كلمة المرور غير صحيحة، كلمة المرور الافتراضية هي آخر 4 أرقام من رقم الإقامة")
 				}
 			}
 			delete(empMap, "password_hash")

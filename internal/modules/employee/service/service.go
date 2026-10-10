@@ -218,11 +218,29 @@ func (s *employeeService) ChangePassword(ctx context.Context, id uuid.UUID, oldP
 		return errors.New("الموظف غير موجود")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(emp.PasswordHash), []byte(oldPassword)); err != nil {
-		return errors.New("كلمة المرور الحالية غير صحيحة")
+	cleanOld := strings.TrimSpace(oldPassword)
+	cleanNew := strings.TrimSpace(newPassword)
+
+	if cleanNew == "" || len(cleanNew) < 4 {
+		return errors.New("كلمة المرور الجديدة يجب ألا تقل عن 4 خانات")
 	}
 
-	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if emp.PasswordHash != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(emp.PasswordHash), []byte(cleanOld)); err != nil {
+			return errors.New("كلمة المرور الحالية غير صحيحة")
+		}
+	} else {
+		// Default password: last 4 digits of National ID / Iqama
+		last4 := emp.NationalID
+		if len(last4) >= 4 {
+			last4 = last4[len(last4)-4:]
+		}
+		if cleanOld != last4 && cleanOld != emp.NationalID {
+			return errors.New("كلمة المرور الحالية غير صحيحة (كلمة المرور الافتراضية هي آخر 4 أرقام من الإقامة)")
+		}
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(cleanNew), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
