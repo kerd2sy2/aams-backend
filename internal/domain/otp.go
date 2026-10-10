@@ -14,6 +14,8 @@ type OTPRequest struct {
 	Employee     *Employee      `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
 	NationalID   string         `gorm:"type:varchar(50);index;not null" json:"national_id"`
 	EmployeeName string         `gorm:"type:varchar(150);not null" json:"employee_name"`
+	BranchID     *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id,omitempty"`
+	BranchName   string         `gorm:"type:varchar(100)" json:"branch_name"`
 	OTPCode      string         `gorm:"type:varchar(10);not null" json:"otp_code"` // 4-digit code e.g. "4829"
 	DeviceInfo   string         `gorm:"type:varchar(255)" json:"device_info"`
 	DeviceUUID   string         `gorm:"type:varchar(100);index" json:"device_uuid"`

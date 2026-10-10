@@ -98,6 +98,10 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone")
 		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS deleted_at timestamp with time zone")
 
+		rawDB.Exec("ALTER TABLE otp_requests ADD COLUMN IF NOT EXISTS branch_id char(36)")
+		rawDB.Exec("ALTER TABLE otp_requests ADD COLUMN IF NOT EXISTS branch_name varchar(100)")
+		rawDB.Exec("ALTER TABLE otp_requests ADD COLUMN IF NOT EXISTS employee_name varchar(150)")
+
 		rawDB.Exec("ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS registration_image text")
 		rawDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS push_token text")
 		rawDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS device_uuid varchar(100)")
