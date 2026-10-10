@@ -159,6 +159,9 @@ func main() {
 	r.Static("/uploads", "./uploads")
 	r.Static("/api/v1/uploads", "./uploads")
 
+	// Privacy policy routes (for Google Play Console & public access)
+	registerPrivacyRoutes(r)
+
 	// Health check & root route
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
