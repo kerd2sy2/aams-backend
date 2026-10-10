@@ -102,4 +102,6 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	// Trusted Devices Management
 	rg.GET("/devices/my-devices", m.OTPHandler.GetMyDevices)
 	rg.DELETE("/devices/:uuid", m.OTPHandler.RevokeDevice)
+	rg.GET("/auth/devices/my-devices", m.OTPHandler.GetMyDevices)
+	rg.DELETE("/auth/devices/:uuid", m.OTPHandler.RevokeDevice)
 }

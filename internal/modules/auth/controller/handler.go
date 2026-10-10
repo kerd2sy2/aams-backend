@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"delivery-backend/internal/domain"
 	"delivery-backend/internal/modules/auth/dto"
 	"delivery-backend/internal/modules/auth/service"
 )
@@ -218,8 +219,15 @@ func (h *OTPHandler) CancelOTP(c *gin.Context) {
 
 func (h *OTPHandler) GetMyDevices(c *gin.Context) {
 	nationalID := ""
-	if emailVal, exists := c.Get("admin_email"); exists && emailVal != nil {
-		nationalID = fmt.Sprintf("%v", emailVal)
+	if empVal, exists := c.Get("employee"); exists && empVal != nil {
+		if emp, ok := empVal.(*domain.Employee); ok && emp.NationalID != "" {
+			nationalID = emp.NationalID
+		}
+	}
+	if nationalID == "" {
+		if emailVal, exists := c.Get("admin_email"); exists && emailVal != nil {
+			nationalID = fmt.Sprintf("%v", emailVal)
+		}
 	}
 	if nationalID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
@@ -243,8 +251,19 @@ func (h *OTPHandler) RevokeDevice(c *gin.Context) {
 	}
 
 	nationalID := ""
-	if emailVal, exists := c.Get("admin_email"); exists && emailVal != nil {
-		nationalID = fmt.Sprintf("%v", emailVal)
+	if empVal, exists := c.Get("employee"); exists && empVal != nil {
+		if emp, ok := empVal.(*domain.Employee); ok && emp.NationalID != "" {
+			nationalID = emp.NationalID
+		}
+	}
+	if nationalID == "" {
+		if emailVal, exists := c.Get("admin_email"); exists && emailVal != nil {
+			nationalID = fmt.Sprintf("%v", emailVal)
+		}
+	}
+	if nationalID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
+		return
 	}
 
 	if err := h.svc.RevokeDevice(c.Request.Context(), nationalID, deviceUUID); err != nil {
