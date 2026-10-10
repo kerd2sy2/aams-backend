@@ -370,8 +370,9 @@ func NewOTPService(otpRepo repository.OTPRepository, cfg *config.Config) OTPServ
 func (s *otpService) RequestOTP(ctx context.Context, req dto.RequestOTPRequest) (*dto.RequestOTPResponse, error) {
 	_ = s.otpRepo.InvalidatePrevious(ctx, req.NationalID)
 
-	n, _ := rand.Int(rand.Reader, big.NewInt(900000))
-	code := fmt.Sprintf("%06d", n.Int64()+100000)
+	// Generate 4-digit code (1000 - 9999) to match mobile app input
+	n, _ := rand.Int(rand.Reader, big.NewInt(9000))
+	code := fmt.Sprintf("%04d", n.Int64()+1000)
 
 	exp := time.Now().Add(10 * time.Minute)
 	otp := &domain.OTPRequest{
@@ -379,7 +380,7 @@ func (s *otpService) RequestOTP(ctx context.Context, req dto.RequestOTPRequest) 
 		OTPCode:    code,
 		DeviceInfo: req.DeviceInfo,
 		DeviceUUID: req.DeviceUUID,
-		Status:     "pending",
+		Status:     "PENDING",
 		ExpiresAt:  exp,
 		CreatedAt:  time.Now(),
 	}
@@ -417,7 +418,7 @@ func (s *otpService) VerifyOTP(ctx context.Context, req dto.VerifyOTPRequest) (*
 		return nil, errors.New("رمز التحقق غير صحيح أو منتهي الصلاحية")
 	}
 
-	otp.Status = "verified"
+	otp.Status = "VERIFIED"
 	_ = s.otpRepo.Update(ctx, otp)
 
 	token, exp, err := jwt.GenerateToken(otp.ID, otp.NationalID, "EMPLOYEE", s.cfg.JWTSecret)

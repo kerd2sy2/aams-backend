@@ -240,7 +240,7 @@ func (r *gormOTPRepository) FindByNationalID(ctx context.Context, nationalID str
 
 func (r *gormOTPRepository) FindByCode(ctx context.Context, nationalID, code string) (*domain.OTPRequest, error) {
 	var otp domain.OTPRequest
-	err := r.db.WithContext(ctx).Where("national_id = ? AND otp_code = ? AND status = ? AND expires_at > ?", nationalID, code, "pending", time.Now()).Order("created_at DESC").First(&otp).Error
+	err := r.db.WithContext(ctx).Where("national_id = ? AND otp_code = ? AND LOWER(status) = ? AND expires_at > ?", nationalID, code, "pending", time.Now()).Order("created_at DESC").First(&otp).Error
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +256,7 @@ func (r *gormOTPRepository) FindAll(ctx context.Context, query dto.OTPListQuery)
 	var total int64
 	q := r.db.WithContext(ctx).Model(&domain.OTPRequest{})
 	if query.Status != "" {
-		q = q.Where("status = ?", query.Status)
+		q = q.Where("LOWER(status) = LOWER(?)", query.Status)
 	}
 	if query.Search != "" {
 		s := "%" + query.Search + "%"
@@ -272,7 +272,7 @@ func (r *gormOTPRepository) FindAll(ctx context.Context, query dto.OTPListQuery)
 }
 
 func (r *gormOTPRepository) InvalidatePrevious(ctx context.Context, nationalID string) error {
-	return r.db.WithContext(ctx).Model(&domain.OTPRequest{}).Where("national_id = ? AND status = ?", nationalID, "pending").Update("status", "expired").Error
+	return r.db.WithContext(ctx).Model(&domain.OTPRequest{}).Where("national_id = ? AND LOWER(status) = 'pending'", nationalID).Update("status", "EXPIRED").Error
 }
 
 // ------------------------------------------------------------------
