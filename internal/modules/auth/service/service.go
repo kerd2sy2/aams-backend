@@ -35,6 +35,8 @@ type OTPService interface {
 	VerifyOTP(ctx context.Context, req dto.VerifyOTPRequest) (*dto.LoginResponse, error)
 	GetOTPList(ctx context.Context, query dto.OTPListQuery) ([]domain.OTPRequest, int64, error)
 	CancelOTP(ctx context.Context, id uuid.UUID) error
+	GetDevices(ctx context.Context, nationalID string) ([]map[string]interface{}, error)
+	RevokeDevice(ctx context.Context, nationalID, deviceUUID string) error
 }
 
 type RoleService interface {
@@ -538,6 +540,14 @@ func (s *otpService) CancelOTP(ctx context.Context, id uuid.UUID) error {
 	}
 	otp.Status = "rejected"
 	return s.otpRepo.Update(ctx, otp)
+}
+
+func (s *otpService) GetDevices(ctx context.Context, nationalID string) ([]map[string]interface{}, error) {
+	return s.otpRepo.GetDevicesByNationalID(ctx, nationalID)
+}
+
+func (s *otpService) RevokeDevice(ctx context.Context, nationalID, deviceUUID string) error {
+	return s.otpRepo.RevokeDevice(ctx, nationalID, deviceUUID)
 }
 
 // RoleService

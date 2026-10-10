@@ -44,6 +44,8 @@ type OTPRepository interface {
 	FindAll(ctx context.Context, query dto.OTPListQuery) ([]domain.OTPRequest, int64, error)
 	InvalidatePrevious(ctx context.Context, nationalID string) error
 	FindEmployeeByNationalID(ctx context.Context, nationalID string) (map[string]interface{}, error)
+	GetDevicesByNationalID(ctx context.Context, nationalID string) ([]map[string]interface{}, error)
+	RevokeDevice(ctx context.Context, nationalID, deviceUUID string) error
 }
 
 type BranchRepository interface {
@@ -373,6 +375,40 @@ func (r *gormOTPRepository) FindEmployeeByNationalID(ctx context.Context, nation
 		res["branch_id"] = emp.BranchID.String()
 	}
 	return res, nil
+}
+
+func (r *gormOTPRepository) GetDevicesByNationalID(ctx context.Context, nationalID string) ([]map[string]interface{}, error) {
+	var rows []struct {
+		DeviceUUID string    `gorm:"column:device_uuid"`
+		DeviceInfo string    `gorm:"column:device_info"`
+		CreatedAt  time.Time `gorm:"column:created_at"`
+	}
+
+	err := r.db.WithContext(ctx).Table("otp_requests").
+		Select("device_uuid, device_info, MAX(created_at) as created_at").
+		Where("national_id = ? AND LOWER(status) = 'verified' AND device_uuid != ''", nationalID).
+		Group("device_uuid, device_info").
+		Order("created_at DESC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var res []map[string]interface{}
+	for _, row := range rows {
+		res = append(res, map[string]interface{}{
+			"uuid":       row.DeviceUUID,
+			"name":       row.DeviceInfo,
+			"trusted_at": row.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	return res, nil
+}
+
+func (r *gormOTPRepository) RevokeDevice(ctx context.Context, nationalID, deviceUUID string) error {
+	return r.db.WithContext(ctx).Table("otp_requests").
+		Where("national_id = ? AND device_uuid = ?", nationalID, deviceUUID).
+		Update("status", "REVOKED").Error
 }
 
 // ------------------------------------------------------------------

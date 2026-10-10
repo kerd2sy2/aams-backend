@@ -216,6 +216,45 @@ func (h *OTPHandler) CancelOTP(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "تم إلغاء الطلب بنجاح"})
 }
 
+func (h *OTPHandler) GetMyDevices(c *gin.Context) {
+	nationalID := ""
+	if emailVal, exists := c.Get("admin_email"); exists && emailVal != nil {
+		nationalID = fmt.Sprintf("%v", emailVal)
+	}
+	if nationalID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
+		return
+	}
+
+	devices, err := h.svc.GetDevices(c.Request.Context(), nationalID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": devices})
+}
+
+func (h *OTPHandler) RevokeDevice(c *gin.Context) {
+	deviceUUID := c.Param("uuid")
+	if deviceUUID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الجهاز مطلوب"})
+		return
+	}
+
+	nationalID := ""
+	if emailVal, exists := c.Get("admin_email"); exists && emailVal != nil {
+		nationalID = fmt.Sprintf("%v", emailVal)
+	}
+
+	if err := h.svc.RevokeDevice(c.Request.Context(), nationalID, deviceUUID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "تم إلغاء توثيق الجهاز بنجاح"})
+}
+
 // RoleHandler
 type RoleHandler struct {
 	svc service.RoleService

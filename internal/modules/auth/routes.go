@@ -98,4 +98,8 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	// OTP Requests & verification audit
 	rg.GET("/otp-requests", m.OTPHandler.GetOTPList)
 	rg.POST("/otp-requests/:id/cancel", m.OTPHandler.CancelOTP)
+
+	// Trusted Devices Management
+	rg.GET("/devices/my-devices", m.OTPHandler.GetMyDevices)
+	rg.DELETE("/devices/:uuid", m.OTPHandler.RevokeDevice)
 }
