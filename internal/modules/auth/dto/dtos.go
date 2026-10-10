@@ -19,6 +19,8 @@ type LoginResponse struct {
 	RefreshToken string     `json:"refresh_token"`
 	ExpiresAt    time.Time  `json:"expires_at"`
 	Type         string     `json:"type"` // "admin" or "employee"
+	IsEmployee   bool       `json:"is_employee,omitempty"`
+	Employee     any        `json:"employee,omitempty"`
 	Admin        *AdminInfo `json:"admin,omitempty"`
 	User         *AdminInfo `json:"user,omitempty"`
 }

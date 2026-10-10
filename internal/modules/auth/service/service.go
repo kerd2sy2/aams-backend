@@ -88,6 +88,37 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		return nil, errors.New("اسم المستخدم وكلمة المرور مطلوبان")
 	}
 
+	// Demo Reviewer Account for Google Play Console App Review
+	if userKey == "1234596" && (req.Password == "1234" || req.Password == "123456") {
+		demoID := uuid.MustParse("00000000-0000-0000-0000-000001234596")
+		token, exp, err := jwt.GenerateToken(demoID, "demo.driver@kerd2sy.com", "DRIVER", s.cfg.JWTSecret)
+		if err != nil {
+			return nil, err
+		}
+		demoEmp := map[string]interface{}{
+			"id":                demoID.String(),
+			"name":              "مندوب تجريبي (Google Review Demo)",
+			"national_id":       "1234596",
+			"employee_number":   "EMP-1234596",
+			"job_role":          "DRIVER",
+			"motorcycle_number": "7777",
+			"key_number":        "KEY-01",
+			"phone":             "0500000000",
+			"branch_name":       "الفرع الرئيسي",
+			"shift":             "morning",
+			"vehicle_type":      "motorcycle",
+		}
+		return &dto.LoginResponse{
+			Token:        token,
+			AccessToken:  token,
+			RefreshToken: token,
+			ExpiresAt:    exp,
+			Type:         "employee",
+			IsEmployee:   true,
+			Employee:     demoEmp,
+		}, nil
+	}
+
 	admin, err := s.adminRepo.FindByUsername(ctx, userKey)
 	if err != nil {
 		admin, err = s.adminRepo.FindByEmail(ctx, userKey)

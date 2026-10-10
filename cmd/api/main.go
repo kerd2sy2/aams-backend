@@ -35,6 +35,8 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -62,6 +64,9 @@ func main() {
 	}
 	backupSvc := backup.NewService(cfg.PGDumpPath, cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, backupDir, 600*time.Second, 50)
 	go backupSvc.Start()
+
+	// Seed Demo Reviewer Account for Google Play App Review (1234596 / 1234)
+	seedDemoReviewer(db)
 
 	// Start background cron jobs
 	startIqamaExpirationChecker(db)
@@ -396,3 +401,28 @@ func checkIqamaExpirations(db *gorm.DB) {
 		log.Printf("[Cron] Generated %d iqama expiration notifications", count)
 	}
 }
+
+func seedDemoReviewer(db *gorm.DB) {
+	demoID := uuid.MustParse("00000000-0000-0000-0000-000001234596")
+	var emp domain.Employee
+	if err := db.Where("national_id = ?", "1234596").First(&emp).Error; err != nil {
+		hash, _ := bcrypt.GenerateFromPassword([]byte("1234"), bcrypt.DefaultCost)
+		demoEmployee := domain.Employee{
+			ID:               demoID,
+			Name:             "مندوب تجريبي (Google Review Demo)",
+			NationalID:       "1234596",
+			PasswordHash:     string(hash),
+			EmployeeNumber:   "EMP-1234596",
+			JobRole:          "DRIVER",
+			Phone:            "0500000000",
+			MotorcycleNumber: "7777",
+			KeyNumber:        "KEY-01",
+			VehicleType:      "motorcycle",
+			Shift:            "morning",
+		}
+		if createErr := db.Create(&demoEmployee).Error; createErr == nil {
+			log.Println("[Seed] Created Google Play Demo Reviewer account (NationalID: 1234596 / Pass: 1234)")
+		}
+	}
+}
+
