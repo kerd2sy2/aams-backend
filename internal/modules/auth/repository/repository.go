@@ -22,6 +22,7 @@ type AdminRepository interface {
 	FindByPhone(ctx context.Context, phone string) (*domain.Admin, error)
 	FindByGoogleID(ctx context.Context, googleID string) (*domain.Admin, error)
 	FindAll(ctx context.Context) ([]domain.Admin, error)
+	FindEmployeeByLogin(ctx context.Context, login string) (map[string]interface{}, error)
 }
 
 type RoleRepository interface {
@@ -42,6 +43,7 @@ type OTPRepository interface {
 	Update(ctx context.Context, otp *domain.OTPRequest) error
 	FindAll(ctx context.Context, query dto.OTPListQuery) ([]domain.OTPRequest, int64, error)
 	InvalidatePrevious(ctx context.Context, nationalID string) error
+	FindEmployeeByNationalID(ctx context.Context, nationalID string) (map[string]interface{}, error)
 }
 
 type BranchRepository interface {
@@ -131,6 +133,56 @@ func (r *gormAdminRepository) FindAll(ctx context.Context) ([]domain.Admin, erro
 	var list []domain.Admin
 	err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").Order("created_at DESC").Find(&list).Error
 	return list, err
+}
+
+func (r *gormAdminRepository) FindEmployeeByLogin(ctx context.Context, login string) (map[string]interface{}, error) {
+	var emp struct {
+		ID               uuid.UUID  `gorm:"column:id"`
+		Name             string     `gorm:"column:name"`
+		NationalID       string     `gorm:"column:national_id"`
+		EmployeeNumber   string     `gorm:"column:employee_number"`
+		JobRole          string     `gorm:"column:job_role"`
+		Phone            string     `gorm:"column:phone"`
+		PersonalImage    string     `gorm:"column:personal_image"`
+		MotorcycleNumber string     `gorm:"column:motorcycle_number"`
+		KeyNumber        string     `gorm:"column:key_number"`
+		VehicleType      string     `gorm:"column:vehicle_type"`
+		Shift            string     `gorm:"column:shift"`
+		PasswordHash     string     `gorm:"column:password_hash"`
+		BranchID         *uuid.UUID `gorm:"column:branch_id"`
+		BranchName       string     `gorm:"column:branch_name"`
+	}
+
+	err := r.db.WithContext(ctx).Table("employees").
+		Select("employees.id, employees.name, employees.national_id, employees.employee_number, employees.job_role, employees.phone, employees.personal_image, employees.motorcycle_number, employees.key_number, employees.vehicle_type, employees.shift, employees.password_hash, employees.branch_id, branches.name as branch_name").
+		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
+		Where("(employees.national_id = ? OR employees.phone = ? OR employees.employee_number = ?) AND employees.deleted_at IS NULL", login, login, login).
+		First(&emp).Error
+	if err != nil {
+		return nil, err
+	}
+
+	res := map[string]interface{}{
+		"id":                emp.ID.String(),
+		"name":              emp.Name,
+		"national_id":       emp.NationalID,
+		"employee_number":   emp.EmployeeNumber,
+		"job_role":          emp.JobRole,
+		"phone":             emp.Phone,
+		"personal_image":    emp.PersonalImage,
+		"motorcycle_number": emp.MotorcycleNumber,
+		"key_number":        emp.KeyNumber,
+		"vehicle_type":      emp.VehicleType,
+		"shift":             emp.Shift,
+		"branch_name":       emp.BranchName,
+		"is_employee":       true,
+		"role":              emp.JobRole,
+		"password_hash":     emp.PasswordHash,
+	}
+	if emp.BranchID != nil {
+		res["branch_id"] = emp.BranchID.String()
+	}
+	return res, nil
 }
 
 // ------------------------------------------------------------------
@@ -273,6 +325,54 @@ func (r *gormOTPRepository) FindAll(ctx context.Context, query dto.OTPListQuery)
 
 func (r *gormOTPRepository) InvalidatePrevious(ctx context.Context, nationalID string) error {
 	return r.db.WithContext(ctx).Model(&domain.OTPRequest{}).Where("national_id = ? AND LOWER(status) = 'pending'", nationalID).Update("status", "EXPIRED").Error
+}
+
+func (r *gormOTPRepository) FindEmployeeByNationalID(ctx context.Context, nationalID string) (map[string]interface{}, error) {
+	var emp struct {
+		ID               uuid.UUID  `gorm:"column:id"`
+		Name             string     `gorm:"column:name"`
+		NationalID       string     `gorm:"column:national_id"`
+		EmployeeNumber   string     `gorm:"column:employee_number"`
+		JobRole          string     `gorm:"column:job_role"`
+		Phone            string     `gorm:"column:phone"`
+		PersonalImage    string     `gorm:"column:personal_image"`
+		MotorcycleNumber string     `gorm:"column:motorcycle_number"`
+		KeyNumber        string     `gorm:"column:key_number"`
+		VehicleType      string     `gorm:"column:vehicle_type"`
+		Shift            string     `gorm:"column:shift"`
+		BranchID         *uuid.UUID `gorm:"column:branch_id"`
+		BranchName       string     `gorm:"column:branch_name"`
+	}
+
+	err := r.db.WithContext(ctx).Table("employees").
+		Select("employees.id, employees.name, employees.national_id, employees.employee_number, employees.job_role, employees.phone, employees.personal_image, employees.motorcycle_number, employees.key_number, employees.vehicle_type, employees.shift, employees.branch_id, branches.name as branch_name").
+		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
+		Where("employees.national_id = ? AND employees.deleted_at IS NULL", nationalID).
+		First(&emp).Error
+	if err != nil {
+		return nil, err
+	}
+
+	res := map[string]interface{}{
+		"id":                emp.ID.String(),
+		"name":              emp.Name,
+		"national_id":       emp.NationalID,
+		"employee_number":   emp.EmployeeNumber,
+		"job_role":          emp.JobRole,
+		"phone":             emp.Phone,
+		"personal_image":    emp.PersonalImage,
+		"motorcycle_number": emp.MotorcycleNumber,
+		"key_number":        emp.KeyNumber,
+		"vehicle_type":      emp.VehicleType,
+		"shift":             emp.Shift,
+		"branch_name":       emp.BranchName,
+		"is_employee":       true,
+		"role":              emp.JobRole,
+	}
+	if emp.BranchID != nil {
+		res["branch_id"] = emp.BranchID.String()
+	}
+	return res, nil
 }
 
 // ------------------------------------------------------------------

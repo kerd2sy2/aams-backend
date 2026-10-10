@@ -124,10 +124,37 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		admin, err = s.adminRepo.FindByEmail(ctx, userKey)
 		if err != nil {
 			admin, err = s.adminRepo.FindByPhone(ctx, userKey)
-			if err != nil {
-				return nil, errors.New("اسم المستخدم أو كلمة المرور غير صحيحة")
-			}
 		}
+	}
+
+	if admin == nil {
+		// Fallback to Employee (Field Delegate) login
+		if empMap, empErr := s.adminRepo.FindEmployeeByLogin(ctx, userKey); empErr == nil && empMap != nil {
+			pwdHash, _ := empMap["password_hash"].(string)
+			// If password_hash is set, check password; if empty (not set yet), allow login
+			if pwdHash != "" {
+				if err := bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(req.Password)); err != nil {
+					return nil, errors.New("كلمة المرور غير صحيحة")
+				}
+			}
+			delete(empMap, "password_hash")
+
+			empID, _ := uuid.Parse(empMap["id"].(string))
+			token, exp, err := jwt.GenerateToken(empID, userKey, "EMPLOYEE", s.cfg.JWTSecret)
+			if err != nil {
+				return nil, err
+			}
+			return &dto.LoginResponse{
+				Token:        token,
+				AccessToken:  token,
+				RefreshToken: token,
+				ExpiresAt:    exp,
+				Type:         "employee",
+				IsEmployee:   true,
+				Employee:     empMap,
+			}, nil
+		}
+		return nil, errors.New("اسم المستخدم أو كلمة المرور غير صحيحة")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.Password)); err != nil {
@@ -401,15 +428,34 @@ func (s *otpService) VerifyOTP(ctx context.Context, req dto.VerifyOTPRequest) (*
 	// Support Demo Review OTP (1234 / 123456) for Google Play Console App Reviewers
 	cleanCode := strings.TrimSpace(req.OTPCode)
 	if cleanCode == "1234" || cleanCode == "123456" || cleanCode == "0000" {
-		token, exp, err := jwt.GenerateToken(uuid.New(), req.NationalID, "EMPLOYEE", s.cfg.JWTSecret)
+		demoID := uuid.MustParse("00000000-0000-0000-0000-000001234596")
+		token, exp, err := jwt.GenerateToken(demoID, req.NationalID, "EMPLOYEE", s.cfg.JWTSecret)
 		if err != nil {
 			return nil, err
 		}
+		demoEmp := map[string]interface{}{
+			"id":                demoID.String(),
+			"name":              "مندوب تجريبي (Google Review Demo)",
+			"national_id":       req.NationalID,
+			"employee_number":   "EMP-1234596",
+			"job_role":          "DRIVER",
+			"motorcycle_number": "7777",
+			"key_number":        "KEY-01",
+			"phone":             "0500000000",
+			"branch_name":       "الفرع الرئيسي",
+			"shift":             "morning",
+			"vehicle_type":      "motorcycle",
+			"is_employee":       true,
+			"role":              "DRIVER",
+		}
 		return &dto.LoginResponse{
 			Token:        token,
+			AccessToken:  token,
 			RefreshToken: token,
 			ExpiresAt:    exp,
 			Type:         "employee",
+			IsEmployee:   true,
+			Employee:     demoEmp,
 		}, nil
 	}
 
@@ -421,16 +467,48 @@ func (s *otpService) VerifyOTP(ctx context.Context, req dto.VerifyOTPRequest) (*
 	otp.Status = "VERIFIED"
 	_ = s.otpRepo.Update(ctx, otp)
 
-	token, exp, err := jwt.GenerateToken(otp.ID, otp.NationalID, "EMPLOYEE", s.cfg.JWTSecret)
+	// Resolve Employee ID and Full Profile
+	var empID uuid.UUID
+	var empData map[string]interface{}
+	if emp, fErr := s.otpRepo.FindEmployeeByNationalID(ctx, req.NationalID); fErr == nil && emp != nil {
+		if idStr, ok := emp["id"].(string); ok {
+			if parsed, pErr := uuid.Parse(idStr); pErr == nil {
+				empID = parsed
+			}
+		}
+		empData = emp
+	}
+
+	if empID == uuid.Nil {
+		if otp.EmployeeID != nil && *otp.EmployeeID != uuid.Nil {
+			empID = *otp.EmployeeID
+		} else {
+			empID = otp.ID
+		}
+		empData = map[string]interface{}{
+			"id":          empID.String(),
+			"name":        otp.EmployeeName,
+			"national_id": otp.NationalID,
+			"job_role":    "DRIVER",
+			"is_employee": true,
+			"role":        "DRIVER",
+			"branch_name": otp.BranchName,
+		}
+	}
+
+	token, exp, err := jwt.GenerateToken(empID, req.NationalID, "EMPLOYEE", s.cfg.JWTSecret)
 	if err != nil {
 		return nil, err
 	}
 
 	return &dto.LoginResponse{
 		Token:        token,
+		AccessToken:  token,
 		RefreshToken: token,
 		ExpiresAt:    exp,
 		Type:         "employee",
+		IsEmployee:   true,
+		Employee:     empData,
 	}, nil
 }
 

@@ -81,6 +81,9 @@ func (m *mockAdminRepo) FindAll(ctx context.Context) ([]domain.Admin, error) {
 	}
 	return list, nil
 }
+func (m *mockAdminRepo) FindEmployeeByLogin(ctx context.Context, login string) (map[string]interface{}, error) {
+	return nil, nil
+}
 
 type mockRoleRepo struct {
 	roles map[uuid.UUID]*domain.Role

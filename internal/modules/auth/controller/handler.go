@@ -84,6 +84,10 @@ func (h *AuthHandler) Me(c *gin.Context) {
 
 	adminDTO, err := h.svc.GetAdminByID(c.Request.Context(), adminID)
 	if err != nil {
+		if empVal, empExists := c.Get("employee"); empExists && empVal != nil {
+			c.JSON(http.StatusOK, empVal)
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "المستخدم غير موجود"})
 		return
 	}
