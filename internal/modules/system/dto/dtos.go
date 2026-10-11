@@ -94,13 +94,15 @@ type BulkDeleteAuditLogsRequest struct {
 
 // Settings DTOs
 type AppSettingsResponse struct {
-	SiteName string `json:"site_name"`
-	LogoURL  string `json:"logo_url"`
+	SiteName       string `json:"site_name"`
+	LogoURL        string `json:"logo_url"`
+	AppDownloadURL string `json:"app_download_url,omitempty"`
 }
 
 type UpdateAppSettingsRequest struct {
-	SiteName string `json:"site_name"`
-	LogoURL  string `json:"logo_url"`
+	SiteName       string `json:"site_name"`
+	LogoURL        string `json:"logo_url"`
+	AppDownloadURL string `json:"app_download_url"`
 }
 
 type UpdateSettingRequest struct {

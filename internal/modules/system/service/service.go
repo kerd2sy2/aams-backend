@@ -199,7 +199,12 @@ func (s *settingService) GetAllSettings(ctx context.Context) (dto.AppSettingsRes
 			resp.SiteName = set.Value
 		case "logo_url":
 			resp.LogoURL = set.Value
+		case "app_download_url":
+			resp.AppDownloadURL = set.Value
 		}
+	}
+	if resp.AppDownloadURL == "" {
+		resp.AppDownloadURL = "https://play.google.com/store/apps/details?id=com.aams.app"
 	}
 	return resp, nil
 }
@@ -214,6 +219,9 @@ func (s *settingService) UpdateAppSettings(ctx context.Context, req dto.UpdateAp
 	}
 	if req.LogoURL != "" {
 		_ = s.repo.UpsertSetting(ctx, &domain.AppSetting{Key: "logo_url", Value: req.LogoURL})
+	}
+	if req.AppDownloadURL != "" {
+		_ = s.repo.UpsertSetting(ctx, &domain.AppSetting{Key: "app_download_url", Value: req.AppDownloadURL})
 	}
 	return nil
 }
