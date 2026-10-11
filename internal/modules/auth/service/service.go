@@ -99,7 +99,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		}
 		demoEmp := map[string]interface{}{
 			"id":                demoID.String(),
-			"name":              "مندوب تجريبي (Google Review Demo)",
+			"name":              "تست جوجل",
 			"national_id":       "1234596",
 			"employee_number":   "EMP-1234596",
 			"job_role":          "DRIVER",
@@ -452,7 +452,7 @@ func (s *otpService) VerifyOTP(ctx context.Context, req dto.VerifyOTPRequest) (*
 		}
 		demoEmp := map[string]interface{}{
 			"id":                demoID.String(),
-			"name":              "مندوب تجريبي (Google Review Demo)",
+			"name":              "تست جوجل",
 			"national_id":       req.NationalID,
 			"employee_number":   "EMP-1234596",
 			"job_role":          "DRIVER",

@@ -409,7 +409,7 @@ func seedDemoReviewer(db *gorm.DB) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte("1234"), bcrypt.DefaultCost)
 		demoEmployee := domain.Employee{
 			ID:               demoID,
-			Name:             "مندوب تجريبي (Google Review Demo)",
+			Name:             "تست جوجل",
 			NationalID:       "1234596",
 			PasswordHash:     string(hash),
 			EmployeeNumber:   "EMP-1234596",
@@ -423,6 +423,8 @@ func seedDemoReviewer(db *gorm.DB) {
 		if createErr := db.Create(&demoEmployee).Error; createErr == nil {
 			log.Println("[Seed] Created Google Play Demo Reviewer account (NationalID: 1234596 / Pass: 1234)")
 		}
+	} else {
+		_ = db.Model(&emp).Update("name", "تست جوجل").Error
 	}
 }
 
