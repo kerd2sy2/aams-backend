@@ -53,12 +53,14 @@ func (s *custodyService) toResponse(day *domain.CustodyDay) *dto.CustodyDayRespo
 		switch e.Category {
 		case "fuel":
 			resp.Totals.Fuel += e.Amount
+		case "internet_advance":
+			resp.Totals.InternetAdvance += e.Amount
+		case "advance":
+			resp.Totals.Advance += e.Amount
 		case "license":
 			resp.Totals.License += e.Amount
 		case "spare_parts":
 			resp.Totals.SpareParts += e.Amount
-		case "advance":
-			resp.Totals.Advance += e.Amount
 		default:
 			resp.Totals.Other += e.Amount
 		}
@@ -68,6 +70,7 @@ func (s *custodyService) toResponse(day *domain.CustodyDay) *dto.CustodyDayRespo
 			Category:      e.Category,
 			Amount:        e.Amount,
 			RecipientName: e.RecipientName,
+			ImageURL:      e.ImageURL,
 			CreatedAt:     e.CreatedAt,
 		})
 	}
@@ -189,6 +192,7 @@ func (s *custodyService) AddExpense(ctx context.Context, dayID uuid.UUID, branch
 		Category:          req.Category,
 		Amount:            req.Amount,
 		RecipientName:     req.RecipientName,
+		ImageURL:          req.ImageURL,
 		CreatedByID:       adminID,
 		CreatedByName:     adminName,
 		CreatedByUsername: adminUsername,
@@ -212,6 +216,7 @@ func (s *custodyService) AddExpense(ctx context.Context, dayID uuid.UUID, branch
 		Amount:        req.Amount,
 		Description:   fmt.Sprintf("إضافة مصروف: %s - %.2f", req.Category, req.Amount),
 		RecipientName: req.RecipientName,
+		ImageURL:      req.ImageURL,
 		AdminID:       adminID,
 		AdminName:     adminName,
 		AdminUsername: adminUsername,

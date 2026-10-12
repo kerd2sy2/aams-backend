@@ -12,15 +12,17 @@ type CustodyExpenseResponse struct {
 	Category      string    `json:"category"`
 	Amount        float64   `json:"amount"`
 	RecipientName string    `json:"recipient_name"`
+	ImageURL      string    `json:"image_url"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
 type CustodyTotals struct {
-	Fuel       float64 `json:"fuel"`
-	License    float64 `json:"license"`
-	SpareParts float64 `json:"spare_parts"`
-	Advance    float64 `json:"advance"`
-	Other      float64 `json:"other"`
+	Fuel            float64 `json:"fuel"`
+	InternetAdvance float64 `json:"internet_advance"`
+	Advance         float64 `json:"advance"`
+	License         float64 `json:"license"`
+	SpareParts      float64 `json:"spare_parts"`
+	Other           float64 `json:"other"`
 }
 
 type CustodyDayResponse struct {
@@ -48,6 +50,7 @@ type CreateCustodyExpenseRequest struct {
 	Category      string  `json:"category" binding:"required"`
 	Amount        float64 `json:"amount" binding:"gte=0"`
 	RecipientName string  `json:"recipient_name"`
+	ImageURL      string  `json:"image_url"`
 }
 
 type AddCustodyAmountRequest struct {

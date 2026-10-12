@@ -36,9 +36,10 @@ func (c *CustodyDay) BeforeCreate(tx *gorm.DB) error {
 type CustodyExpense struct {
 	ID                uuid.UUID  `gorm:"type:char(36);primary_key" json:"id"`
 	CustodyDayID      uuid.UUID  `gorm:"type:char(36);index;not null" json:"custody_day_id"`
-	Category          string     `gorm:"type:varchar(20);not null;index" json:"category"` // fuel, license, spare_parts, other
+	Category          string     `gorm:"type:varchar(30);not null;index" json:"category"` // fuel, internet_advance, advance, license, spare_parts, other
 	Amount            float64    `gorm:"default:0" json:"amount"`
 	RecipientName     string     `gorm:"type:varchar(150)" json:"recipient_name"`
+	ImageURL          string     `gorm:"type:varchar(500)" json:"image_url"`
 	CreatedByID       *uuid.UUID `gorm:"type:char(36);index" json:"created_by_id"`
 	CreatedByName     string     `gorm:"type:varchar(100)" json:"created_by_name"`
 	CreatedByUsername string     `gorm:"type:varchar(50)" json:"created_by_username"`
@@ -58,10 +59,11 @@ type CustodyLog struct {
 	CustodyDayID  uuid.UUID  `gorm:"type:char(36);index" json:"custody_day_id"`
 	Date          string     `gorm:"type:varchar(10);not null;index" json:"date"`
 	ActionType    string     `gorm:"type:varchar(30);not null;index" json:"action_type"` // ADD_CUSTODY, ADD_EXPENSE, DELETE_EXPENSE
-	Category      string     `gorm:"type:varchar(30)" json:"category"`                   // fuel, license, spare_parts, other, custody
+	Category      string     `gorm:"type:varchar(30)" json:"category"`                   // fuel, license, spare_parts, other, custody, internet_advance, advance
 	Amount        float64    `gorm:"default:0" json:"amount"`
 	Description   string     `gorm:"type:varchar(255)" json:"description"`
 	RecipientName string     `gorm:"type:varchar(150)" json:"recipient_name"`
+	ImageURL      string     `gorm:"type:varchar(500)" json:"image_url"`
 	AdminID       *uuid.UUID `gorm:"type:char(36);index" json:"admin_id"`
 	AdminName     string     `gorm:"type:varchar(100)" json:"admin_name"`
 	AdminUsername string     `gorm:"type:varchar(50)" json:"admin_username"`
