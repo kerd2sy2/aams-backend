@@ -388,6 +388,9 @@ func (h *EmployeeHandler) GetPrintCard(c *gin.Context) {
 func (h *EmployeeHandler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("image")
 	if err != nil {
+		file, err = c.FormFile("file")
+	}
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "الصورة مطلوبة"})
 		return
 	}
