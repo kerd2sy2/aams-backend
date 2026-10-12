@@ -107,6 +107,31 @@ func (m *mockCustodyRepo) DeleteLog(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (m *mockCustodyRepo) FindDaysFrom(ctx context.Context, branchID *uuid.UUID, startDate string) ([]domain.CustodyDay, error) {
+	var list []domain.CustodyDay
+	for _, d := range m.days {
+		if d.Date >= startDate {
+			list = append(list, *d)
+		}
+	}
+	return list, nil
+}
+
+func (m *mockCustodyRepo) FindPreviousDay(ctx context.Context, branchID *uuid.UUID, beforeDate string) (*domain.CustodyDay, error) {
+	var latest *domain.CustodyDay
+	for _, d := range m.days {
+		if d.Date < beforeDate {
+			if latest == nil || d.Date > latest.Date {
+				latest = d
+			}
+		}
+	}
+	if latest == nil {
+		return nil, domain.ErrDayNotFound
+	}
+	return latest, nil
+}
+
 func TestCustodyService_Lifecycle(t *testing.T) {
 	repo := newMockCustodyRepo()
 	svc := service.NewCustodyService(repo)

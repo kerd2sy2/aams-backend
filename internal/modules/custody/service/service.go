@@ -101,6 +101,34 @@ func (s *custodyService) List(ctx context.Context, branchID *uuid.UUID) ([]dto.C
 	return result, nil
 }
 
+func (s *custodyService) cascadeRecalculateChain(ctx context.Context, branchID *uuid.UUID, fromDate string) error {
+	days, err := s.repo.FindDaysFrom(ctx, branchID, fromDate)
+	if err != nil {
+		return err
+	}
+	if len(days) == 0 {
+		return nil
+	}
+
+	for i := range days {
+		day := &days[i]
+		if i == 0 {
+			// Find previous day strictly before day.Date to know opening balance
+			prev, err := s.repo.FindPreviousDay(ctx, branchID, day.Date)
+			if err == nil && prev != nil {
+				s.recomputeClosing(prev)
+				day.OpeningBalance = prev.ClosingBalance
+			}
+		} else {
+			prevDay := &days[i-1]
+			day.OpeningBalance = prevDay.ClosingBalance
+		}
+		s.recomputeClosing(day)
+		_ = s.repo.UpdateDay(ctx, day)
+	}
+	return nil
+}
+
 func (s *custodyService) Create(ctx context.Context, req dto.CreateCustodyDayRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error) {
 	existing, err := s.repo.FindDayByDate(ctx, req.BranchID, req.Date)
 	if err == nil && existing != nil {
@@ -108,10 +136,10 @@ func (s *custodyService) Create(ctx context.Context, req dto.CreateCustodyDayReq
 	}
 
 	var openingBalance float64
-	lastDay, err := s.repo.FindLastDay(ctx, req.BranchID)
-	if err == nil && lastDay != nil {
-		s.recomputeClosing(lastDay)
-		openingBalance = lastDay.ClosingBalance
+	prevDay, err := s.repo.FindPreviousDay(ctx, req.BranchID, req.Date)
+	if err == nil && prevDay != nil {
+		s.recomputeClosing(prevDay)
+		openingBalance = prevDay.ClosingBalance
 	}
 
 	day := &domain.CustodyDay{
@@ -146,6 +174,14 @@ func (s *custodyService) Create(ctx context.Context, req dto.CreateCustodyDayReq
 		_ = s.repo.CreateLog(ctx, logEntry)
 	}
 
+	// Recalculate subsequent days if this day was inserted retroactively
+	_ = s.cascadeRecalculateChain(ctx, req.BranchID, req.Date)
+
+	updatedDay, err := s.repo.FindDayByID(ctx, day.ID)
+	if err == nil && updatedDay != nil {
+		day = updatedDay
+	}
+
 	return s.toResponse(day), nil
 }
 
@@ -176,6 +212,13 @@ func (s *custodyService) AddAmount(ctx context.Context, req dto.AddCustodyAmount
 		CreatedAt:     time.Now(),
 	}
 	_ = s.repo.CreateLog(ctx, logEntry)
+
+	_ = s.cascadeRecalculateChain(ctx, day.BranchID, day.Date)
+
+	updatedDay, err := s.repo.FindDayByID(ctx, day.ID)
+	if err == nil && updatedDay != nil {
+		day = updatedDay
+	}
 
 	return s.toResponse(day), nil
 }
@@ -224,6 +267,13 @@ func (s *custodyService) AddExpense(ctx context.Context, dayID uuid.UUID, branch
 	}
 	_ = s.repo.CreateLog(ctx, logEntry)
 
+	_ = s.cascadeRecalculateChain(ctx, day.BranchID, day.Date)
+
+	updatedDay, err := s.repo.FindDayByID(ctx, day.ID)
+	if err == nil && updatedDay != nil {
+		day = updatedDay
+	}
+
 	return s.toResponse(day), nil
 }
 
@@ -265,6 +315,13 @@ func (s *custodyService) DeleteExpense(ctx context.Context, expenseID uuid.UUID,
 	s.recomputeClosing(day)
 	_ = s.repo.UpdateDay(ctx, day)
 
+	_ = s.cascadeRecalculateChain(ctx, day.BranchID, day.Date)
+
+	updatedDay, err := s.repo.FindDayByID(ctx, day.ID)
+	if err == nil && updatedDay != nil {
+		day = updatedDay
+	}
+
 	return s.toResponse(day), nil
 }
 
@@ -289,6 +346,7 @@ func (s *custodyService) DeleteLog(ctx context.Context, id uuid.UUID, adminID *u
 		}
 		s.recomputeClosing(day)
 		_ = s.repo.UpdateDay(ctx, day)
+		_ = s.cascadeRecalculateChain(ctx, day.BranchID, day.Date)
 	}
 
 	return s.repo.DeleteLog(ctx, id)

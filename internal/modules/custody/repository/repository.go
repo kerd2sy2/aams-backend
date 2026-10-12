@@ -24,6 +24,8 @@ type CustodyRepository interface {
 	FindLogs(ctx context.Context, filter dto.CustodyLogFilter) ([]domain.CustodyLog, int64, error)
 	FindLogByID(ctx context.Context, id uuid.UUID) (*domain.CustodyLog, error)
 	DeleteLog(ctx context.Context, id uuid.UUID) error
+	FindDaysFrom(ctx context.Context, branchID *uuid.UUID, startDate string) ([]domain.CustodyDay, error)
+	FindPreviousDay(ctx context.Context, branchID *uuid.UUID, beforeDate string) (*domain.CustodyDay, error)
 }
 
 type gormCustodyRepository struct {
@@ -168,4 +170,28 @@ func (r *gormCustodyRepository) FindLogByID(ctx context.Context, id uuid.UUID) (
 
 func (r *gormCustodyRepository) DeleteLog(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.CustodyLog{}, "id = ?", id).Error
+}
+
+func (r *gormCustodyRepository) FindDaysFrom(ctx context.Context, branchID *uuid.UUID, startDate string) ([]domain.CustodyDay, error) {
+	var days []domain.CustodyDay
+	query := r.db.WithContext(ctx).Preload("Expenses").Where("date >= ?", startDate)
+	if branchID != nil {
+		query = query.Where("branch_id = ?", *branchID)
+	}
+	if err := query.Order("date ASC").Find(&days).Error; err != nil {
+		return nil, err
+	}
+	return days, nil
+}
+
+func (r *gormCustodyRepository) FindPreviousDay(ctx context.Context, branchID *uuid.UUID, beforeDate string) (*domain.CustodyDay, error) {
+	var day domain.CustodyDay
+	query := r.db.WithContext(ctx).Preload("Expenses").Where("date < ?", beforeDate)
+	if branchID != nil {
+		query = query.Where("branch_id = ?", *branchID)
+	}
+	if err := query.Order("date DESC").First(&day).Error; err != nil {
+		return nil, err
+	}
+	return &day, nil
 }
