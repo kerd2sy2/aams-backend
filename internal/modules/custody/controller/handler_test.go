@@ -49,6 +49,10 @@ func (m *mockCustodyService) DeleteExpense(ctx context.Context, expenseID uuid.U
 	return nil, nil
 }
 
+func (m *mockCustodyService) UpdateExpense(ctx context.Context, expenseID uuid.UUID, branchID *uuid.UUID, req dto.UpdateCustodyExpenseRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error) {
+	return nil, nil
+}
+
 func (m *mockCustodyService) GetLogs(ctx context.Context, filter dto.CustodyLogFilter) ([]domain.CustodyLog, int64, error) {
 	return nil, 0, nil
 }

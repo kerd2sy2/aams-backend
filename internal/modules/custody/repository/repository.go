@@ -18,6 +18,7 @@ type CustodyRepository interface {
 	FindLastDay(ctx context.Context, branchID *uuid.UUID) (*domain.CustodyDay, error)
 	FindAll(ctx context.Context, branchID *uuid.UUID) ([]domain.CustodyDay, error)
 	CreateExpense(ctx context.Context, expense *domain.CustodyExpense) error
+	UpdateExpense(ctx context.Context, expense *domain.CustodyExpense) error
 	DeleteExpense(ctx context.Context, id uuid.UUID) error
 	FindExpenseByID(ctx context.Context, id uuid.UUID) (*domain.CustodyExpense, error)
 	CreateLog(ctx context.Context, log *domain.CustodyLog) error
@@ -99,6 +100,10 @@ func (r *gormCustodyRepository) FindAll(ctx context.Context, branchID *uuid.UUID
 
 func (r *gormCustodyRepository) CreateExpense(ctx context.Context, expense *domain.CustodyExpense) error {
 	return r.db.WithContext(ctx).Create(expense).Error
+}
+
+func (r *gormCustodyRepository) UpdateExpense(ctx context.Context, expense *domain.CustodyExpense) error {
+	return r.db.WithContext(ctx).Save(expense).Error
 }
 
 func (r *gormCustodyRepository) DeleteExpense(ctx context.Context, id uuid.UUID) error {

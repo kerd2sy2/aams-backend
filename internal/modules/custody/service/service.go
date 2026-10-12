@@ -19,6 +19,7 @@ type CustodyService interface {
 	Create(ctx context.Context, req dto.CreateCustodyDayRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error)
 	AddAmount(ctx context.Context, req dto.AddCustodyAmountRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error)
 	AddExpense(ctx context.Context, dayID uuid.UUID, branchID *uuid.UUID, req dto.CreateCustodyExpenseRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error)
+	UpdateExpense(ctx context.Context, expenseID uuid.UUID, branchID *uuid.UUID, req dto.UpdateCustodyExpenseRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error)
 	DeleteExpense(ctx context.Context, expenseID uuid.UUID, branchID *uuid.UUID, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error)
 	GetLogs(ctx context.Context, filter dto.CustodyLogFilter) ([]domain.CustodyLog, int64, error)
 	DeleteLog(ctx context.Context, id uuid.UUID, adminID *uuid.UUID, adminName, adminUsername string) error
@@ -266,6 +267,72 @@ func (s *custodyService) AddExpense(ctx context.Context, dayID uuid.UUID, branch
 		CreatedAt:     time.Now(),
 	}
 	_ = s.repo.CreateLog(ctx, logEntry)
+
+	_ = s.cascadeRecalculateChain(ctx, day.BranchID, day.Date)
+
+	updatedDay, err := s.repo.FindDayByID(ctx, day.ID)
+	if err == nil && updatedDay != nil {
+		day = updatedDay
+	}
+
+	return s.toResponse(day), nil
+}
+
+func (s *custodyService) UpdateExpense(ctx context.Context, expenseID uuid.UUID, branchID *uuid.UUID, req dto.UpdateCustodyExpenseRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error) {
+	expense, err := s.repo.FindExpenseByID(ctx, expenseID)
+	if err != nil {
+		return nil, errors.New("المصروف غير موجود")
+	}
+
+	day, err := s.repo.FindDayByID(ctx, expense.CustodyDayID)
+	if err != nil {
+		return nil, errors.New("سجل العهدة غير موجود")
+	}
+
+	oldAmount := expense.Amount
+	oldRecipient := expense.RecipientName
+
+	if req.Category != nil && *req.Category != "" {
+		expense.Category = *req.Category
+	}
+	if req.Amount != nil && *req.Amount >= 0 {
+		expense.Amount = *req.Amount
+	}
+	if req.RecipientName != nil {
+		expense.RecipientName = *req.RecipientName
+	}
+	if req.ImageURL != nil {
+		expense.ImageURL = *req.ImageURL
+	}
+
+	if err := s.repo.UpdateExpense(ctx, expense); err != nil {
+		return nil, err
+	}
+
+	logEntry := &domain.CustodyLog{
+		BranchID:      day.BranchID,
+		CustodyDayID:  day.ID,
+		Date:          day.Date,
+		ActionType:    "UPDATE_EXPENSE",
+		Category:      expense.Category,
+		Amount:        expense.Amount,
+		Description:   fmt.Sprintf("تعديل مصروف (%s): من %.2f إلى %.2f (مستلم: %s -> %s)", expense.Category, oldAmount, expense.Amount, oldRecipient, expense.RecipientName),
+		RecipientName: expense.RecipientName,
+		ImageURL:      expense.ImageURL,
+		AdminID:       adminID,
+		AdminName:     adminName,
+		AdminUsername: adminUsername,
+		CreatedAt:     time.Now(),
+	}
+	_ = s.repo.CreateLog(ctx, logEntry)
+
+	// Fetch refreshed day with expenses
+	day, err = s.repo.FindDayByID(ctx, expense.CustodyDayID)
+	if err != nil {
+		return nil, err
+	}
+	s.recomputeClosing(day)
+	_ = s.repo.UpdateDay(ctx, day)
 
 	_ = s.cascadeRecalculateChain(ctx, day.BranchID, day.Date)
 

@@ -53,6 +53,13 @@ type CreateCustodyExpenseRequest struct {
 	ImageURL      string  `json:"image_url"`
 }
 
+type UpdateCustodyExpenseRequest struct {
+	Category      *string  `json:"category"`
+	Amount        *float64 `json:"amount"`
+	RecipientName *string  `json:"recipient_name"`
+	ImageURL      *string  `json:"image_url"`
+}
+
 type AddCustodyAmountRequest struct {
 	CustodyDayID uuid.UUID  `json:"custody_day_id" binding:"required"`
 	AddedAmount  float64    `json:"added_amount" binding:"gt=0"`

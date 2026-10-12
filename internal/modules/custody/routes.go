@@ -38,6 +38,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 		c.GET("/logs", m.Handler.GetLogs)
 		c.DELETE("/logs/:id", m.Handler.DeleteLog)
 		c.POST("/:id/expenses", m.Handler.AddExpense)
+		c.PUT("/expenses/:id", m.Handler.UpdateExpense)
 		c.DELETE("/expenses/:id", m.Handler.DeleteExpense)
 	}
 }

@@ -72,6 +72,11 @@ func (m *mockCustodyRepo) CreateExpense(ctx context.Context, expense *domain.Cus
 	return nil
 }
 
+func (m *mockCustodyRepo) UpdateExpense(ctx context.Context, expense *domain.CustodyExpense) error {
+	m.expenses[expense.ID] = expense
+	return nil
+}
+
 func (m *mockCustodyRepo) DeleteExpense(ctx context.Context, id uuid.UUID) error {
 	delete(m.expenses, id)
 	return nil

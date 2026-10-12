@@ -128,6 +128,29 @@ func (h *CustodyHandler) AddExpense(c *gin.Context) {
 	c.JSON(http.StatusCreated, result)
 }
 
+func (h *CustodyHandler) UpdateExpense(c *gin.Context) {
+	expenseID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف المصروف غير صالح"})
+		return
+	}
+
+	var req dto.UpdateCustodyExpenseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات غير صالحة: " + err.Error()})
+		return
+	}
+
+	branchID := custodyBranchID(c)
+	adminID, adminName, adminUsername := getAdminInfo(c)
+	result, err := h.svc.UpdateExpense(c.Request.Context(), expenseID, branchID, req, adminID, adminName, adminUsername)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 func (h *CustodyHandler) DeleteExpense(c *gin.Context) {
 	expenseID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
