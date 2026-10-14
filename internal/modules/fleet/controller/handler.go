@@ -187,8 +187,6 @@ func (h *VehicleHandler) GetAll(c *gin.Context) {
 
 	if !scope.IsGlobal {
 		filter.BranchID = scope.BranchID
-	} else if filter.BranchID == nil && scope.BranchID != nil {
-		filter.BranchID = scope.BranchID
 	}
 
 	vehicles, total, err := h.vehicleService.GetAll(c.Request.Context(), filter)

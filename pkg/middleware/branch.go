@@ -78,9 +78,9 @@ func ResolveBranchScope(c *gin.Context) (*BranchScope, error) {
 		}, nil
 	}
 
-	// 2. SUPER_ADMIN: explicitly authorized for cross-branch global access.
+	// 2. SUPER_ADMIN, OWNER, or unassigned ADMIN: explicitly authorized for cross-branch global access.
 	// Can optionally filter by branch if query param is explicitly provided.
-	if strings.EqualFold(role, "SUPER_ADMIN") {
+	if strings.EqualFold(role, "SUPER_ADMIN") || strings.EqualFold(role, "OWNER") || (strings.EqualFold(role, "ADMIN") && (extractContextBranchID(c) == nil || *extractContextBranchID(c) == uuid.Nil)) {
 		scope := &BranchScope{
 			IsGlobal:  true,
 			Role:      role,

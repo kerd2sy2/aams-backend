@@ -226,7 +226,7 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	seedRoles(db)
 	seedAdmin(db)
 	seedAppSettings(db)
-	seedTargetAccounts(db)
+	// seedTargetAccounts(db) - disabled to keep only requested primary admin
 	seedTargetSettings(db)
 
 	return db, nil
@@ -363,12 +363,19 @@ func seedAdmin(db *gorm.DB) {
 
 	// Ensure primary system admin 0500626432 exists with SUPER_ADMIN role
 	var admin0500 domain.Admin
-	if err := db.Where("phone = ?", "0500626432").First(&admin0500).Error; err != nil {
-		var superRole domain.Role
-		var roleID *uuid.UUID
-		if err := db.Where("name = ?", "SUPER_ADMIN").First(&superRole).Error; err == nil {
-			roleID = &superRole.ID
-		}
+	var superRole domain.Role
+	var roleID *uuid.UUID
+	if err := db.Where("name = ?", "SUPER_ADMIN").First(&superRole).Error; err == nil {
+		roleID = &superRole.ID
+	}
+
+	if err := db.Where("phone = ? OR username = ?", "0500626432", "0500626432").First(&admin0500).Error; err == nil {
+		db.Model(&domain.Admin{}).Where("id = ?", admin0500.ID).Updates(map[string]interface{}{
+			"role":      "SUPER_ADMIN",
+			"role_id":   roleID,
+			"branch_id": nil,
+		})
+	} else {
 		defaultAdminPassword := os.Getenv("DEFAULT_ADMIN_PASSWORD")
 		if defaultAdminPassword == "" {
 			defaultAdminPassword = "Admin@2026!"
@@ -380,7 +387,7 @@ func seedAdmin(db *gorm.DB) {
 			Email:    "admin0500626432@aams.com",
 			Name:     "المدير العام",
 			Password: string(hashedPassword),
-			Role:     "ADMIN",
+			Role:     "SUPER_ADMIN",
 			RoleID:   roleID,
 		}
 		if err := db.Create(&newAdmin).Error; err == nil {
