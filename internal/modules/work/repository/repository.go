@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"delivery-backend/internal/modules/work/domain"
 )
@@ -15,6 +16,7 @@ type WorkRepository interface {
 	Update(ctx context.Context, session *domain.WorkSession) error
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.WorkSession, error)
 	FindActiveSessionByEmployeeID(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
+	FindActiveSessionByEmployeeIDForUpdate(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	FindLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	FindLastSessionByMotorcycle(ctx context.Context, motorcycleNumber string) (*domain.WorkSession, error)
 	CountTodaySessions(ctx context.Context, empID uuid.UUID) (int64, error)
@@ -59,6 +61,15 @@ func (r *gormWorkRepository) FindByID(ctx context.Context, id uuid.UUID) (*domai
 func (r *gormWorkRepository) FindActiveSessionByEmployeeID(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error) {
 	var session domain.WorkSession
 	err := r.db.WithContext(ctx).Where("employee_id = ? AND status = ?", empID, "ACTIVE").First(&session).Error
+	if err != nil {
+		return nil, err
+	}
+	return &session, nil
+}
+
+func (r *gormWorkRepository) FindActiveSessionByEmployeeIDForUpdate(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error) {
+	var session domain.WorkSession
+	err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("employee_id = ? AND status = ?", empID, "ACTIVE").First(&session).Error
 	if err != nil {
 		return nil, err
 	}

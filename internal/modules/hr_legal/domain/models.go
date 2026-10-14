@@ -15,7 +15,9 @@ var (
 type Investigation struct {
 	ID                 uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
 	EmployeeID         uuid.UUID      `gorm:"type:char(36);index;not null" json:"employee_id"`
+	EmployeeName       string         `gorm:"type:varchar(255)" json:"employee_name"`
 	SupervisorID       uuid.UUID      `gorm:"type:char(36);index;not null" json:"supervisor_id"`
+	SupervisorName     string         `gorm:"type:varchar(100)" json:"supervisor_name"`
 	NationalID         string         `gorm:"type:varchar(50)" json:"national_id"`
 	Type               string         `gorm:"type:varchar(30);default:investigation" json:"type"` // investigation, supervisor_report, advance, internet_advance, absence, custody
 	Questions          string         `gorm:"type:text" json:"questions"`                         // JSON array
@@ -166,6 +168,7 @@ func (f *FuelLog) BeforeCreate(tx *gorm.DB) error {
 type EmployeeInfo struct {
 	ID               uuid.UUID  `gorm:"column:id"`
 	Name             string     `gorm:"column:name"`
+	NationalID       string     `gorm:"column:national_id"`
 	Language         string     `gorm:"column:language"`
 	PushToken        string     `gorm:"column:push_token"`
 	BranchID         *uuid.UUID `gorm:"column:branch_id"`

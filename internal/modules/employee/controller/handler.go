@@ -12,6 +12,7 @@ import (
 
 	"delivery-backend/internal/modules/employee/dto"
 	"delivery-backend/internal/modules/employee/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type StorageProvider interface {
@@ -30,22 +31,6 @@ func NewEmployeeHandler(svc service.EmployeeService, storage StorageProvider) *E
 	}
 }
 
-func employeeBranchID(c *gin.Context) *uuid.UUID {
-	if bid, exists := c.Get("branch_id"); exists && bid != nil {
-		if val, ok := bid.(*uuid.UUID); ok && val != nil {
-			return val
-		}
-		if val, ok := bid.(uuid.UUID); ok && val != uuid.Nil {
-			return &val
-		}
-	}
-	if s := c.Query("branch_id"); s != "" {
-		if id, err := uuid.Parse(s); err == nil {
-			return &id
-		}
-	}
-	return nil
-}
 
 func (h *EmployeeHandler) Create(c *gin.Context) {
 	var req dto.CreateEmployeeRequest
@@ -54,9 +39,16 @@ func (h *EmployeeHandler) Create(c *gin.Context) {
 		return
 	}
 
-	branchID := employeeBranchID(c)
-	if branchID != nil {
-		req.BranchID = branchID
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !scope.IsGlobal {
+		req.BranchID = scope.BranchID
+	} else if req.BranchID == nil && scope.BranchID != nil {
+		req.BranchID = scope.BranchID
 	}
 
 	emp, err := h.svc.Create(c.Request.Context(), req)
@@ -78,9 +70,16 @@ func (h *EmployeeHandler) GetAll(c *gin.Context) {
 		return
 	}
 
-	branchID := employeeBranchID(c)
-	if branchID != nil {
-		filter.BranchID = branchID
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !scope.IsGlobal {
+		filter.BranchID = scope.BranchID
+	} else if filter.BranchID == nil && scope.BranchID != nil {
+		filter.BranchID = scope.BranchID
 	}
 
 	emps, total, err := h.svc.FindAll(c.Request.Context(), filter)
@@ -106,9 +105,20 @@ func (h *EmployeeHandler) GetAll(c *gin.Context) {
 
 func (h *EmployeeHandler) Search(c *gin.Context) {
 	q := c.Query("q")
-	branchID := employeeBranchID(c)
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
-	emps, err := h.svc.Search(c.Request.Context(), q, branchID)
+	var branchFilter *uuid.UUID
+	if !scope.IsGlobal {
+		branchFilter = scope.BranchID
+	} else if scope.BranchID != nil {
+		branchFilter = scope.BranchID
+	}
+
+	emps, err := h.svc.Search(c.Request.Context(), q, branchFilter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -118,8 +128,20 @@ func (h *EmployeeHandler) Search(c *gin.Context) {
 }
 
 func (h *EmployeeHandler) GetWorking(c *gin.Context) {
-	branchID := employeeBranchID(c)
-	emps, err := h.svc.GetWorkingEmployees(c.Request.Context(), branchID)
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	var branchFilter *uuid.UUID
+	if !scope.IsGlobal {
+		branchFilter = scope.BranchID
+	} else if scope.BranchID != nil {
+		branchFilter = scope.BranchID
+	}
+
+	emps, err := h.svc.GetWorkingEmployees(c.Request.Context(), branchFilter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -136,8 +158,14 @@ func (h *EmployeeHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	emp, err := h.svc.FindByID(c.Request.Context(), id)
+	scope, err := middleware.ResolveBranchScope(c)
 	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	emp, err := h.svc.FindByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(emp.BranchID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
 		return
 	}
@@ -153,9 +181,26 @@ func (h *EmployeeHandler) Update(c *gin.Context) {
 		return
 	}
 
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	existingEmp, err := h.svc.FindByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(existingEmp.BranchID) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+
 	var req dto.UpdateEmployeeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("بيانات غير صالحة: %v", err)})
+		return
+	}
+
+	if !scope.IsGlobal && req.BranchID != nil && !scope.AllowsBranch(req.BranchID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح بنقل الموظف إلى فرع آخر"})
 		return
 	}
 
@@ -179,6 +224,18 @@ func (h *EmployeeHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	existingEmp, err := h.svc.FindByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(existingEmp.BranchID) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -188,10 +245,57 @@ func (h *EmployeeHandler) Delete(c *gin.Context) {
 }
 
 func (h *EmployeeHandler) BatchSetOilChange(c *gin.Context) {
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	if isEmpVal, ok := c.Get("is_employee"); ok {
+		if b, okBool := isEmpVal.(bool); okBool && b {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح للموظفين بإجراء هذا التعديل"})
+			return
+		}
+	}
+	if strings.EqualFold(scope.Role, "DRIVER") || strings.EqualFold(scope.Role, "EMPLOYEE") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح للسائقين بإجراء هذا التعديل"})
+		return
+	}
+
 	var req dto.BatchOilSetupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("بيانات غير صالحة: %v", err)})
 		return
+	}
+
+	if len(req.Entries) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "قائمة الموظفين لا يمكن أن تكون فارغة"})
+		return
+	}
+
+	// Pre-validate all entries fail-closed before performing any write operations
+	seenIDs := make(map[uuid.UUID]bool, len(req.Entries))
+	for _, entry := range req.Entries {
+		id, err := uuid.Parse(entry.EmployeeID)
+		if err != nil || id == uuid.Nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح في القائمة"})
+			return
+		}
+		if entry.LastOilChangeDistance < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "مسافة غيار الزيت لا يمكن أن تكون سالبة"})
+			return
+		}
+		if seenIDs[id] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("تكرار معرف الموظف %s في نفس الطلب غير مسموح به", entry.EmployeeID)})
+			return
+		}
+		seenIDs[id] = true
+
+		emp, err := h.svc.FindByID(c.Request.Context(), id)
+		if err != nil || !scope.AllowsBranch(emp.BranchID) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "أحد الموظفين في القائمة غير موجود"})
+			return
+		}
 	}
 
 	count, err := h.svc.BatchSetOilChange(c.Request.Context(), req)
@@ -273,8 +377,18 @@ func (h *EmployeeHandler) SetMyLocation(c *gin.Context) {
 }
 
 func (h *EmployeeHandler) GetLocations(c *gin.Context) {
-	branchID := employeeBranchID(c)
-	locations, err := h.svc.GetLocations(c.Request.Context(), branchID)
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	var branchFilter *uuid.UUID
+	if !scope.IsGlobal {
+		branchFilter = scope.BranchID
+	} else if scope.BranchID != nil {
+		branchFilter = scope.BranchID
+	}
+	locations, err := h.svc.GetLocations(c.Request.Context(), branchFilter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -288,6 +402,18 @@ func (h *EmployeeHandler) SetPhone(c *gin.Context) {
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
+		return
+	}
+
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	existingEmp, err := h.svc.FindByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(existingEmp.BranchID) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
 		return
 	}
 
@@ -313,6 +439,18 @@ func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	existingEmp, err := h.svc.FindByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(existingEmp.BranchID) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+
 	var req struct {
 		Password string `json:"password"`
 	}
@@ -334,8 +472,14 @@ func (h *EmployeeHandler) GetBarcode(c *gin.Context) {
 		return
 	}
 
-	emp, err := h.svc.FindByID(c.Request.Context(), id)
+	scope, err := middleware.ResolveBranchScope(c)
 	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	emp, err := h.svc.FindByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(emp.BranchID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
 		return
 	}
@@ -355,8 +499,14 @@ func (h *EmployeeHandler) GetQRCode(c *gin.Context) {
 		return
 	}
 
-	emp, err := h.svc.FindByID(c.Request.Context(), id)
+	scope, err := middleware.ResolveBranchScope(c)
 	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	emp, err := h.svc.FindByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(emp.BranchID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
 		return
 	}
@@ -376,8 +526,14 @@ func (h *EmployeeHandler) GetPrintCard(c *gin.Context) {
 		return
 	}
 
-	emp, err := h.svc.FindByID(c.Request.Context(), id)
+	scope, err := middleware.ResolveBranchScope(c)
 	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	emp, err := h.svc.FindByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(emp.BranchID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
 		return
 	}

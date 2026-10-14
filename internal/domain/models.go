@@ -305,8 +305,10 @@ type Investigation struct {
 	ID                 uuid.UUID  `gorm:"type:char(36);primary_key" json:"id"`
 	EmployeeID         uuid.UUID  `gorm:"type:char(36);index;not null" json:"employee_id"`
 	Employee           *Employee  `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
+	EmployeeName       string     `gorm:"type:varchar(255)" json:"employee_name"`
 	SupervisorID       uuid.UUID  `gorm:"type:char(36);index;not null" json:"supervisor_id"`
 	Supervisor         *Admin     `gorm:"foreignKey:SupervisorID" json:"supervisor,omitempty"`
+	SupervisorName     string     `gorm:"type:varchar(100)" json:"supervisor_name"`
 	NationalID         string     `gorm:"type:varchar(50)" json:"national_id"`
 	Type               string     `gorm:"type:varchar(30);default:investigation" json:"type"` // investigation, supervisor_report, advance, internet_advance, absence, custody
 	Questions          string     `gorm:"type:text" json:"questions"`                         // JSON array of question strings (for investigation)

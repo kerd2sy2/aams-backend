@@ -7,6 +7,7 @@ import (
 	"delivery-backend/internal/modules/employee/controller"
 	"delivery-backend/internal/modules/employee/repository"
 	"delivery-backend/internal/modules/employee/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type Module struct {
@@ -33,7 +34,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/employees/:id", m.Handler.GetByID)
 	rg.PUT("/employees/:id", m.Handler.Update)
 	rg.DELETE("/employees/:id", m.Handler.Delete)
-	rg.POST("/employees/batch-oil-setup", m.Handler.BatchSetOilChange)
+	rg.POST("/employees/batch-oil-setup", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.BatchSetOilChange)
 	rg.POST("/employees/me/change-password", m.Handler.ChangeMyPassword)
 	rg.POST("/employees/me/phone", m.Handler.SetMyPhone)
 	rg.POST("/employees/me/location", m.Handler.SetMyLocation)

@@ -366,7 +366,23 @@ func (h *RoleHandler) GetAll(c *gin.Context) {
 }
 
 func (h *RoleHandler) GetPermissions(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"permissions": []string{"*"}})
+	c.JSON(http.StatusOK, gin.H{"permissions": []string{
+		"*",
+		"custody", "custody.access", "custody.view", "custody.add", "custody.delete", "custody.manage",
+		"employees.view", "employees.create", "employees.edit", "employees.cards",
+		"work.view", "work.start", "work.end",
+		"vehicles.view", "vehicles.manage", "vehicles.oil",
+		"fuel.view", "fuel.manage",
+		"maintenance.view", "maintenance.manage",
+		"attendance.view", "investigations.view", "investigations.create",
+		"inventory.view", "inventory.dispense",
+		"tickets.view", "tickets.manage",
+		"bank_accounts.view", "bank_accounts.manage",
+		"violations.view", "violations.manage",
+		"reports.view", "reports.export",
+		"documents.view", "documents.manage",
+		"leaves.view", "leaves.manage",
+	}})
 }
 
 // AdminHandler

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,9 +114,64 @@ func (r *gormAdminRepository) FindByUsername(ctx context.Context, username strin
 	return &a, nil
 }
 
+// NormalizeSaudiPhoneVariations generates canonical variations for Saudi phone numbers (966, 05, 5)
+func NormalizeSaudiPhoneVariations(input string) []string {
+	s := strings.TrimSpace(input)
+	if s == "" {
+		return []string{""}
+	}
+	eastern := []string{"٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"}
+	persian := []string{"۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"}
+	for i := 0; i <= 9; i++ {
+		s = strings.ReplaceAll(s, eastern[i], strconv.Itoa(i))
+		s = strings.ReplaceAll(s, persian[i], strconv.Itoa(i))
+	}
+
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	digits := b.String()
+	if digits == "" {
+		return []string{input}
+	}
+
+	resMap := make(map[string]struct{})
+	resMap[input] = struct{}{}
+	resMap[digits] = struct{}{}
+
+	var core string
+	if strings.HasPrefix(digits, "009665") && len(digits) == 14 {
+		core = digits[5:]
+	} else if strings.HasPrefix(digits, "9665") && len(digits) == 12 {
+		core = digits[3:]
+	} else if strings.HasPrefix(digits, "05") && len(digits) == 10 {
+		core = digits[1:]
+	} else if strings.HasPrefix(digits, "5") && len(digits) == 9 {
+		core = digits
+	}
+
+	if len(core) == 9 {
+		resMap[core] = struct{}{}
+		resMap["0"+core] = struct{}{}
+		resMap["966"+core] = struct{}{}
+		resMap["+966"+core] = struct{}{}
+		resMap["00966"+core] = struct{}{}
+	}
+
+	result := make([]string, 0, len(resMap))
+	for v := range resMap {
+		result = append(result, v)
+	}
+	return result
+}
+
 func (r *gormAdminRepository) FindByPhone(ctx context.Context, phone string) (*domain.Admin, error) {
 	var a domain.Admin
-	err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").Where("phone = ?", phone).First(&a).Error
+	variations := NormalizeSaudiPhoneVariations(phone)
+	err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").Where("phone IN (?)", variations).First(&a).Error
 	if err != nil {
 		return nil, err
 	}
@@ -155,10 +211,12 @@ func (r *gormAdminRepository) FindEmployeeByLogin(ctx context.Context, login str
 		BranchName       string     `gorm:"column:branch_name"`
 	}
 
+	variations := NormalizeSaudiPhoneVariations(login)
+
 	err := r.db.WithContext(ctx).Table("employees").
 		Select("employees.id, employees.name, employees.national_id, employees.employee_number, employees.job_role, employees.phone, employees.personal_image, employees.motorcycle_number, employees.key_number, employees.vehicle_type, employees.shift, employees.password_hash, employees.branch_id, branches.name as branch_name").
 		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
-		Where("(employees.national_id = ? OR employees.phone = ? OR employees.employee_number = ?) AND employees.deleted_at IS NULL", login, login, login).
+		Where("(employees.national_id = ? OR employees.phone IN (?) OR employees.employee_number = ?) AND employees.deleted_at IS NULL", login, variations, login).
 		First(&emp).Error
 	if err != nil {
 		return nil, err

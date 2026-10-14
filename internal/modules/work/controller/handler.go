@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,16 +9,23 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"delivery-backend/internal/modules/work/contracts"
 	"delivery-backend/internal/modules/work/dto"
 	"delivery-backend/internal/modules/work/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type WorkHandler struct {
-	svc service.WorkService
+	svc   service.WorkService
+	audit contracts.IAuditContract
 }
 
-func NewWorkHandler(svc service.WorkService) *WorkHandler {
-	return &WorkHandler{svc: svc}
+func NewWorkHandler(svc service.WorkService, audit ...contracts.IAuditContract) *WorkHandler {
+	var a contracts.IAuditContract
+	if len(audit) > 0 {
+		a = audit[0]
+	}
+	return &WorkHandler{svc: svc, audit: a}
 }
 
 func getAdminInfo(c *gin.Context) (*uuid.UUID, string) {
@@ -233,4 +241,133 @@ func (h *WorkHandler) CheckOilChange(c *gin.Context) {
 
 	c.JSON(http.StatusOK, res)
 }
+
+func (h *WorkHandler) SupervisorStartShift(c *gin.Context) {
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	if isEmpVal, ok := c.Get("is_employee"); ok {
+		if b, okBool := isEmpVal.(bool); okBool && b {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: بدء دوام المشرف مخصص لحسابات الإشراف والإدارة فقط"})
+			return
+		}
+	}
+	if strings.EqualFold(scope.Role, "DRIVER") || strings.EqualFold(scope.Role, "EMPLOYEE") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح للسائقين ببدء دوام المشرف أو تنفيذ تجاوزات"})
+		return
+	}
+
+	var req dto.SupervisorStartShiftRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("بيانات غير صالحة: %v", err)})
+		return
+	}
+
+	adminIDVal, exists := c.Get("admin_id")
+	if !exists || adminIDVal == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "جلسة المشرف غير صالحة"})
+		return
+	}
+	supervisorID, _ := adminIDVal.(uuid.UUID)
+	supervisorName := c.GetString("admin_name")
+	if supervisorName == "" {
+		supervisorName = "Supervisor"
+	}
+
+	session, err := h.svc.SupervisorStartShift(c.Request.Context(), req, supervisorID, supervisorName, scope.Role, scope.BranchID)
+	if err != nil {
+		if errors.Is(err, service.ErrActiveSessionExists) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, service.ErrCrossBranchForbidden) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.audit != nil {
+		targetDesc := "دوام المشرف الشخصي"
+		if req.EmployeeID != "" {
+			targetDesc = fmt.Sprintf("تجاوز دوام للموظف %s", req.EmployeeID)
+		}
+		details := fmt.Sprintf("بدء %s (بداية العداد: %.0f) - السبب: %s", targetDesc, session.StartKM, req.OverrideReason)
+		_ = h.audit.LogAction(c.Request.Context(), supervisorName, "بدء شفت مشرف / تجاوز", details, c.ClientIP(), scope.BranchID)
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "تم بدء الشفت بنجاح",
+		"data":    session,
+	})
+}
+
+func (h *WorkHandler) SupervisorEndShift(c *gin.Context) {
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	if isEmpVal, ok := c.Get("is_employee"); ok {
+		if b, okBool := isEmpVal.(bool); okBool && b {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: إنهاء دوام المشرف مخصص لحسابات الإشراف والإدارة فقط"})
+			return
+		}
+	}
+	if strings.EqualFold(scope.Role, "DRIVER") || strings.EqualFold(scope.Role, "EMPLOYEE") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح للسائقين بإنهاء دوام المشرف أو تنفيذ تجاوزات"})
+		return
+	}
+
+	var req dto.SupervisorEndShiftRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("بيانات غير صالحة: %v", err)})
+		return
+	}
+
+	adminIDVal, exists := c.Get("admin_id")
+	if !exists || adminIDVal == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "جلسة المشرف غير صالحة"})
+		return
+	}
+	supervisorID, _ := adminIDVal.(uuid.UUID)
+	supervisorName := c.GetString("admin_name")
+	if supervisorName == "" {
+		supervisorName = "Supervisor"
+	}
+
+	session, err := h.svc.SupervisorEndShift(c.Request.Context(), req, supervisorID, supervisorName, scope.Role, scope.BranchID)
+	if err != nil {
+		if errors.Is(err, service.ErrNoActiveSession) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, service.ErrCrossBranchForbidden) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.audit != nil {
+		targetDesc := "دوام المشرف الشخصي"
+		if req.EmployeeID != "" {
+			targetDesc = fmt.Sprintf("تجاوز دوام للموظف %s", req.EmployeeID)
+		}
+		details := fmt.Sprintf("إنهاء %s (نهاية العداد: %.0f، المسافة: %.0f كم، الطلبات: %d) - السبب: %s", targetDesc, session.EndKM, session.Distance, session.OrdersCount, req.OverrideReason)
+		_ = h.audit.LogAction(c.Request.Context(), supervisorName, "إنهاء شفت مشرف / تجاوز", details, c.ClientIP(), scope.BranchID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "تم إنهاء الشفت بنجاح",
+		"data":    session,
+	})
+}
+
 

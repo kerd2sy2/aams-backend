@@ -11,10 +11,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"delivery-backend/internal/modules/work/contracts"
 	"delivery-backend/internal/modules/work/controller"
 	"delivery-backend/internal/modules/work/repository"
 	"delivery-backend/internal/modules/work/service"
 	legacyService "delivery-backend/internal/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type gormEmployeeAdapter struct {
@@ -267,12 +269,16 @@ type Module struct {
 	Handler *controller.WorkHandler
 }
 
-func NewModule(db *gorm.DB, storage service.StorageProvider) *Module {
+func NewModule(db *gorm.DB, storage service.StorageProvider, audit ...contracts.IAuditContract) *Module {
 	repo := repository.NewWorkRepository(db)
 	empAdapter := &gormEmployeeAdapter{db: db}
 	vehicleAdapter := &gormVehicleAdapter{db: db}
 	svc := service.NewWorkService(repo, empAdapter, vehicleAdapter, storage)
-	handler := controller.NewWorkHandler(svc)
+	var auditContract contracts.IAuditContract
+	if len(audit) > 0 {
+		auditContract = audit[0]
+	}
+	handler := controller.NewWorkHandler(svc, auditContract)
 	return &Module{
 		Service: svc,
 		Handler: handler,
@@ -291,4 +297,12 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/work/scan-plate", m.Handler.ScanPlate)
 	rg.GET("/work/today-count", m.Handler.TodayCount)
 	rg.GET("/work/check-oil", m.Handler.CheckOilChange)
+
+	// Supervisor shift routes (Strictly restricted to supervisor / management roles)
+	supervisorWork := rg.Group("/work/supervisor")
+	supervisorWork.Use(middleware.RequireRoles("SUPERVISOR", "ADMIN", "SUPER_ADMIN"))
+	{
+		supervisorWork.POST("/start-shift", m.Handler.SupervisorStartShift)
+		supervisorWork.POST("/end-shift", m.Handler.SupervisorEndShift)
+	}
 }

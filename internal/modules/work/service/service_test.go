@@ -50,6 +50,10 @@ func (m *mockWorkRepo) FindActiveSessionByEmployeeID(ctx context.Context, empID 
 	return nil, nil
 }
 
+func (m *mockWorkRepo) FindActiveSessionByEmployeeIDForUpdate(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error) {
+	return m.FindActiveSessionByEmployeeID(ctx, empID)
+}
+
 func (m *mockWorkRepo) FindLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error) {
 	for _, s := range m.sessions {
 		if s.EmployeeID != nil && *s.EmployeeID == empID && s.Status == "COMPLETED" {

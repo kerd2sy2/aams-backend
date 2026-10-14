@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,6 +79,22 @@ func NewAuthService(adminRepo repository.AdminRepository, branchRepo repository.
 	}
 }
 
+func extractDigits(s string) string {
+	eastern := []string{"٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"}
+	persian := []string{"۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"}
+	for i := 0; i <= 9; i++ {
+		s = strings.ReplaceAll(s, eastern[i], strconv.Itoa(i))
+		s = strings.ReplaceAll(s, persian[i], strconv.Itoa(i))
+	}
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.LoginResponse, error) {
 	userKey := strings.TrimSpace(req.Username)
 	if userKey == "" {
@@ -87,13 +104,18 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		userKey = strings.TrimSpace(req.Email)
 	}
 	if userKey == "" || req.Password == "" {
-		return nil, errors.New("اسم المستخدم وكلمة المرور مطلوبان")
+		return nil, errors.New("رقم الجوال وكلمة المرور مطلوبان")
 	}
 
+	cleanUserDigits := extractDigits(userKey)
+	cleanPassword := strings.TrimSpace(req.Password)
+
 	// Demo Reviewer Account for Google Play Console App Review
-	if userKey == "1234596" && (req.Password == "1234" || req.Password == "123456") {
+	isDemoUser := (userKey == "1234596" || cleanUserDigits == "1234596" || cleanUserDigits == "0500000000" || cleanUserDigits == "500000000" || cleanUserDigits == "966500000000")
+	isDemoPass := (cleanPassword == "1234" || cleanPassword == "123456" || cleanPassword == "0000" || cleanPassword == "596")
+	if isDemoUser && isDemoPass {
 		demoID := uuid.MustParse("00000000-0000-0000-0000-000001234596")
-		token, exp, err := jwt.GenerateToken(demoID, "demo.driver@kerd2sy.com", "DRIVER", s.cfg.JWTSecret)
+		token, exp, err := jwt.GenerateToken(demoID, "demo.driver@kerd2sy.com", "SUPER_ADMIN", s.cfg.JWTSecret)
 		if err != nil {
 			return nil, err
 		}
@@ -109,23 +131,44 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 			"branch_name":       "الفرع الرئيسي",
 			"shift":             "morning",
 			"vehicle_type":      "motorcycle",
+			"role":              "SUPER_ADMIN",
+			"permissions":       []string{"*"},
+			"is_employee":       true,
+		}
+		demoAdmin := &dto.AdminInfo{
+			ID:          demoID,
+			Email:       "demo.driver@kerd2sy.com",
+			Username:    "demo_reviewer",
+			Name:        "تست جوجل",
+			Role:        "SUPER_ADMIN",
+			Permissions: []string{"*"},
+			BranchName:  "الفرع الرئيسي",
 		}
 		return &dto.LoginResponse{
 			Token:        token,
 			AccessToken:  token,
 			RefreshToken: token,
 			ExpiresAt:    exp,
-			Type:         "employee",
+			Type:         "admin",
 			IsEmployee:   true,
 			Employee:     demoEmp,
+			Admin:        demoAdmin,
+			User:         demoAdmin,
 		}, nil
 	}
 
+	phoneVariations := repository.NormalizeSaudiPhoneVariations(userKey)
+
 	admin, err := s.adminRepo.FindByUsername(ctx, userKey)
-	if err != nil {
+	if err != nil || admin == nil {
 		admin, err = s.adminRepo.FindByEmail(ctx, userKey)
-		if err != nil {
-			admin, err = s.adminRepo.FindByPhone(ctx, userKey)
+		if err != nil || admin == nil {
+			for _, p := range phoneVariations {
+				if a, pErr := s.adminRepo.FindByPhone(ctx, p); pErr == nil && a != nil {
+					admin = a
+					break
+				}
+			}
 		}
 	}
 
@@ -134,26 +177,45 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		if empMap, empErr := s.adminRepo.FindEmployeeByLogin(ctx, userKey); empErr == nil && empMap != nil {
 			pwdHash, _ := empMap["password_hash"].(string)
 			natID, _ := empMap["national_id"].(string)
+			phoneVal, _ := empMap["phone"].(string)
 
-			// Calculate default password: last 4 digits of National ID / Iqama
-			last4 := natID
-			if len(last4) >= 4 {
-				last4 = last4[len(last4)-4:]
-			}
-
-			cleanInputPassword := strings.TrimSpace(req.Password)
+			// Default password checks:
+			// 1. Last 4 digits of employee phone
+			// 2. Last 4 digits of input user phone
+			// 3. Last 4 digits of National ID (fallback)
+			matched := false
 
 			if pwdHash != "" {
-				// User has changed their password: check against bcrypt hash
-				if err := bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(cleanInputPassword)); err != nil {
-					return nil, errors.New("كلمة المرور غير صحيحة")
-				}
-			} else {
-				// Default password: MUST be last 4 digits of National ID / Iqama
-				if cleanInputPassword != last4 {
-					return nil, errors.New("كلمة المرور غير صحيحة، كلمة المرور الافتراضية هي آخر 4 أرقام من رقم الإقامة")
+				// User set a custom bcrypt password
+				if err := bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(cleanPassword)); err == nil {
+					matched = true
 				}
 			}
+
+			if !matched && phoneVal != "" {
+				phoneDigits := extractDigits(phoneVal)
+				if len(phoneDigits) >= 4 && cleanPassword == phoneDigits[len(phoneDigits)-4:] {
+					matched = true
+				}
+			}
+
+			if !matched && len(cleanUserDigits) >= 4 {
+				if cleanPassword == cleanUserDigits[len(cleanUserDigits)-4:] {
+					matched = true
+				}
+			}
+
+			if !matched && natID != "" {
+				natDigits := extractDigits(natID)
+				if len(natDigits) >= 4 && cleanPassword == natDigits[len(natDigits)-4:] {
+					matched = true
+				}
+			}
+
+			if !matched {
+				return nil, errors.New("كلمة المرور غير صحيحة، كلمة المرور هي آخر 4 أرقام من رقم الجوال")
+			}
+
 			delete(empMap, "password_hash")
 
 			empID, _ := uuid.Parse(empMap["id"].(string))
@@ -171,11 +233,31 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 				Employee:     empMap,
 			}, nil
 		}
-		return nil, errors.New("اسم المستخدم أو كلمة المرور غير صحيحة")
+		return nil, errors.New("رقم الجوال أو كلمة المرور غير صحيحة")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.Password)); err != nil {
-		return nil, errors.New("اسم المستخدم أو كلمة المرور غير صحيحة")
+	// Verify Admin password:
+	adminPasswordMatched := false
+	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(cleanPassword)); err == nil {
+		adminPasswordMatched = true
+	}
+
+	// Default password for admin: last 4 digits of phone
+	if !adminPasswordMatched && admin.Phone != "" {
+		adminPhoneDigits := extractDigits(admin.Phone)
+		if len(adminPhoneDigits) >= 4 && cleanPassword == adminPhoneDigits[len(adminPhoneDigits)-4:] {
+			adminPasswordMatched = true
+		}
+	}
+
+	if !adminPasswordMatched && len(cleanUserDigits) >= 4 {
+		if cleanPassword == cleanUserDigits[len(cleanUserDigits)-4:] {
+			adminPasswordMatched = true
+		}
+	}
+
+	if !adminPasswordMatched {
+		return nil, errors.New("رقم الجوال أو كلمة المرور غير صحيحة")
 	}
 
 	token, exp, err := jwt.GenerateToken(admin.ID, admin.Email, admin.Role, s.cfg.JWTSecret)

@@ -11,6 +11,7 @@ import (
 	"delivery-backend/internal/modules/fleet/contracts"
 	"delivery-backend/internal/modules/fleet/dto"
 	"delivery-backend/internal/modules/fleet/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type VehicleHandler struct {
@@ -32,10 +33,16 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 		return
 	}
 
-	if bid, exists := c.Get("branch_id"); exists && bid != nil {
-		if b, ok := bid.(*uuid.UUID); ok && b != nil {
-			req.BranchID = b
-		}
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !scope.IsGlobal {
+		req.BranchID = scope.BranchID
+	} else if req.BranchID == nil && scope.BranchID != nil {
+		req.BranchID = scope.BranchID
 	}
 
 	vehicle, err := h.vehicleService.Create(c.Request.Context(), req)
@@ -64,9 +71,26 @@ func (h *VehicleHandler) Update(c *gin.Context) {
 		return
 	}
 
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	existingVehicle, err := h.vehicleService.GetByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(existingVehicle.Vehicle.BranchID) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "المركبة غير موجودة"})
+		return
+	}
+
 	var req dto.UpdateVehicleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات غير صالحة: " + err.Error()})
+		return
+	}
+
+	if !scope.IsGlobal && req.BranchID != nil && !scope.AllowsBranch(req.BranchID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح بنقل المركبة إلى فرع آخر"})
 		return
 	}
 
@@ -96,6 +120,18 @@ func (h *VehicleHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	existingVehicle, err := h.vehicleService.GetByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(existingVehicle.Vehicle.BranchID) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "المركبة غير موجودة"})
+		return
+	}
+
 	if err := h.vehicleService.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل في حذف المركبة"})
 		return
@@ -121,8 +157,14 @@ func (h *VehicleHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	vehicle, err := h.vehicleService.GetByID(c.Request.Context(), id)
+	scope, err := middleware.ResolveBranchScope(c)
 	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	vehicle, err := h.vehicleService.GetByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(vehicle.Vehicle.BranchID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "المركبة غير موجودة"})
 		return
 	}
@@ -137,10 +179,16 @@ func (h *VehicleHandler) GetAll(c *gin.Context) {
 		return
 	}
 
-	if bid, exists := c.Get("branch_id"); exists && bid != nil {
-		if b, ok := bid.(*uuid.UUID); ok && b != nil {
-			filter.BranchID = b
-		}
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !scope.IsGlobal {
+		filter.BranchID = scope.BranchID
+	} else if filter.BranchID == nil && scope.BranchID != nil {
+		filter.BranchID = scope.BranchID
 	}
 
 	vehicles, total, err := h.vehicleService.GetAll(c.Request.Context(), filter)
@@ -204,6 +252,18 @@ func (h *VehicleHandler) RecordOilChange(c *gin.Context) {
 		return
 	}
 
+	scope, err := middleware.ResolveBranchScope(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	existingVehicle, err := h.vehicleService.GetByID(c.Request.Context(), id)
+	if err != nil || !scope.AllowsBranch(existingVehicle.Vehicle.BranchID) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "المركبة غير موجودة"})
+		return
+	}
+
 	if err := h.vehicleService.RecordOilChange(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -211,3 +271,4 @@ func (h *VehicleHandler) RecordOilChange(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "تم تسجيل تغيير الزيت بنجاح"})
 }
+

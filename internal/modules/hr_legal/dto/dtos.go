@@ -9,6 +9,9 @@ import (
 // 1. Investigation
 type CreateInvestigationRequest struct {
 	EmployeeID     string   `json:"employee_id" binding:"required,uuid"`
+	EmployeeName   string   `json:"employee_name"`
+	NationalID     string   `json:"national_id"`
+	SupervisorName string   `json:"supervisor_name"`
 	Type           string   `json:"type"`
 	Questions      []string `json:"questions"`
 	Answers        []string `json:"answers"`
@@ -25,6 +28,9 @@ type CreateInvestigationRequest struct {
 
 type UpdateInvestigationRequest struct {
 	EmployeeID     string   `json:"employee_id" binding:"required,uuid"`
+	EmployeeName   string   `json:"employee_name"`
+	NationalID     string   `json:"national_id"`
+	SupervisorName string   `json:"supervisor_name"`
 	Type           string   `json:"type"`
 	Questions      []string `json:"questions"`
 	Answers        []string `json:"answers"`

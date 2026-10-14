@@ -16,6 +16,12 @@ import (
 	"delivery-backend/internal/modules/work/repository"
 )
 
+var (
+	ErrActiveSessionExists  = errors.New("يوجد شفت عمل نشط بالفعل حالياً")
+	ErrNoActiveSession      = errors.New("لا يوجد شفت نشط قيد العمل حالياً أو تم إنهاؤه مسبقاً")
+	ErrCrossBranchForbidden = errors.New("غير مصرح: الموظف يتبع فرعاً آخر")
+)
+
 type EmployeeData struct {
 	ID                    uuid.UUID
 	Name                  string
@@ -71,6 +77,8 @@ type WorkService interface {
 	CheckOilChange(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (*dto.OilChangeCheckResponse, error)
 	GetSessionByID(ctx context.Context, sessionID uuid.UUID) (*domain.WorkSession, error)
 	GetActiveSessions(ctx context.Context, branchID *uuid.UUID) ([]domain.WorkSession, error)
+	SupervisorStartShift(ctx context.Context, req dto.SupervisorStartShiftRequest, supervisorID uuid.UUID, supervisorName, supervisorRole string, supervisorBranchID *uuid.UUID) (*domain.WorkSession, error)
+	SupervisorEndShift(ctx context.Context, req dto.SupervisorEndShiftRequest, supervisorID uuid.UUID, supervisorName, supervisorRole string, supervisorBranchID *uuid.UUID) (*domain.WorkSession, error)
 }
 
 type workService struct {
@@ -599,3 +607,196 @@ func toContractDTO(s *domain.WorkSession) *contracts.WorkSessionDTO {
 		Status:           s.Status,
 	}
 }
+
+func (s *workService) SupervisorStartShift(
+	ctx context.Context,
+	req dto.SupervisorStartShiftRequest,
+	supervisorID uuid.UUID,
+	supervisorName, supervisorRole string,
+	supervisorBranchID *uuid.UUID,
+) (*domain.WorkSession, error) {
+	var targetEmpID *uuid.UUID
+
+	if strings.TrimSpace(req.EmployeeID) != "" {
+		empUUID, err := uuid.Parse(req.EmployeeID)
+		if err != nil {
+			return nil, errors.New("معرف الموظف غير صالح")
+		}
+		if s.empProvider != nil {
+			emp, err := s.empProvider.GetEmployee(ctx, empUUID)
+			if err != nil || emp == nil {
+				return nil, errors.New("الموظف غير موجود")
+			}
+			if !strings.EqualFold(supervisorRole, "SUPER_ADMIN") {
+				if supervisorBranchID == nil || emp.BranchID == nil || *emp.BranchID != *supervisorBranchID {
+					return nil, ErrCrossBranchForbidden
+				}
+			}
+		}
+		targetEmpID = &empUUID
+	} else {
+		targetEmpID = &supervisorID
+	}
+
+	startImg := req.StartKMImage
+	if s.storage != nil && strings.HasPrefix(startImg, "data:image") {
+		if savedUrl, err := s.storage.SaveBase64Image(startImg, "odometer"); err == nil && savedUrl != "" {
+			startImg = savedUrl
+		}
+	}
+
+	startPlateImg := req.StartPlateImage
+	if s.storage != nil && strings.HasPrefix(startPlateImg, "data:image") {
+		if savedUrl, err := s.storage.SaveBase64Image(startPlateImg, "plates"); err == nil && savedUrl != "" {
+			startPlateImg = savedUrl
+		}
+	}
+
+	session := &domain.WorkSession{
+		ID:                   uuid.New(),
+		EmployeeID:           targetEmpID,
+		StartTime:            time.Now(),
+		StartKM:              req.StartKM,
+		StartKMImage:         startImg,
+		StartPlateImage:      startPlateImg,
+		ApplicationID:        req.ApplicationID,
+		ApplicationType:      req.ApplicationType,
+		VehicleType:          req.VehicleType,
+		MotorcycleNumber:     req.MotorcycleNumber,
+		IsEditedBySupervisor: true,
+		EditedByName:         supervisorName,
+		ReviewedBy:           &supervisorID,
+		ReviewNotes:          req.OverrideReason,
+		Notes:                req.Notes,
+		Status:               "ACTIVE",
+		OriginalStartKM:      req.StartKM,
+	}
+
+	err := s.repo.ExecInTx(ctx, func(txRepo repository.WorkRepository) error {
+		active, _ := txRepo.FindActiveSessionByEmployeeID(ctx, *targetEmpID)
+		if active != nil {
+			return ErrActiveSessionExists
+		}
+		if err := txRepo.Create(ctx, session); err != nil {
+			return err
+		}
+		if strings.TrimSpace(req.EmployeeID) != "" && s.empProvider != nil {
+			return s.empProvider.UpdateEmployeeOnStartWork(ctx, *targetEmpID, req.ApplicationID, req.ApplicationType, req.MotorcycleNumber)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
+}
+
+func (s *workService) SupervisorEndShift(
+	ctx context.Context,
+	req dto.SupervisorEndShiftRequest,
+	supervisorID uuid.UUID,
+	supervisorName, supervisorRole string,
+	supervisorBranchID *uuid.UUID,
+) (*domain.WorkSession, error) {
+	var targetEmpID *uuid.UUID
+
+	if strings.TrimSpace(req.EmployeeID) != "" {
+		empUUID, err := uuid.Parse(req.EmployeeID)
+		if err != nil {
+			return nil, errors.New("معرف الموظف غير صالح")
+		}
+		if s.empProvider != nil {
+			emp, err := s.empProvider.GetEmployee(ctx, empUUID)
+			if err != nil || emp == nil {
+				return nil, errors.New("الموظف غير موجود")
+			}
+			if !strings.EqualFold(supervisorRole, "SUPER_ADMIN") {
+				if supervisorBranchID == nil || emp.BranchID == nil || *emp.BranchID != *supervisorBranchID {
+					return nil, ErrCrossBranchForbidden
+				}
+			}
+		}
+		targetEmpID = &empUUID
+	} else {
+		targetEmpID = &supervisorID
+	}
+
+	endImg := req.EndKMImage
+	if s.storage != nil && strings.HasPrefix(endImg, "data:image") {
+		if savedUrl, err := s.storage.SaveBase64Image(endImg, "odometer"); err == nil && savedUrl != "" {
+			endImg = savedUrl
+		}
+	}
+
+	var updatedSession *domain.WorkSession
+
+	err := s.repo.ExecInTx(ctx, func(txRepo repository.WorkRepository) error {
+		session, err := txRepo.FindActiveSessionByEmployeeIDForUpdate(ctx, *targetEmpID)
+		if err != nil || session == nil {
+			return ErrNoActiveSession
+		}
+
+		if req.EndKM > 0 && req.EndKM < session.StartKM {
+			return errors.New("عداد النهاية لا يمكن أن يكون أقل من عداد البداية")
+		}
+
+		distance := 0.0
+		if req.EndKM >= session.StartKM {
+			distance = req.EndKM - session.StartKM
+		}
+
+		now := time.Now()
+		session.EndTime = &now
+		session.EndKM = req.EndKM
+		session.EndKMImage = endImg
+		session.Distance = distance
+		session.OrdersCount = req.OrdersCount
+		session.FuelCost = req.FuelCost
+		session.Status = "COMPLETED"
+		session.IsReviewed = true
+		session.ReviewedBy = &supervisorID
+		session.IsEditedBySupervisor = true
+		session.EditedByName = supervisorName
+		if req.OverrideReason != "" {
+			session.ReviewNotes = req.OverrideReason
+		}
+		if req.ReviewNotes != "" {
+			if session.ReviewNotes != "" {
+				session.ReviewNotes += " | " + req.ReviewNotes
+			} else {
+				session.ReviewNotes = req.ReviewNotes
+			}
+		}
+		if req.Notes != "" {
+			session.Notes = req.Notes
+		}
+		session.OriginalEndKM = req.EndKM
+		session.OriginalOrdersCount = req.OrdersCount
+
+		if err := txRepo.Update(ctx, session); err != nil {
+			return err
+		}
+
+		if strings.TrimSpace(req.EmployeeID) != "" && s.empProvider != nil {
+			if err := s.empProvider.UpdateEmployeeOnEndWork(ctx, *targetEmpID, distance, req.OrdersCount); err != nil {
+				return err
+			}
+		}
+
+		if s.vehicleProvider != nil && session.MotorcycleNumber != "" && req.EndKM > 0 {
+			_ = s.vehicleProvider.UpdateVehicleKM(ctx, session.MotorcycleNumber, req.EndKM)
+		}
+
+		updatedSession = session
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedSession, nil
+}
+

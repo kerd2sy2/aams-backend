@@ -52,6 +52,10 @@ func (h *HRLegalHandler) CreateInvestigation(c *gin.Context) {
 		return
 	}
 
+	if req.SupervisorName == "" {
+		req.SupervisorName = c.GetString("admin_name")
+	}
+
 	resp, err := h.svc.CreateInvestigation(c.Request.Context(), req, supervisorID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

@@ -80,18 +80,43 @@ func (r *gormHRLegalRepository) UpdateInvestigation(ctx context.Context, inv *do
 
 func (r *gormHRLegalRepository) FindInvestigations(ctx context.Context, branchID *uuid.UUID) ([]domain.Investigation, error) {
 	var list []domain.Investigation
-	query := r.db.WithContext(ctx).Order("created_at DESC")
+	selectCols := `investigations.*,
+		COALESCE(NULLIF(investigations.employee_name, ''), emp.name, '') AS employee_name,
+		COALESCE(NULLIF(investigations.national_id, ''), emp.national_id, '') AS national_id,
+		COALESCE(NULLIF(investigations.supervisor_name, ''), adm.name, sup_emp.name, '') AS supervisor_name`
+
+	query := r.db.WithContext(ctx).
+		Table("investigations").
+		Select(selectCols).
+		Joins("LEFT JOIN employees emp ON emp.id = investigations.employee_id").
+		Joins("LEFT JOIN admins adm ON adm.id = investigations.supervisor_id").
+		Joins("LEFT JOIN employees sup_emp ON sup_emp.id = investigations.supervisor_id").
+		Where("investigations.deleted_at IS NULL").
+		Order("investigations.created_at DESC")
+
 	if branchID != nil {
-		query = query.Joins("JOIN employees ON employees.id = investigations.employee_id").
-			Where("employees.branch_id = ?", *branchID)
+		query = query.Where("emp.branch_id = ?", *branchID)
 	}
-	err := query.Find(&list).Error
+	err := query.Scan(&list).Error
 	return list, err
 }
 
 func (r *gormHRLegalRepository) FindInvestigationByID(ctx context.Context, id uuid.UUID) (*domain.Investigation, error) {
 	var inv domain.Investigation
-	if err := r.db.WithContext(ctx).First(&inv, "id = ?", id).Error; err != nil {
+	selectCols := `investigations.*,
+		COALESCE(NULLIF(investigations.employee_name, ''), emp.name, '') AS employee_name,
+		COALESCE(NULLIF(investigations.national_id, ''), emp.national_id, '') AS national_id,
+		COALESCE(NULLIF(investigations.supervisor_name, ''), adm.name, sup_emp.name, '') AS supervisor_name`
+
+	err := r.db.WithContext(ctx).
+		Table("investigations").
+		Select(selectCols).
+		Joins("LEFT JOIN employees emp ON emp.id = investigations.employee_id").
+		Joins("LEFT JOIN admins adm ON adm.id = investigations.supervisor_id").
+		Joins("LEFT JOIN employees sup_emp ON sup_emp.id = investigations.supervisor_id").
+		Where("investigations.id = ? AND investigations.deleted_at IS NULL", id).
+		Take(&inv).Error
+	if err != nil {
 		return nil, err
 	}
 	return &inv, nil

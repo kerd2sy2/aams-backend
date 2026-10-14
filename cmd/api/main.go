@@ -95,7 +95,7 @@ func main() {
 	custodyModule := custody.NewModule(db)
 	hrLegalModule := hr_legal.NewModule(db)
 	attendanceModule := attendance.NewModule(db)
-	workModule := work.NewModule(db, storageService)
+	workModule := work.NewModule(db, storageService, auditService)
 	targetModule := target.NewModule(db)
 	employeeModule := employee.NewModule(db, nil)
 

@@ -79,3 +79,30 @@ type LastKMResponse struct {
 	RemainingOilKM    float64 `json:"remaining_oil_km"`
 	DistanceSinceOil  float64 `json:"distance_since_oil"`
 }
+
+type SupervisorStartShiftRequest struct {
+	EmployeeID       string  `json:"employee_id"` // Optional: if provided, overrides delegate shift; if omitted, starts supervisor's own shift
+	StartKM          float64 `json:"start_km" binding:"gte=0"`
+	StartKMImage     string  `json:"start_km_image"`
+	StartPlateImage  string  `json:"start_plate_image"`
+	ApplicationID    string  `json:"application_id"`
+	ApplicationType  string  `json:"application_type"`
+	VehicleType      string  `json:"vehicle_type"`
+	MotorcycleNumber string  `json:"motorcycle_number"`
+	OverrideReason   string  `json:"override_reason"` // e.g. "جهاز المندوب معطل"
+	Notes            string  `json:"notes"`
+}
+
+type SupervisorEndShiftRequest struct {
+	EmployeeID      string  `json:"employee_id"` // Optional: if provided, overrides delegate shift; if omitted, ends supervisor's own shift
+	EndKM           float64 `json:"end_km" binding:"gte=0"`
+	EndKMImage      string  `json:"end_km_image"`
+	OrdersCount     int     `json:"orders_count" binding:"gte=0"`
+	FuelCost        float64 `json:"fuel_cost" binding:"gte=0"`
+	ApplicationID   string  `json:"application_id"`
+	ApplicationType string  `json:"application_type"`
+	OverrideReason  string  `json:"override_reason"`
+	ReviewNotes     string  `json:"review_notes"`
+	Notes           string  `json:"notes"`
+}
+

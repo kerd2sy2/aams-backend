@@ -97,6 +97,23 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS rejected_at timestamp with time zone")
 		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone")
 		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS deleted_at timestamp with time zone")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS employee_name varchar(255)")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS supervisor_name varchar(100)")
+		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS national_id varchar(50)")
+
+		// Backfill existing investigations with employee and supervisor names if missing
+		rawDB.Exec(`UPDATE investigations SET 
+			employee_name = employees.name, 
+			national_id = COALESCE(NULLIF(investigations.national_id, ''), employees.national_id)
+			FROM employees WHERE investigations.employee_id = employees.id AND (investigations.employee_name IS NULL OR investigations.employee_name = '')`)
+
+		rawDB.Exec(`UPDATE investigations SET 
+			supervisor_name = admins.name
+			FROM admins WHERE investigations.supervisor_id = admins.id AND (investigations.supervisor_name IS NULL OR investigations.supervisor_name = '')`)
+
+		rawDB.Exec(`UPDATE investigations SET 
+			supervisor_name = employees.name
+			FROM employees WHERE investigations.supervisor_id = employees.id AND (investigations.supervisor_name IS NULL OR investigations.supervisor_name = '')`)
 
 		rawDB.Exec("ALTER TABLE otp_requests ADD COLUMN IF NOT EXISTS branch_id char(36)")
 		rawDB.Exec("ALTER TABLE otp_requests ADD COLUMN IF NOT EXISTS branch_name varchar(100)")
@@ -228,14 +245,21 @@ func seedRoles(db *gorm.DB) {
 			Name:        "SUPERVISOR",
 			DisplayName: "مشرف وردية",
 			Description: "متابعة المناديب، تسجيل الدوام، العهدة اليومية، فحص الزيت ومتابعة العمليات الميدانية",
-			Permissions: `["employees.view","employees.create","employees.edit","employees.cards","work.view","work.start","work.end","custody.view","custody.add","vehicles.view","vehicles.oil","fuel.view","fuel.manage","maintenance.view","maintenance.manage","attendance.view","investigations.view","investigations.create","inventory.view","inventory.dispense","tickets.view","tickets.manage"]`,
+			Permissions: `["employees.view","employees.create","employees.edit","employees.cards","work.view","work.start","work.end","custody","custody.access","custody.view","custody.add","vehicles.view","vehicles.oil","fuel.view","fuel.manage","maintenance.view","maintenance.manage","attendance.view","investigations.view","investigations.create","inventory.view","inventory.dispense","tickets.view","tickets.manage"]`,
 			IsSystem:    true,
 		},
 		{
 			Name:        "ACCOUNTANT",
 			DisplayName: "إدارة مالية ومحاسبة",
 			Description: "إدارة العهدة، المصروفات، الحسابات البنكية، الوقود، المخالفات والتقارير المالية",
-			Permissions: `["custody.view","custody.add","custody.delete","bank_accounts.view","bank_accounts.manage","fuel.view","fuel.manage","violations.view","violations.manage","reports.view","reports.export","inventory.view","investigations.view"]`,
+			Permissions: `["custody","custody.access","custody.view","custody.add","custody.delete","bank_accounts.view","bank_accounts.manage","fuel.view","fuel.manage","violations.view","violations.manage","reports.view","reports.export","inventory.view","investigations.view"]`,
+			IsSystem:    true,
+		},
+		{
+			Name:        "CUSTODY",
+			DisplayName: "مسؤول العهدة والمصروفات",
+			Description: "إدارة وصرف العهدة اليومية وتوثيق الفواتير والمصروفات",
+			Permissions: `["custody","custody.access","custody.view","custody.add","custody.delete","bank_accounts.view","reports.view"]`,
 			IsSystem:    true,
 		},
 		{

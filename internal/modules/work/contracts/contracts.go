@@ -29,3 +29,9 @@ type IWorkContract interface {
 	GetLastCompletedSession(ctx context.Context, empID uuid.UUID) (*WorkSessionDTO, error)
 	CountTodaySessions(ctx context.Context, empID uuid.UUID) (int64, error)
 }
+
+// IAuditContract defines the audit logging contract for work actions
+type IAuditContract interface {
+	LogAction(ctx context.Context, userName, action, details, ip string, branchID *uuid.UUID) error
+}
+

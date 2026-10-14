@@ -97,8 +97,10 @@ func (s *hrLegalService) toInvestigationResponse(inv *domain.Investigation) *dto
 	return &dto.InvestigationResponse{
 		ID:                 inv.ID,
 		EmployeeID:         inv.EmployeeID,
+		EmployeeName:       inv.EmployeeName,
 		NationalID:         inv.NationalID,
 		SupervisorID:       inv.SupervisorID,
+		SupervisorName:     inv.SupervisorName,
 		Type:               inv.Type,
 		Questions:          questions,
 		Answers:            answers,
@@ -150,10 +152,28 @@ func (s *hrLegalService) CreateInvestigation(ctx context.Context, req dto.Create
 		}
 	}
 
+	empName := strings.TrimSpace(req.EmployeeName)
+	nationalID := strings.TrimSpace(req.NationalID)
+	if empName == "" || nationalID == "" {
+		if empInfo, err := s.repo.GetEmployeeInfo(ctx, empID); err == nil && empInfo != nil {
+			if empName == "" {
+				empName = empInfo.Name
+			}
+			if nationalID == "" {
+				nationalID = empInfo.NationalID
+			}
+		}
+	}
+
+	supName := strings.TrimSpace(req.SupervisorName)
+
 	inv := &domain.Investigation{
 		ID:             uuid.New(),
 		EmployeeID:     empID,
+		EmployeeName:   empName,
 		SupervisorID:   supervisorID,
+		SupervisorName: supName,
+		NationalID:     nationalID,
 		Type:           invType,
 		Questions:      string(questionsJSON),
 		Answers:        string(answersJSON),
@@ -179,6 +199,21 @@ func (s *hrLegalService) UpdateInvestigation(ctx context.Context, id uuid.UUID, 
 	inv, err := s.repo.FindInvestigationByID(ctx, id)
 	if err != nil {
 		return nil, errors.New("سجل التحقيق غير موجود")
+	}
+
+	if req.EmployeeID != "" {
+		if empUUID, err := uuid.Parse(req.EmployeeID); err == nil {
+			inv.EmployeeID = empUUID
+		}
+	}
+	if req.EmployeeName != "" {
+		inv.EmployeeName = strings.TrimSpace(req.EmployeeName)
+	}
+	if req.NationalID != "" {
+		inv.NationalID = strings.TrimSpace(req.NationalID)
+	}
+	if req.SupervisorName != "" {
+		inv.SupervisorName = strings.TrimSpace(req.SupervisorName)
 	}
 
 	if req.Type != "" {
