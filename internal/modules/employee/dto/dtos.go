@@ -23,6 +23,9 @@ type CreateEmployeeRequest struct {
 	VehicleType              string     `json:"vehicle_type"`
 	Shift                    string     `json:"shift"`
 	BranchID                 *uuid.UUID `json:"branch_id"`
+	RoleID                   *uuid.UUID `json:"role_id"`
+	RoleName                 string     `json:"role_name"`
+	Permissions              string     `json:"permissions"`
 }
 
 type UpdateEmployeeRequest struct {
@@ -44,6 +47,9 @@ type UpdateEmployeeRequest struct {
 	VehicleType              string     `json:"vehicle_type"`
 	Shift                    string     `json:"shift"`
 	BranchID                 *uuid.UUID `json:"branch_id"`
+	RoleID                   *uuid.UUID `json:"role_id"`
+	RoleName                 string     `json:"role_name"`
+	Permissions              string     `json:"permissions"`
 }
 
 type SetPhoneRequest struct {

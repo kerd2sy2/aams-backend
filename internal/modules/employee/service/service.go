@@ -76,6 +76,9 @@ func (s *employeeService) Create(ctx context.Context, req dto.CreateEmployeeRequ
 		VehicleType:              req.VehicleType,
 		Shift:                    req.Shift,
 		BranchID:                 req.BranchID,
+		RoleID:                   req.RoleID,
+		RoleName:                 req.RoleName,
+		Permissions:              req.Permissions,
 		Barcode:                  barcodeData,
 		QRCode:                   qrData,
 		Language:                 "ar",
@@ -164,6 +167,15 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req dto.Upda
 	}
 	if req.BranchID != nil {
 		emp.BranchID = req.BranchID
+	}
+	if req.RoleID != nil {
+		emp.RoleID = req.RoleID
+	}
+	if req.RoleName != "" {
+		emp.RoleName = req.RoleName
+	}
+	if req.Permissions != "" {
+		emp.Permissions = req.Permissions
 	}
 
 	if err := s.repo.Update(ctx, emp); err != nil {

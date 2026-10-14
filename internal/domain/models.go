@@ -111,7 +111,10 @@ type Employee struct {
 	CreatedAt                time.Time      `json:"created_at"`
 	UpdatedAt                time.Time      `json:"updated_at"`
 	DeletedAt                gorm.DeletedAt `gorm:"index" json:"-"`
-
+	RoleID                   *uuid.UUID     `gorm:"type:char(36);index" json:"role_id"`
+	RoleObj                  *Role          `gorm:"foreignKey:RoleID" json:"role_obj,omitempty"`
+	RoleName                 string         `gorm:"type:varchar(50)" json:"role_name"`
+	Permissions              string         `gorm:"type:text" json:"permissions"`
 	WorkSessions []WorkSession `gorm:"foreignKey:EmployeeID;constraint:OnDelete:SET NULL" json:"work_sessions,omitempty"`
 }
 

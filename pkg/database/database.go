@@ -242,6 +242,13 @@ func seedRoles(db *gorm.DB) {
 			IsSystem:    true,
 		},
 		{
+			Name:        "OWNER",
+			DisplayName: "مالك المؤسسة",
+			Description: "كامل الصلاحيات للإشراف العام والتقارير والعمليات المالية والإدارية",
+			Permissions: `["*"]`,
+			IsSystem:    true,
+		},
+		{
 			Name:        "SUPERVISOR",
 			DisplayName: "مشرف وردية",
 			Description: "متابعة المناديب، تسجيل الدوام، العهدة اليومية، فحص الزيت ومتابعة العمليات الميدانية",
@@ -351,6 +358,33 @@ func seedAdmin(db *gorm.DB) {
 		var supRole domain.Role
 		if err := db.Where("name = ?", "SUPERVISOR").First(&supRole).Error; err == nil {
 			db.Model(&domain.Admin{}).Where("role = 'SUPERVISOR' AND role_id IS NULL").Update("role_id", supRole.ID)
+		}
+	}
+
+	// Ensure primary system admin 0500626432 exists with SUPER_ADMIN role
+	var admin0500 domain.Admin
+	if err := db.Where("phone = ?", "0500626432").First(&admin0500).Error; err != nil {
+		var superRole domain.Role
+		var roleID *uuid.UUID
+		if err := db.Where("name = ?", "SUPER_ADMIN").First(&superRole).Error; err == nil {
+			roleID = &superRole.ID
+		}
+		defaultAdminPassword := os.Getenv("DEFAULT_ADMIN_PASSWORD")
+		if defaultAdminPassword == "" {
+			defaultAdminPassword = "Admin@2026!"
+		}
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(defaultAdminPassword), bcrypt.DefaultCost)
+		newAdmin := domain.Admin{
+			Phone:    "0500626432",
+			Username: "0500626432",
+			Email:    "admin0500626432@aams.com",
+			Name:     "المدير العام",
+			Password: string(hashedPassword),
+			Role:     "ADMIN",
+			RoleID:   roleID,
+		}
+		if err := db.Create(&newAdmin).Error; err == nil {
+			log.Println("[SEED SUCCESS] Admin 0500626432 created with SUPER_ADMIN role")
 		}
 	}
 }

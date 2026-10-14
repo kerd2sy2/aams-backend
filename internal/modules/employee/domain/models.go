@@ -42,6 +42,9 @@ type Employee struct {
 	DeviceUUID               string         `gorm:"type:varchar(100)" json:"device_uuid"`
 	Language                 string         `gorm:"type:varchar(10);default:'ar'" json:"language"`
 	IsWorking                bool           `gorm:"default:false" json:"is_working"`
+	RoleID                   *uuid.UUID     `gorm:"type:char(36);index" json:"role_id"`
+	RoleName                 string         `gorm:"type:varchar(50)" json:"role_name"`
+	Permissions              string         `gorm:"type:text" json:"permissions"`
 	CreatedAt                time.Time      `json:"created_at"`
 	UpdatedAt                time.Time      `json:"updated_at"`
 	DeletedAt                gorm.DeletedAt `gorm:"index" json:"-"`
