@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,12 +83,16 @@ func (s *custodyService) toResponse(day *domain.CustodyDay) *dto.CustodyDayRespo
 	return resp
 }
 
-func (s *custodyService) recomputeClosing(day *domain.CustodyDay) {
-	var totalExpenses float64
+func (s *custodyService) sumExpenses(day *domain.CustodyDay) float64 {
+	var total float64
 	for _, e := range day.Expenses {
-		totalExpenses += e.Amount
+		total += e.Amount
 	}
-	day.ClosingBalance = (day.OpeningBalance + day.AddedAmount) - totalExpenses
+	return total
+}
+
+func (s *custodyService) recomputeClosing(day *domain.CustodyDay) {
+	day.ClosingBalance = (day.OpeningBalance + day.AddedAmount) - s.sumExpenses(day)
 }
 
 func (s *custodyService) List(ctx context.Context, branchID *uuid.UUID) ([]dto.CustodyDayResponse, error) {
@@ -95,6 +100,58 @@ func (s *custodyService) List(ctx context.Context, branchID *uuid.UUID) ([]dto.C
 	if err != nil {
 		return nil, err
 	}
+	if len(days) == 0 {
+		return []dto.CustodyDayResponse{}, nil
+	}
+
+	// 1. Group and recalculate chain per branch in ascending date order
+	// so opening balance of each day strictly matches previous day's closing balance
+	sort.Slice(days, func(i, j int) bool {
+		return days[i].Date < days[j].Date
+	})
+
+	branchLastClosing := make(map[string]float64)
+	branchHasPrev := make(map[string]bool)
+
+	for i := range days {
+		day := &days[i]
+		bKey := "global"
+		if day.BranchID != nil {
+			bKey = day.BranchID.String()
+		}
+
+		if !branchHasPrev[bKey] {
+			prev, errPrev := s.repo.FindPreviousDay(ctx, day.BranchID, day.Date)
+			if errPrev == nil && prev != nil {
+				s.recomputeClosing(prev)
+				if day.OpeningBalance != prev.ClosingBalance {
+					day.OpeningBalance = prev.ClosingBalance
+					_ = s.repo.UpdateDay(ctx, day)
+				}
+			}
+			s.recomputeClosing(day)
+			branchLastClosing[bKey] = day.ClosingBalance
+			branchHasPrev[bKey] = true
+		} else {
+			prevClosing := branchLastClosing[bKey]
+			needsUpdate := false
+			if day.OpeningBalance != prevClosing {
+				day.OpeningBalance = prevClosing
+				needsUpdate = true
+			}
+			s.recomputeClosing(day)
+			if needsUpdate {
+				_ = s.repo.UpdateDay(ctx, day)
+			}
+			branchLastClosing[bKey] = day.ClosingBalance
+		}
+	}
+
+	// 2. Sort newest first for client display
+	sort.Slice(days, func(i, j int) bool {
+		return days[i].Date > days[j].Date
+	})
+
 	result := make([]dto.CustodyDayResponse, 0, len(days))
 	for i := range days {
 		result = append(result, *s.toResponse(&days[i]))
