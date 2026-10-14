@@ -32,14 +32,22 @@ DELETE FROM attendances;
 DELETE FROM custody_expenses;
 DELETE FROM investigations;
 DELETE FROM maintenance_requests;
+DELETE FROM maintenance_logs;
 DELETE FROM fuel_logs;
 DELETE FROM traffic_violations;
+DELETE FROM inventory_transactions;
+DELETE FROM support_tickets;
+DELETE FROM notifications;
+DELETE FROM broadcast_votes;
+DELETE FROM broadcast_reads;
 DELETE FROM employee_documents;
 DELETE FROM employee_bank_accounts;
 DELETE FROM leave_requests;
+DELETE FROM otp_requests;
 DELETE FROM employees;
 
--- 3. Delete non-admin users, keeping only phone 0500626432
+-- 3. Update any custody_logs attributed to other admins, then delete non-admin users
+UPDATE custody_logs SET admin_id = (SELECT id FROM admins WHERE phone = '0500626432' OR phone = '+966500626432' OR username = '0500626432' LIMIT 1);
 DELETE FROM admins WHERE phone != '0500626432' AND phone != '+966500626432' AND username != '0500626432';
 
 -- 4. Ensure admin 0500626432 is configured as SUPER_ADMIN
