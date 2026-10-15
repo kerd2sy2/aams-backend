@@ -45,9 +45,10 @@ func (r *gormCustodyRepository) UpdateDay(ctx context.Context, day *domain.Custo
 	return r.db.WithContext(ctx).Model(&domain.CustodyDay{}).
 		Where("id = ?", day.ID).
 		Updates(map[string]interface{}{
-			"opening_balance": day.OpeningBalance,
-			"added_amount":    day.AddedAmount,
-			"closing_balance": day.ClosingBalance,
+			"opening_balance":  day.OpeningBalance,
+			"added_amount":     day.AddedAmount,
+			"closing_balance":  day.ClosingBalance,
+			"ledger_image_url": day.LedgerImageURL,
 		}).Error
 }
 

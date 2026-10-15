@@ -213,6 +213,24 @@ func (h *CustodyHandler) DeleteLog(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "تم حذف سجل التدقيق بنجاح"})
 }
 
+func (h *CustodyHandler) SetLedgerImage(c *gin.Context) {
+	var req dto.SetLedgerImageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات غير صالحة: " + err.Error()})
+		return
+	}
+
+	branchID := custodyBranchID(c)
+	adminID, adminName, adminUsername := getAdminInfo(c)
+	result, err := h.svc.SetLedgerImage(c.Request.Context(), branchID, req, adminID, adminName, adminUsername)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 func (h *CustodyHandler) CheckAdminOnly(c *gin.Context) bool {
 	role, exists := c.Get("admin_role")
 	if !exists || (role != "admin" && role != "superadmin") {

@@ -24,6 +24,7 @@ type CustodyService interface {
 	DeleteExpense(ctx context.Context, expenseID uuid.UUID, branchID *uuid.UUID, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error)
 	GetLogs(ctx context.Context, filter dto.CustodyLogFilter) ([]domain.CustodyLog, int64, error)
 	DeleteLog(ctx context.Context, id uuid.UUID, adminID *uuid.UUID, adminName, adminUsername string) error
+	SetLedgerImage(ctx context.Context, branchID *uuid.UUID, req dto.SetLedgerImageRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error)
 
 	// Contract implementations
 	GetDaySummary(ctx context.Context, branchID *uuid.UUID, date string) (*contracts.CustodySummaryDTO, error)
@@ -46,6 +47,7 @@ func (s *custodyService) toResponse(day *domain.CustodyDay) *dto.CustodyDayRespo
 		AddedAmount:    day.AddedAmount,
 		CustodyValue:   day.OpeningBalance + day.AddedAmount,
 		ClosingBalance: day.ClosingBalance,
+		LedgerImageURL: day.LedgerImageURL,
 		Expenses:       make([]dto.CustodyExpenseResponse, 0, len(day.Expenses)),
 	}
 
@@ -496,4 +498,34 @@ func (s *custodyService) GetDaySummary(ctx context.Context, branchID *uuid.UUID,
 		TotalExpenses:  totalExpenses,
 		ClosingBalance: day.ClosingBalance,
 	}, nil
+}
+
+func (s *custodyService) SetLedgerImage(ctx context.Context, branchID *uuid.UUID, req dto.SetLedgerImageRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error) {
+	day, err := s.repo.FindDayByDate(ctx, branchID, req.Date)
+	if err != nil {
+		day = &domain.CustodyDay{
+			BranchID: branchID,
+			Date:     req.Date,
+		}
+		if prev, errPrev := s.repo.FindPreviousDay(ctx, branchID, req.Date); errPrev == nil && prev != nil {
+			day.OpeningBalance = prev.ClosingBalance
+		}
+		day.ClosingBalance = day.OpeningBalance
+		day.LedgerImageURL = req.ImageURL
+		if errCreate := s.repo.CreateDay(ctx, day); errCreate != nil {
+			return nil, errCreate
+		}
+	} else {
+		day.LedgerImageURL = req.ImageURL
+		if errUpdate := s.repo.UpdateDay(ctx, day); errUpdate != nil {
+			return nil, errUpdate
+		}
+	}
+
+	updatedDay, err := s.repo.FindDayByID(ctx, day.ID)
+	if err == nil && updatedDay != nil {
+		day = updatedDay
+	}
+	s.recomputeClosing(day)
+	return s.toResponse(day), nil
 }

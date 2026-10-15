@@ -35,9 +35,15 @@ type CustodyDayResponse struct {
 	CustodyValue   float64                  `json:"custody_value"`
 	TotalExpenses  float64                  `json:"total_expenses"`
 	ClosingBalance float64                  `json:"closing_balance"`
+	LedgerImageURL string                   `json:"ledger_image_url"`
 	Totals         CustodyTotals            `json:"totals"`
 	Expenses       []CustodyExpenseResponse `json:"expenses"`
 	CreatedAt      time.Time                `json:"created_at"`
+}
+
+type SetLedgerImageRequest struct {
+	Date     string `json:"date" binding:"required"`
+	ImageURL string `json:"image_url" binding:"required"`
 }
 
 type CreateCustodyDayRequest struct {

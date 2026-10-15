@@ -40,5 +40,6 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 		c.POST("/:id/expenses", m.Handler.AddExpense)
 		c.PUT("/expenses/:id", m.Handler.UpdateExpense)
 		c.DELETE("/expenses/:id", m.Handler.DeleteExpense)
+		c.POST("/ledger-image", m.Handler.SetLedgerImage)
 	}
 }

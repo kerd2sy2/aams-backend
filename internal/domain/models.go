@@ -394,6 +394,7 @@ type CustodyDay struct {
 	OpeningBalance float64          `gorm:"default:0" json:"opening_balance"`
 	AddedAmount    float64          `gorm:"default:0" json:"added_amount"`
 	ClosingBalance float64          `gorm:"default:0" json:"closing_balance"`
+	LedgerImageURL string           `gorm:"type:varchar(500)" json:"ledger_image_url"`
 	Expenses       []CustodyExpense `gorm:"foreignKey:CustodyDayID;constraint:OnDelete:CASCADE" json:"expenses,omitempty"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`
