@@ -34,6 +34,11 @@ func custodyBranchID(c *gin.Context) *uuid.UUID {
 			return &id
 		}
 	}
+	if s := c.GetHeader("X-Branch-ID"); s != "" {
+		if id, err := uuid.Parse(s); err == nil {
+			return &id
+		}
+	}
 	return nil
 }
 
