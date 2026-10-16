@@ -372,13 +372,35 @@ func (h *NotificationHandler) GetBroadcastVotes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": votes})
 }
 
+func resolveActorEmployeeID(c *gin.Context) (uuid.UUID, bool) {
+	if empIDVal, exists := c.Get("employee_id"); exists {
+		if id, ok := empIDVal.(uuid.UUID); ok && id != uuid.Nil {
+			return id, true
+		}
+	}
+	if qID := c.Query("employee_id"); qID != "" {
+		if id, err := uuid.Parse(qID); err == nil && id != uuid.Nil {
+			return id, true
+		}
+	}
+	if aIDVal, exists := c.Get("admin_id"); exists {
+		if id, ok := aIDVal.(uuid.UUID); ok && id != uuid.Nil {
+			return id, true
+		}
+	}
+	return uuid.Nil, false
+}
+
 func (h *NotificationHandler) GetEmployeeBroadcasts(c *gin.Context) {
-	empIDVal, exists := c.Get("employee_id")
+	empID, exists := resolveActorEmployeeID(c)
 	if !exists {
+		if _, isAdmin := c.Get("admin_id"); isAdmin {
+			c.JSON(http.StatusOK, gin.H{"data": []dto.BroadcastItemDTO{}})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
 		return
 	}
-	empID, _ := empIDVal.(uuid.UUID)
 	branchID := getBranchID(c)
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 
@@ -392,12 +414,15 @@ func (h *NotificationHandler) GetEmployeeBroadcasts(c *gin.Context) {
 }
 
 func (h *NotificationHandler) GetEmployeeUnreadBroadcasts(c *gin.Context) {
-	empIDVal, exists := c.Get("employee_id")
+	empID, exists := resolveActorEmployeeID(c)
 	if !exists {
+		if _, isAdmin := c.Get("admin_id"); isAdmin {
+			c.JSON(http.StatusOK, gin.H{"data": []dto.BroadcastItemDTO{}, "count": 0})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
 		return
 	}
-	empID, _ := empIDVal.(uuid.UUID)
 	branchID := getBranchID(c)
 
 	unread, err := h.svc.GetEmployeeUnreadBroadcasts(c.Request.Context(), empID, branchID, time.Time{})
@@ -417,12 +442,11 @@ func (h *NotificationHandler) MarkEmployeeBroadcastRead(c *gin.Context) {
 		return
 	}
 
-	empIDVal, exists := c.Get("employee_id")
+	empID, exists := resolveActorEmployeeID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
 		return
 	}
-	empID, _ := empIDVal.(uuid.UUID)
 
 	if err := h.svc.MarkEmployeeBroadcastRead(c.Request.Context(), empID, broadcastID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل تحديث حالة القراءة"})
@@ -433,12 +457,11 @@ func (h *NotificationHandler) MarkEmployeeBroadcastRead(c *gin.Context) {
 }
 
 func (h *NotificationHandler) MarkAllEmployeeBroadcastsRead(c *gin.Context) {
-	empIDVal, exists := c.Get("employee_id")
+	empID, exists := resolveActorEmployeeID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
 		return
 	}
-	empID, _ := empIDVal.(uuid.UUID)
 	branchID := getBranchID(c)
 
 	if err := h.svc.MarkAllEmployeeBroadcastsRead(c.Request.Context(), empID, branchID, time.Time{}); err != nil {
@@ -457,12 +480,11 @@ func (h *NotificationHandler) SubmitVote(c *gin.Context) {
 		return
 	}
 
-	empIDVal, exists := c.Get("employee_id")
+	empID, exists := resolveActorEmployeeID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
 		return
 	}
-	empID, _ := empIDVal.(uuid.UUID)
 
 	var req dto.SubmitPollVoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
