@@ -9,6 +9,7 @@ import (
 type LoginRequest struct {
 	Username string `json:"username"`
 	Login    string `json:"login"`
+	Phone    string `json:"phone"`
 	Email    string `json:"email"`
 	Password string `json:"password" binding:"required"`
 }

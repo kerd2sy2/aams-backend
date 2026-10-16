@@ -97,7 +97,10 @@ func extractDigits(s string) string {
 }
 
 func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.LoginResponse, error) {
-	userKey := strings.TrimSpace(req.Username)
+	userKey := strings.TrimSpace(req.Phone)
+	if userKey == "" {
+		userKey = strings.TrimSpace(req.Username)
+	}
 	if userKey == "" {
 		userKey = strings.TrimSpace(req.Login)
 	}
