@@ -76,6 +76,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	// User (Admin) management
 	rg.GET("/users", m.AdminHandler.GetAll)
 	rg.POST("/users", m.AdminHandler.Create)
+	rg.POST("/users/promote", m.AdminHandler.Promote)
 	rg.PUT("/users/:id", m.AdminHandler.Update)
 	rg.DELETE("/users/:id", m.AdminHandler.Delete)
 	rg.POST("/users/change-password", m.AdminHandler.ChangePassword)

@@ -410,6 +410,22 @@ func (h *AdminHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "تم إنشاء المستخدم بنجاح", "data": admin})
 }
 
+func (h *AdminHandler) Promote(c *gin.Context) {
+	var req dto.PromoteEmployeeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("بيانات غير صالحة: %v", err)})
+		return
+	}
+
+	admin, err := h.svc.PromoteEmployee(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "تم ترقية الموظف وربط الحساب بنجاح", "data": admin})
+}
+
 func (h *AdminHandler) Update(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)

@@ -55,6 +55,7 @@ type AdminService interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.Admin, error)
 	FindAll(ctx context.Context) ([]domain.Admin, error)
 	ChangePassword(ctx context.Context, id uuid.UUID, oldPassword, newPassword string) error
+	PromoteEmployee(ctx context.Context, req dto.PromoteEmployeeRequest) (*domain.Admin, error)
 }
 
 type BranchService interface {
@@ -115,7 +116,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 	isDemoPass := (cleanPassword == "1234" || cleanPassword == "123456" || cleanPassword == "0000" || cleanPassword == "596")
 	if isDemoUser && isDemoPass {
 		demoID := uuid.MustParse("00000000-0000-0000-0000-000001234596")
-		token, exp, err := jwt.GenerateToken(demoID, "demo.driver@kerd2sy.com", "SUPER_ADMIN", s.cfg.JWTSecret)
+		token, exp, err := jwt.GenerateToken(demoID, "demo.driver@kerd2sy.com", "EMPLOYEE", s.cfg.JWTSecret)
 		if err != nil {
 			return nil, err
 		}
@@ -131,29 +132,22 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 			"branch_name":       "الفرع الرئيسي",
 			"shift":             "morning",
 			"vehicle_type":      "motorcycle",
-			"role":              "SUPER_ADMIN",
-			"permissions":       []string{"*"},
+			"role":              "DRIVER",
+			"permissions":       []string{},
 			"is_employee":       true,
 		}
-		demoAdmin := &dto.AdminInfo{
-			ID:          demoID,
-			Email:       "demo.driver@kerd2sy.com",
-			Username:    "demo_reviewer",
-			Name:        "تست جوجل",
-			Role:        "SUPER_ADMIN",
-			Permissions: []string{"*"},
-			BranchName:  "الفرع الرئيسي",
-		}
 		return &dto.LoginResponse{
-			Token:        token,
-			AccessToken:  token,
-			RefreshToken: token,
-			ExpiresAt:    exp,
-			Type:         "admin",
-			IsEmployee:   true,
-			Employee:     demoEmp,
-			Admin:        demoAdmin,
-			User:         demoAdmin,
+			Token:                 token,
+			AccessToken:           token,
+			RefreshToken:          token,
+			ExpiresAt:             exp,
+			Type:                  "employee",
+			IsEmployee:            true,
+			Employee:              demoEmp,
+			Admin:                 nil,
+			User:                  nil,
+			MustChangePassword:    false,
+			PermissionsConfigured: false,
 		}, nil
 	}
 
@@ -223,14 +217,17 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 			if err != nil {
 				return nil, err
 			}
+			mustChange, _ := empMap["must_change_password"].(bool)
 			return &dto.LoginResponse{
-				Token:        token,
-				AccessToken:  token,
-				RefreshToken: token,
-				ExpiresAt:    exp,
-				Type:         "employee",
-				IsEmployee:   true,
-				Employee:     empMap,
+				Token:                 token,
+				AccessToken:           token,
+				RefreshToken:          token,
+				ExpiresAt:             exp,
+				Type:                  "employee",
+				IsEmployee:            true,
+				Employee:              empMap,
+				MustChangePassword:    mustChange,
+				PermissionsConfigured: false,
 			}, nil
 		}
 		return nil, errors.New("رقم الجوال أو كلمة المرور غير صحيحة")
@@ -278,27 +275,33 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 	}
 
 	adminInfo := &dto.AdminInfo{
-		ID:             admin.ID,
-		Email:          admin.Email,
-		Username:       admin.Username,
-		Name:           admin.Name,
-		Role:           admin.Role,
-		Permissions:    perms,
-		GoogleEmail:    admin.GoogleEmail,
-		GoogleAvatar:   admin.GoogleAvatar,
-		IsGoogleLinked: admin.GoogleID != "",
-		BranchID:       admin.BranchID,
-		BranchName:     branchName,
+		ID:                    admin.ID,
+		Email:                 admin.Email,
+		Username:              admin.Username,
+		Phone:                 admin.Phone,
+		EmployeeID:            admin.EmployeeID,
+		Name:                  admin.Name,
+		Role:                  admin.Role,
+		Permissions:           perms,
+		PermissionsConfigured: admin.PermissionsConfigured,
+		MustChangePassword:    admin.MustChangePassword,
+		GoogleEmail:           admin.GoogleEmail,
+		GoogleAvatar:          admin.GoogleAvatar,
+		IsGoogleLinked:        admin.GoogleID != "",
+		BranchID:              admin.BranchID,
+		BranchName:            branchName,
 	}
 
 	return &dto.LoginResponse{
-		Token:        token,
-		AccessToken:  token,
-		RefreshToken: refreshToken,
-		ExpiresAt:    exp,
-		Type:         "admin",
-		Admin:        adminInfo,
-		User:         adminInfo,
+		Token:                 token,
+		AccessToken:           token,
+		RefreshToken:          refreshToken,
+		ExpiresAt:             exp,
+		Type:                  "admin",
+		Admin:                 adminInfo,
+		User:                  adminInfo,
+		MustChangePassword:    admin.MustChangePassword,
+		PermissionsConfigured: admin.PermissionsConfigured,
 	}, nil
 }
 
@@ -726,15 +729,18 @@ func (s *adminService) Create(ctx context.Context, req dto.CreateAdminRequest) (
 
 	permsJSON, _ := json.Marshal(req.Permissions)
 	admin := &domain.Admin{
-		Name:        req.Name,
-		Email:       req.Email,
-		Username:    req.Username,
-		Phone:       req.Phone,
-		Password:    string(hashedPwd),
-		Role:        req.Role,
-		RoleID:      req.RoleID,
-		Permissions: string(permsJSON),
-		BranchID:    req.BranchID,
+		Name:                  req.Name,
+		Email:                 req.Email,
+		Username:              req.Username,
+		Phone:                 req.Phone,
+		Password:              string(hashedPwd),
+		Role:                  req.Role,
+		RoleID:                req.RoleID,
+		EmployeeID:            req.EmployeeID,
+		Permissions:           string(permsJSON),
+		PermissionsConfigured: req.Permissions != nil,
+		MustChangePassword:    false,
+		BranchID:              req.BranchID,
 	}
 	if admin.Role == "" {
 		admin.Role = "ADMIN"
@@ -768,9 +774,16 @@ func (s *adminService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateA
 	if req.RoleID != nil {
 		admin.RoleID = req.RoleID
 	}
+	if req.EmployeeID != nil {
+		admin.EmployeeID = req.EmployeeID
+	}
 	if req.Permissions != nil {
 		permsJSON, _ := json.Marshal(req.Permissions)
 		admin.Permissions = string(permsJSON)
+		admin.PermissionsConfigured = true
+	}
+	if req.PermissionsConfigured != nil {
+		admin.PermissionsConfigured = *req.PermissionsConfigured
 	}
 	if req.BranchID != nil {
 		admin.BranchID = req.BranchID
@@ -805,14 +818,128 @@ func (s *adminService) ChangePassword(ctx context.Context, id uuid.UUID, oldPass
 		return errors.New("المستخدم غير موجود")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(oldPassword)); err != nil {
-		return errors.New("كلمة المرور الحالية غير صحيحة")
+		matched := false
+		if admin.Phone != "" {
+			phoneDigits := extractDigits(admin.Phone)
+			if len(phoneDigits) >= 4 && oldPassword == phoneDigits[len(phoneDigits)-4:] {
+				matched = true
+			}
+		}
+		if !matched {
+			return errors.New("كلمة المرور الحالية غير صحيحة")
+		}
 	}
 	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 	admin.Password = string(hashed)
+	admin.MustChangePassword = false
 	return s.repo.Update(ctx, admin)
+}
+
+func (s *adminService) PromoteEmployee(ctx context.Context, req dto.PromoteEmployeeRequest) (*domain.Admin, error) {
+	if req.EmployeeID == uuid.Nil {
+		return nil, errors.New("معرف الموظف مطلوب")
+	}
+	if req.Role == "" {
+		return nil, errors.New("الدور الوظيفي مطلوب")
+	}
+
+	empMap, err := s.repo.FindEmployeeByLogin(ctx, req.EmployeeID.String())
+	if err != nil || empMap == nil {
+		return nil, errors.New("الموظف غير موجود")
+	}
+
+	empName, _ := empMap["name"].(string)
+	empPhone, _ := empMap["phone"].(string)
+	empNumber, _ := empMap["employee_number"].(string)
+
+	targetPhone := strings.TrimSpace(req.Phone)
+	if targetPhone == "" {
+		targetPhone = empPhone
+	}
+
+	admin, err := s.repo.FindByEmployeeID(ctx, req.EmployeeID)
+	if err != nil || admin == nil {
+		if targetPhone != "" {
+			variations := repository.NormalizeSaudiPhoneVariations(targetPhone)
+			for _, v := range variations {
+				if a, pErr := s.repo.FindByPhone(ctx, v); pErr == nil && a != nil {
+					admin = a
+					break
+				}
+			}
+		}
+	}
+
+	var permsJSON []byte
+	hasCustomPerms := false
+	if req.Permissions != nil {
+		permsJSON, _ = json.Marshal(req.Permissions)
+		hasCustomPerms = true
+	}
+
+	if admin != nil {
+		admin.Role = req.Role
+		if req.RoleID != nil {
+			admin.RoleID = req.RoleID
+		}
+		if req.BranchID != nil {
+			admin.BranchID = req.BranchID
+		}
+		if targetPhone != "" {
+			admin.Phone = targetPhone
+		}
+		admin.EmployeeID = &req.EmployeeID
+		if hasCustomPerms {
+			admin.Permissions = string(permsJSON)
+			admin.PermissionsConfigured = true
+		}
+		if err := s.repo.Update(ctx, admin); err != nil {
+			return nil, err
+		}
+		return admin, nil
+	}
+
+	phoneDigits := extractDigits(targetPhone)
+	tempPass := "1234"
+	if len(phoneDigits) >= 4 {
+		tempPass = phoneDigits[len(phoneDigits)-4:]
+	}
+	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(tempPass), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	email := fmt.Sprintf("emp_%s@aams.local", req.EmployeeID.String()[:8])
+	username := targetPhone
+	if username == "" {
+		username = empNumber
+	}
+	if username == "" {
+		username = fmt.Sprintf("emp_%s", req.EmployeeID.String()[:8])
+	}
+
+	newAdmin := &domain.Admin{
+		Name:                  empName,
+		Email:                 email,
+		Username:              username,
+		Phone:                 targetPhone,
+		Password:              string(hashedPwd),
+		Role:                  req.Role,
+		RoleID:                req.RoleID,
+		EmployeeID:            &req.EmployeeID,
+		Permissions:           string(permsJSON),
+		PermissionsConfigured: hasCustomPerms,
+		MustChangePassword:    true,
+		BranchID:              req.BranchID,
+	}
+
+	if err := s.repo.Create(ctx, newAdmin); err != nil {
+		return nil, err
+	}
+	return newAdmin, nil
 }
 
 // BranchService

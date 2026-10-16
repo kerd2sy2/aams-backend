@@ -2,9 +2,11 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
+	"delivery-backend/internal/domain"
 	"delivery-backend/internal/repository"
 	"delivery-backend/pkg/jwt"
 
@@ -49,6 +51,8 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 			c.Set("admin_role", admin.Role)
 			c.Set("admin_role_id", admin.RoleID)
 			c.Set("branch_id", admin.BranchID)
+			c.Set("must_change_password", admin.MustChangePassword)
+			c.Set("permissions_configured", admin.PermissionsConfigured)
 			c.Set("admin", admin)
 			c.Set("is_employee", false)
 			c.Next()
@@ -65,6 +69,8 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 				c.Set("admin_name", emp.Name)
 				c.Set("admin_role", "DRIVER")
 				c.Set("branch_id", emp.BranchID)
+				c.Set("must_change_password", emp.MustChangePassword)
+				c.Set("permissions_configured", false)
 				c.Set("employee", emp)
 				c.Set("is_employee", true)
 				c.Next()
@@ -109,3 +115,108 @@ func RequireRoles(allowedRoles ...string) gin.HandlerFunc {
 		c.Abort()
 	}
 }
+
+func checkAdminPermission(admin *domain.Admin, requiredPerm string) bool {
+	if admin == nil {
+		return false
+	}
+	roleUpper := strings.ToUpper(strings.TrimSpace(admin.Role))
+	if roleUpper == "SUPER_ADMIN" {
+		return true
+	}
+
+	if admin.PermissionsConfigured {
+		// When permissions are explicitly configured, only the explicit permissions apply
+		var userPerms []string
+		if admin.Permissions != "" {
+			_ = json.Unmarshal([]byte(admin.Permissions), &userPerms)
+		}
+		for _, p := range userPerms {
+			if p == "*" || strings.EqualFold(p, requiredPerm) {
+				return true
+			}
+		}
+		// If configured, empty or missing permission means strictly forbidden (no fallback)
+		return false
+	}
+
+	// Legacy unconfigured account: fallback to role permissions
+	if admin.RoleObj != nil && admin.RoleObj.Permissions != "" {
+		var rolePerms []string
+		if err := json.Unmarshal([]byte(admin.RoleObj.Permissions), &rolePerms); err == nil {
+			for _, p := range rolePerms {
+				if p == "*" || strings.EqualFold(p, requiredPerm) {
+					return true
+				}
+			}
+		}
+	}
+
+	// Default fallback for legacy ADMIN role
+	if roleUpper == "ADMIN" {
+		return true
+	}
+
+	return false
+}
+
+// RequirePermission checks whether the authenticated admin has a specific permission
+func RequirePermission(requiredPerm string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		adminVal, exists := c.Get("admin")
+		if !exists || adminVal == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: هذه العملية مخصصة للمشرفين والمديرين"})
+			c.Abort()
+			return
+		}
+
+		admin, ok := adminVal.(*domain.Admin)
+		if !ok || admin == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: خطأ في بيانات المصادقة"})
+			c.Abort()
+			return
+		}
+
+		if !checkAdminPermission(admin, requiredPerm) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "غير مصرح: لا تملك الصلاحية المطلوبة (" + requiredPerm + ")",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// RequireAnyPermission checks whether the authenticated admin has any of the specified permissions
+func RequireAnyPermission(requiredPerms ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		adminVal, exists := c.Get("admin")
+		if !exists || adminVal == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: هذه العملية مخصصة للمشرفين والمديرين"})
+			c.Abort()
+			return
+		}
+
+		admin, ok := adminVal.(*domain.Admin)
+		if !ok || admin == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: خطأ في بيانات المصادقة"})
+			c.Abort()
+			return
+		}
+
+		for _, perm := range requiredPerms {
+			if checkAdminPermission(admin, perm) {
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "غير مصرح: لا تملك أي من الصلاحيات المطلوبة (" + strings.Join(requiredPerms, ", ") + ")",
+		})
+		c.Abort()
+	}
+}
+

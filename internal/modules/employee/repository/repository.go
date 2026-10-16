@@ -163,7 +163,10 @@ func (r *gormEmployeeRepository) UpdatePhone(ctx context.Context, id uuid.UUID, 
 }
 
 func (r *gormEmployeeRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
-	return r.db.WithContext(ctx).Model(&domain.Employee{}).Where("id = ?", id).Update("password_hash", passwordHash).Error
+	return r.db.WithContext(ctx).Model(&domain.Employee{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"password_hash":        passwordHash,
+		"must_change_password": false,
+	}).Error
 }
 
 func (r *gormEmployeeRepository) BatchSetOilChange(ctx context.Context, entries []dto.OilSetupEntry) (int, error) {

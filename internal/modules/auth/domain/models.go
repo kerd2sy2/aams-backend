@@ -52,9 +52,12 @@ type Admin struct {
 	Password     string         `gorm:"type:varchar(255);not null" json:"-"`
 	Name         string         `gorm:"type:varchar(100);not null" json:"name"`
 	Role         string         `gorm:"type:varchar(50);default:ADMIN" json:"role"`
-	RoleID       *uuid.UUID     `gorm:"type:char(36);index" json:"role_id"`
-	RoleObj      *Role          `gorm:"foreignKey:RoleID" json:"role_obj,omitempty"`
-	Permissions  string         `gorm:"type:text" json:"permissions"`
+	RoleID                *uuid.UUID     `gorm:"type:char(36);index" json:"role_id"`
+	RoleObj               *Role          `gorm:"foreignKey:RoleID" json:"role_obj,omitempty"`
+	EmployeeID            *uuid.UUID     `gorm:"type:char(36);index" json:"employee_id,omitempty"`
+	Permissions           string         `gorm:"type:text" json:"permissions"`
+	PermissionsConfigured bool           `gorm:"default:false" json:"permissions_configured"`
+	MustChangePassword    bool           `gorm:"default:false" json:"must_change_password"`
 	GoogleID     string         `gorm:"type:varchar(100);index" json:"google_id,omitempty"`
 	GoogleEmail  string         `gorm:"type:varchar(150);index" json:"google_email,omitempty"`
 	GoogleAvatar string         `gorm:"type:varchar(255)" json:"google_avatar,omitempty"`

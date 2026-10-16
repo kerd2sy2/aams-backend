@@ -22,6 +22,7 @@ type AdminRepository interface {
 	FindByUsername(ctx context.Context, username string) (*domain.Admin, error)
 	FindByPhone(ctx context.Context, phone string) (*domain.Admin, error)
 	FindByGoogleID(ctx context.Context, googleID string) (*domain.Admin, error)
+	FindByEmployeeID(ctx context.Context, employeeID uuid.UUID) (*domain.Admin, error)
 	FindAll(ctx context.Context) ([]domain.Admin, error)
 	FindEmployeeByLogin(ctx context.Context, login string) (map[string]interface{}, error)
 }
@@ -193,28 +194,38 @@ func (r *gormAdminRepository) FindAll(ctx context.Context) ([]domain.Admin, erro
 	return list, err
 }
 
+func (r *gormAdminRepository) FindByEmployeeID(ctx context.Context, employeeID uuid.UUID) (*domain.Admin, error) {
+	var a domain.Admin
+	err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").Where("employee_id = ?", employeeID).First(&a).Error
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
 func (r *gormAdminRepository) FindEmployeeByLogin(ctx context.Context, login string) (map[string]interface{}, error) {
 	var emp struct {
-		ID               uuid.UUID  `gorm:"column:id"`
-		Name             string     `gorm:"column:name"`
-		NationalID       string     `gorm:"column:national_id"`
-		EmployeeNumber   string     `gorm:"column:employee_number"`
-		JobRole          string     `gorm:"column:job_role"`
-		Phone            string     `gorm:"column:phone"`
-		PersonalImage    string     `gorm:"column:personal_image"`
-		MotorcycleNumber string     `gorm:"column:motorcycle_number"`
-		KeyNumber        string     `gorm:"column:key_number"`
-		VehicleType      string     `gorm:"column:vehicle_type"`
-		Shift            string     `gorm:"column:shift"`
-		PasswordHash     string     `gorm:"column:password_hash"`
-		BranchID         *uuid.UUID `gorm:"column:branch_id"`
-		BranchName       string     `gorm:"column:branch_name"`
+		ID                 uuid.UUID  `gorm:"column:id"`
+		Name               string     `gorm:"column:name"`
+		NationalID         string     `gorm:"column:national_id"`
+		EmployeeNumber     string     `gorm:"column:employee_number"`
+		JobRole            string     `gorm:"column:job_role"`
+		Phone              string     `gorm:"column:phone"`
+		PersonalImage      string     `gorm:"column:personal_image"`
+		MotorcycleNumber   string     `gorm:"column:motorcycle_number"`
+		KeyNumber          string     `gorm:"column:key_number"`
+		VehicleType        string     `gorm:"column:vehicle_type"`
+		Shift              string     `gorm:"column:shift"`
+		PasswordHash       string     `gorm:"column:password_hash"`
+		MustChangePassword bool       `gorm:"column:must_change_password"`
+		BranchID           *uuid.UUID `gorm:"column:branch_id"`
+		BranchName         string     `gorm:"column:branch_name"`
 	}
 
 	variations := NormalizeSaudiPhoneVariations(login)
 
 	err := r.db.WithContext(ctx).Table("employees").
-		Select("employees.id, employees.name, employees.national_id, employees.employee_number, employees.job_role, employees.phone, employees.personal_image, employees.motorcycle_number, employees.key_number, employees.vehicle_type, employees.shift, employees.password_hash, employees.branch_id, branches.name as branch_name").
+		Select("employees.id, employees.name, employees.national_id, employees.employee_number, employees.job_role, employees.phone, employees.personal_image, employees.motorcycle_number, employees.key_number, employees.vehicle_type, employees.shift, employees.password_hash, employees.must_change_password, employees.branch_id, branches.name as branch_name").
 		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
 		Where("(employees.national_id = ? OR employees.phone IN (?) OR employees.employee_number = ?) AND employees.deleted_at IS NULL", login, variations, login).
 		First(&emp).Error
@@ -223,21 +234,22 @@ func (r *gormAdminRepository) FindEmployeeByLogin(ctx context.Context, login str
 	}
 
 	res := map[string]interface{}{
-		"id":                emp.ID.String(),
-		"name":              emp.Name,
-		"national_id":       emp.NationalID,
-		"employee_number":   emp.EmployeeNumber,
-		"job_role":          emp.JobRole,
-		"phone":             emp.Phone,
-		"personal_image":    emp.PersonalImage,
-		"motorcycle_number": emp.MotorcycleNumber,
-		"key_number":        emp.KeyNumber,
-		"vehicle_type":      emp.VehicleType,
-		"shift":             emp.Shift,
-		"branch_name":       emp.BranchName,
-		"is_employee":       true,
-		"role":              emp.JobRole,
-		"password_hash":     emp.PasswordHash,
+		"id":                   emp.ID.String(),
+		"name":                 emp.Name,
+		"national_id":          emp.NationalID,
+		"employee_number":      emp.EmployeeNumber,
+		"job_role":             emp.JobRole,
+		"phone":                emp.Phone,
+		"personal_image":       emp.PersonalImage,
+		"motorcycle_number":    emp.MotorcycleNumber,
+		"key_number":           emp.KeyNumber,
+		"vehicle_type":         emp.VehicleType,
+		"shift":                emp.Shift,
+		"branch_name":          emp.BranchName,
+		"is_employee":          true,
+		"role":                 emp.JobRole,
+		"password_hash":        emp.PasswordHash,
+		"must_change_password": emp.MustChangePassword,
 	}
 	if emp.BranchID != nil {
 		res["branch_id"] = emp.BranchID.String()

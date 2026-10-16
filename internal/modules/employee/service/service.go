@@ -241,13 +241,34 @@ func (s *employeeService) ChangePassword(ctx context.Context, id uuid.UUID, oldP
 			return errors.New("كلمة المرور الحالية غير صحيحة")
 		}
 	} else {
-		// Default password: last 4 digits of National ID / Iqama
-		last4 := emp.NationalID
-		if len(last4) >= 4 {
-			last4 = last4[len(last4)-4:]
+		// Default password: last 4 digits of Phone or National ID / Iqama
+		matched := false
+		if emp.Phone != "" {
+			phoneDigits := ""
+			for _, r := range emp.Phone {
+				if r >= '0' && r <= '9' {
+					phoneDigits += string(r)
+				}
+			}
+			if len(phoneDigits) >= 4 && cleanOld == phoneDigits[len(phoneDigits)-4:] {
+				matched = true
+			}
 		}
-		if cleanOld != last4 && cleanOld != emp.NationalID {
-			return errors.New("كلمة المرور الحالية غير صحيحة (كلمة المرور الافتراضية هي آخر 4 أرقام من الإقامة)")
+		if !matched && emp.NationalID != "" {
+			natDigits := ""
+			for _, r := range emp.NationalID {
+				if r >= '0' && r <= '9' {
+					natDigits += string(r)
+				}
+			}
+			if len(natDigits) >= 4 && cleanOld == natDigits[len(natDigits)-4:] {
+				matched = true
+			} else if cleanOld == emp.NationalID {
+				matched = true
+			}
+		}
+		if !matched {
+			return errors.New("كلمة المرور الحالية غير صحيحة (كلمة المرور الافتراضية هي آخر 4 أرقام من رقم الجوال)")
 		}
 	}
 

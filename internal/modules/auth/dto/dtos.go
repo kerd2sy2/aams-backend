@@ -14,29 +14,35 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token        string     `json:"token"`
-	AccessToken  string     `json:"access_token"`
-	RefreshToken string     `json:"refresh_token"`
-	ExpiresAt    time.Time  `json:"expires_at"`
-	Type         string     `json:"type"` // "admin" or "employee"
-	IsEmployee   bool       `json:"is_employee,omitempty"`
-	Employee     any        `json:"employee,omitempty"`
-	Admin        *AdminInfo `json:"admin,omitempty"`
-	User         *AdminInfo `json:"user,omitempty"`
+	Token                 string     `json:"token"`
+	AccessToken           string     `json:"access_token"`
+	RefreshToken          string     `json:"refresh_token"`
+	ExpiresAt             time.Time  `json:"expires_at"`
+	Type                  string     `json:"type"` // "admin" or "employee"
+	IsEmployee            bool       `json:"is_employee,omitempty"`
+	Employee              any        `json:"employee,omitempty"`
+	Admin                 *AdminInfo `json:"admin,omitempty"`
+	User                  *AdminInfo `json:"user,omitempty"`
+	MustChangePassword    bool       `json:"must_change_password"`
+	PermissionsConfigured bool       `json:"permissions_configured"`
 }
 
 type AdminInfo struct {
-	ID             uuid.UUID  `json:"id"`
-	Email          string     `json:"email"`
-	Username       string     `json:"username"`
-	Name           string     `json:"name"`
-	Role           string     `json:"role"`
-	Permissions    []string   `json:"permissions"`
-	GoogleEmail    string     `json:"google_email,omitempty"`
-	GoogleAvatar   string     `json:"google_avatar,omitempty"`
-	IsGoogleLinked bool       `json:"is_google_linked"`
-	BranchID       *uuid.UUID `json:"branch_id"`
-	BranchName     string     `json:"branch_name,omitempty"`
+	ID                    uuid.UUID  `json:"id"`
+	Email                 string     `json:"email"`
+	Username              string     `json:"username"`
+	Phone                 string     `json:"phone,omitempty"`
+	EmployeeID            *uuid.UUID `json:"employee_id,omitempty"`
+	Name                  string     `json:"name"`
+	Role                  string     `json:"role"`
+	Permissions           []string   `json:"permissions"`
+	PermissionsConfigured bool       `json:"permissions_configured"`
+	MustChangePassword    bool       `json:"must_change_password"`
+	GoogleEmail           string     `json:"google_email,omitempty"`
+	GoogleAvatar          string     `json:"google_avatar,omitempty"`
+	IsGoogleLinked        bool       `json:"is_google_linked"`
+	BranchID              *uuid.UUID `json:"branch_id"`
+	BranchName            string     `json:"branch_name,omitempty"`
 }
 
 type RefreshTokenRequest struct {
@@ -115,20 +121,32 @@ type CreateAdminRequest struct {
 	Password    string     `json:"password" binding:"required,min=8"`
 	Role        string     `json:"role"`
 	RoleID      *uuid.UUID `json:"role_id"`
+	EmployeeID  *uuid.UUID `json:"employee_id,omitempty"`
 	Permissions []string   `json:"permissions"`
 	BranchID    *uuid.UUID `json:"branch_id"`
 }
 
 type UpdateAdminRequest struct {
-	Name        string     `json:"name"`
-	Email       string     `json:"email"`
-	Username    string     `json:"username"`
-	Phone       string     `json:"phone"`
-	Password    string     `json:"password"`
-	Role        string     `json:"role"`
+	Name                  string     `json:"name"`
+	Email                 string     `json:"email"`
+	Username              string     `json:"username"`
+	Phone                 string     `json:"phone"`
+	Password              string     `json:"password"`
+	Role                  string     `json:"role"`
+	RoleID                *uuid.UUID `json:"role_id"`
+	EmployeeID            *uuid.UUID `json:"employee_id,omitempty"`
+	Permissions           []string   `json:"permissions"`
+	PermissionsConfigured *bool      `json:"permissions_configured,omitempty"`
+	BranchID              *uuid.UUID `json:"branch_id"`
+}
+
+type PromoteEmployeeRequest struct {
+	EmployeeID  uuid.UUID  `json:"employee_id" binding:"required"`
+	Role        string     `json:"role" binding:"required"`
 	RoleID      *uuid.UUID `json:"role_id"`
-	Permissions []string   `json:"permissions"`
 	BranchID    *uuid.UUID `json:"branch_id"`
+	Phone       string     `json:"phone"`
+	Permissions []string   `json:"permissions"`
 }
 
 type ChangePasswordRequest struct {

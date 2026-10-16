@@ -12,6 +12,7 @@ import (
 	"delivery-backend/internal/modules/auth/repository"
 	"delivery-backend/internal/modules/auth/service"
 	"delivery-backend/pkg/config"
+	"delivery-backend/pkg/jwt"
 )
 
 var (
@@ -21,7 +22,8 @@ var (
 )
 
 type mockAdminRepo struct {
-	admins map[uuid.UUID]*domain.Admin
+	admins    map[uuid.UUID]*domain.Admin
+	employees map[string]map[string]interface{}
 }
 
 func (m *mockAdminRepo) Create(ctx context.Context, admin *domain.Admin) error {
@@ -81,7 +83,20 @@ func (m *mockAdminRepo) FindAll(ctx context.Context) ([]domain.Admin, error) {
 	}
 	return list, nil
 }
+func (m *mockAdminRepo) FindByEmployeeID(ctx context.Context, employeeID uuid.UUID) (*domain.Admin, error) {
+	for _, a := range m.admins {
+		if a.EmployeeID != nil && *a.EmployeeID == employeeID {
+			return a, nil
+		}
+	}
+	return nil, nil
+}
 func (m *mockAdminRepo) FindEmployeeByLogin(ctx context.Context, login string) (map[string]interface{}, error) {
+	if m.employees != nil {
+		if emp, ok := m.employees[login]; ok {
+			return emp, nil
+		}
+	}
 	return nil, nil
 }
 
@@ -238,5 +253,106 @@ func TestRoleAndBranchService(t *testing.T) {
 	}
 	if branch.Name != "Riyadh Main" {
 		t.Errorf("branch name mismatch: %s", branch.Name)
+	}
+}
+
+func TestGooglePlayReviewerAccount(t *testing.T) {
+	adminRepo := &mockAdminRepo{admins: make(map[uuid.UUID]*domain.Admin)}
+	branchRepo := &mockBranchRepo{branches: make(map[uuid.UUID]*domain.Branch)}
+	cfg := &config.Config{JWTSecret: "test-secret-key-1234567890"}
+	authSvc := service.NewAuthService(adminRepo, branchRepo, cfg)
+	ctx := context.Background()
+
+	resp, err := authSvc.Login(ctx, dto.LoginRequest{
+		Username: "1234596",
+		Password: "1234",
+	})
+	if err != nil {
+		t.Fatalf("expected login to succeed for demo reviewer: %v", err)
+	}
+
+	if resp.Type != "employee" {
+		t.Errorf("expected type to be employee, got %s", resp.Type)
+	}
+	if !resp.IsEmployee {
+		t.Errorf("expected is_employee to be true")
+	}
+	if resp.Admin != nil {
+		t.Errorf("expected Admin info to be nil for security, but was non-nil")
+	}
+	if resp.User != nil {
+		t.Errorf("expected User info to be nil for security, but was non-nil")
+	}
+	empMap, ok := resp.Employee.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected employee payload to be map")
+	}
+	if empMap["role"] != "DRIVER" {
+		t.Errorf("expected role DRIVER, got %v", empMap["role"])
+	}
+	claims, err := jwt.ValidateToken(resp.Token, cfg.JWTSecret)
+	if err != nil {
+		t.Fatalf("token validation failed: %v", err)
+	}
+	if claims.Role != "EMPLOYEE" {
+		t.Errorf("expected token role to be EMPLOYEE, got %s", claims.Role)
+	}
+}
+
+func TestPromoteEmployee(t *testing.T) {
+	empID := uuid.New()
+	adminRepo := &mockAdminRepo{
+		admins: make(map[uuid.UUID]*domain.Admin),
+		employees: map[string]map[string]interface{}{
+			empID.String(): {
+				"id":              empID.String(),
+				"name":            "أحمد المندوب",
+				"phone":           "0551234567",
+				"employee_number": "EMP-100",
+			},
+		},
+	}
+	adminSvc := service.NewAdminService(adminRepo)
+	ctx := context.Background()
+
+	// 1. First promotion: creates new Admin linked to EmployeeID with must_change_password=true
+	admin, err := adminSvc.PromoteEmployee(ctx, dto.PromoteEmployeeRequest{
+		EmployeeID:  empID,
+		Role:        "SUPERVISOR",
+		Permissions: []string{"work.view", "work.start"},
+	})
+	if err != nil {
+		t.Fatalf("promotion failed: %v", err)
+	}
+	if admin.Role != "SUPERVISOR" {
+		t.Errorf("expected role SUPERVISOR, got %s", admin.Role)
+	}
+	if admin.EmployeeID == nil || *admin.EmployeeID != empID {
+		t.Errorf("expected linked EmployeeID %s", empID)
+	}
+	if !admin.MustChangePassword {
+		t.Errorf("expected MustChangePassword to be true for new promoted admin")
+	}
+	if !admin.PermissionsConfigured {
+		t.Errorf("expected PermissionsConfigured to be true")
+	}
+
+	// 2. Second promotion: updates existing Admin without duplicating
+	updatedAdmin, err := adminSvc.PromoteEmployee(ctx, dto.PromoteEmployeeRequest{
+		EmployeeID:  empID,
+		Role:        "ADMIN",
+		Permissions: []string{"*"},
+	})
+	if err != nil {
+		t.Fatalf("second promotion failed: %v", err)
+	}
+	if updatedAdmin.ID != admin.ID {
+		t.Errorf("expected same admin ID %s, got %s (duplicate created)", admin.ID, updatedAdmin.ID)
+	}
+	if updatedAdmin.Role != "ADMIN" {
+		t.Errorf("expected updated role ADMIN, got %s", updatedAdmin.Role)
+	}
+	if len(adminRepo.admins) != 1 {
+		t.Errorf("expected exactly 1 admin in repo, got %d", len(adminRepo.admins))
 	}
 }
