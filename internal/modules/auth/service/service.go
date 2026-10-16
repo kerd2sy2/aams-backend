@@ -96,6 +96,105 @@ func extractDigits(s string) string {
 	return b.String()
 }
 
+func GetAppArabicName(appName string) string {
+	switch strings.ToLower(strings.TrimSpace(appName)) {
+	case "ohda", "custody":
+		return "تطبيق العهدة"
+	case "eshraf", "supervision":
+		return "تطبيق الإشراف"
+	case "edara", "admin", "management":
+		return "تطبيق الإدارة"
+	case "manadeeb", "delegate", "driver":
+		return "تطبيق المناديب"
+	case "dashboard":
+		return "لوحة التحكم"
+	default:
+		return appName
+	}
+}
+
+func HasAppAccess(role string, permissions []string, appName string) bool {
+	cleanApp := strings.ToLower(strings.TrimSpace(appName))
+	if cleanApp == "" {
+		return true
+	}
+
+	normRole := strings.ToUpper(strings.TrimSpace(role))
+	if normRole == "SUPER_ADMIN" {
+		return true
+	}
+
+	hasPerm := func(target string) bool {
+		for _, p := range permissions {
+			pClean := strings.ToLower(strings.TrimSpace(p))
+			if pClean == "*" || pClean == target {
+				return true
+			}
+		}
+		return false
+	}
+
+	switch cleanApp {
+	case "ohda", "custody":
+		if hasPerm("apps.ohda") || hasPerm("app.ohda") || hasPerm("custody") || hasPerm("custody.access") || hasPerm("custody.view") || hasPerm("custody.manage") || hasPerm("custody.add") {
+			return true
+		}
+		if len(permissions) > 0 {
+			return false
+		}
+		return normRole == "ACCOUNTANT" || normRole == "CUSTODY" || normRole == "CUSTODY_ADMIN"
+
+	case "eshraf", "supervision":
+		if hasPerm("apps.eshraf") || hasPerm("app.eshraf") || hasPerm("work.view") || hasPerm("work.start") || hasPerm("work.end") {
+			return true
+		}
+		if len(permissions) > 0 {
+			return false
+		}
+		return normRole == "SUPERVISOR"
+
+	case "edara", "admin", "management":
+		if hasPerm("apps.edara") || hasPerm("app.edara") {
+			return true
+		}
+		if len(permissions) > 0 {
+			return false
+		}
+		return normRole == "ADMIN" || normRole == "OWNER"
+
+	case "manadeeb", "delegate", "driver":
+		if hasPerm("apps.manadeeb") || hasPerm("app.manadeeb") {
+			return true
+		}
+		if len(permissions) > 0 {
+			return false
+		}
+		return normRole == "DRIVER" || normRole == "EMPLOYEE" || normRole == ""
+
+	case "dashboard":
+		if hasPerm("apps.dashboard") || hasPerm("app.dashboard") {
+			return true
+		}
+		if len(permissions) > 0 {
+			return normRole == "ADMIN" || normRole == "SUPERVISOR" || normRole == "ACCOUNTANT" || normRole == "HR" || normRole == "OWNER"
+		}
+		return normRole == "ADMIN" || normRole == "SUPERVISOR" || normRole == "ACCOUNTANT" || normRole == "HR" || normRole == "OWNER"
+
+	default:
+		return hasPerm("apps." + cleanApp) || hasPerm(cleanApp)
+	}
+}
+
+func ComputeAppPermissions(role string, permissions []string) map[string]bool {
+	return map[string]bool{
+		"ohda":      HasAppAccess(role, permissions, "ohda"),
+		"eshraf":    HasAppAccess(role, permissions, "eshraf"),
+		"edara":     HasAppAccess(role, permissions, "edara"),
+		"manadeeb":  HasAppAccess(role, permissions, "manadeeb"),
+		"dashboard": HasAppAccess(role, permissions, "dashboard"),
+	}
+}
+
 func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.LoginResponse, error) {
 	userKey := strings.TrimSpace(req.Phone)
 	if userKey == "" {
@@ -220,6 +319,23 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 			if err != nil {
 				return nil, err
 			}
+
+			var empPerms []string
+			if rawP, ok := empMap["permissions"].(string); ok && rawP != "" {
+				_ = json.Unmarshal([]byte(rawP), &empPerms)
+			}
+			empRole, _ := empMap["job_role"].(string)
+			if empRole == "" {
+				empRole = "DRIVER"
+			}
+
+			if req.App != "" && !HasAppAccess(empRole, empPerms, req.App) {
+				return nil, fmt.Errorf("عذراً، ليس لديك صلاحية للدخول إلى %s (يرجى مراجعة إدارة النظام)", GetAppArabicName(req.App))
+			}
+
+			appPerms := ComputeAppPermissions(empRole, empPerms)
+			empMap["app_permissions"] = appPerms
+
 			mustChange, _ := empMap["must_change_password"].(bool)
 			return &dto.LoginResponse{
 				Token:                 token,
@@ -231,6 +347,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 				Employee:              empMap,
 				MustChangePassword:    mustChange,
 				PermissionsConfigured: false,
+				AppPermissions:        appPerms,
 			}, nil
 		}
 		return nil, errors.New("رقم الجوال أو كلمة المرور غير صحيحة")
@@ -247,6 +364,25 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		adminPhoneDigits := extractDigits(admin.Phone)
 		if len(adminPhoneDigits) >= 4 && cleanPassword == adminPhoneDigits[len(adminPhoneDigits)-4:] {
 			adminPasswordMatched = true
+		}
+	}
+
+	if !adminPasswordMatched && admin.EmployeeID != nil {
+		if empMap, empErr := s.adminRepo.FindEmployeeByLogin(ctx, admin.EmployeeID.String()); empErr == nil && empMap != nil {
+			if phoneVal, ok := empMap["phone"].(string); ok && phoneVal != "" {
+				empPhoneDigits := extractDigits(phoneVal)
+				if len(empPhoneDigits) >= 4 && cleanPassword == empPhoneDigits[len(empPhoneDigits)-4:] {
+					adminPasswordMatched = true
+				}
+			}
+			if !adminPasswordMatched {
+				if natID, ok := empMap["national_id"].(string); ok && natID != "" {
+					empNatDigits := extractDigits(natID)
+					if len(empNatDigits) >= 4 && cleanPassword == empNatDigits[len(empNatDigits)-4:] {
+						adminPasswordMatched = true
+					}
+				}
+			}
 		}
 	}
 
@@ -272,6 +408,12 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		_ = json.Unmarshal([]byte(admin.Permissions), &perms)
 	}
 
+	if req.App != "" && !HasAppAccess(admin.Role, perms, req.App) {
+		return nil, fmt.Errorf("عذراً، ليس لديك صلاحية للدخول إلى %s (يرجى مراجعة إدارة النظام)", GetAppArabicName(req.App))
+	}
+
+	appPerms := ComputeAppPermissions(admin.Role, perms)
+
 	branchName := ""
 	if admin.Branch != nil {
 		branchName = admin.Branch.Name
@@ -288,6 +430,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		Permissions:           perms,
 		PermissionsConfigured: admin.PermissionsConfigured,
 		MustChangePassword:    admin.MustChangePassword,
+		AppPermissions:        appPerms,
 		GoogleEmail:           admin.GoogleEmail,
 		GoogleAvatar:          admin.GoogleAvatar,
 		IsGoogleLinked:        admin.GoogleID != "",
@@ -305,6 +448,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		User:                  adminInfo,
 		MustChangePassword:    admin.MustChangePassword,
 		PermissionsConfigured: admin.PermissionsConfigured,
+		AppPermissions:        appPerms,
 	}, nil
 }
 
@@ -333,28 +477,38 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*d
 		branchName = admin.Branch.Name
 	}
 
+	appPerms := ComputeAppPermissions(admin.Role, perms)
+
 	adminInfo := &dto.AdminInfo{
-		ID:             admin.ID,
-		Email:          admin.Email,
-		Username:       admin.Username,
-		Name:           admin.Name,
-		Role:           admin.Role,
-		Permissions:    perms,
-		GoogleEmail:    admin.GoogleEmail,
-		GoogleAvatar:   admin.GoogleAvatar,
-		IsGoogleLinked: admin.GoogleID != "",
-		BranchID:       admin.BranchID,
-		BranchName:     branchName,
+		ID:                    admin.ID,
+		Email:                 admin.Email,
+		Username:              admin.Username,
+		Phone:                 admin.Phone,
+		EmployeeID:            admin.EmployeeID,
+		Name:                  admin.Name,
+		Role:                  admin.Role,
+		Permissions:           perms,
+		PermissionsConfigured: admin.PermissionsConfigured,
+		MustChangePassword:    admin.MustChangePassword,
+		AppPermissions:        appPerms,
+		GoogleEmail:           admin.GoogleEmail,
+		GoogleAvatar:          admin.GoogleAvatar,
+		IsGoogleLinked:        admin.GoogleID != "",
+		BranchID:              admin.BranchID,
+		BranchName:            branchName,
 	}
 
 	return &dto.LoginResponse{
-		Token:        token,
-		AccessToken:  token,
-		RefreshToken: refreshToken,
-		ExpiresAt:    exp,
-		Type:         "admin",
-		Admin:        adminInfo,
-		User:         adminInfo,
+		Token:                 token,
+		AccessToken:           token,
+		RefreshToken:          refreshToken,
+		ExpiresAt:             exp,
+		Type:                  "admin",
+		Admin:                 adminInfo,
+		User:                  adminInfo,
+		MustChangePassword:    admin.MustChangePassword,
+		PermissionsConfigured: admin.PermissionsConfigured,
+		AppPermissions:        appPerms,
 	}, nil
 }
 

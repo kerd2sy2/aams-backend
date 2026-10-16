@@ -12,33 +12,36 @@ type LoginRequest struct {
 	Phone    string `json:"phone"`
 	Email    string `json:"email"`
 	Password string `json:"password" binding:"required"`
+	App      string `json:"app"` // "ohda", "eshraf", "edara", "manadeeb", "dashboard"
 }
 
 type LoginResponse struct {
-	Token                 string     `json:"token"`
-	AccessToken           string     `json:"access_token"`
-	RefreshToken          string     `json:"refresh_token"`
-	ExpiresAt             time.Time  `json:"expires_at"`
-	Type                  string     `json:"type"` // "admin" or "employee"
-	IsEmployee            bool       `json:"is_employee,omitempty"`
-	Employee              any        `json:"employee,omitempty"`
-	Admin                 *AdminInfo `json:"admin,omitempty"`
-	User                  *AdminInfo `json:"user,omitempty"`
-	MustChangePassword    bool       `json:"must_change_password"`
-	PermissionsConfigured bool       `json:"permissions_configured"`
+	Token                 string          `json:"token"`
+	AccessToken           string          `json:"access_token"`
+	RefreshToken          string          `json:"refresh_token"`
+	ExpiresAt             time.Time       `json:"expires_at"`
+	Type                  string          `json:"type"` // "admin" or "employee"
+	IsEmployee            bool            `json:"is_employee,omitempty"`
+	Employee              any             `json:"employee,omitempty"`
+	Admin                 *AdminInfo      `json:"admin,omitempty"`
+	User                  *AdminInfo      `json:"user,omitempty"`
+	MustChangePassword    bool            `json:"must_change_password"`
+	PermissionsConfigured bool            `json:"permissions_configured"`
+	AppPermissions        map[string]bool `json:"app_permissions,omitempty"`
 }
 
 type AdminInfo struct {
-	ID                    uuid.UUID  `json:"id"`
-	Email                 string     `json:"email"`
-	Username              string     `json:"username"`
-	Phone                 string     `json:"phone,omitempty"`
-	EmployeeID            *uuid.UUID `json:"employee_id,omitempty"`
-	Name                  string     `json:"name"`
-	Role                  string     `json:"role"`
-	Permissions           []string   `json:"permissions"`
-	PermissionsConfigured bool       `json:"permissions_configured"`
-	MustChangePassword    bool       `json:"must_change_password"`
+	ID                    uuid.UUID       `json:"id"`
+	Email                 string          `json:"email"`
+	Username              string          `json:"username"`
+	Phone                 string          `json:"phone,omitempty"`
+	EmployeeID            *uuid.UUID      `json:"employee_id,omitempty"`
+	Name                  string          `json:"name"`
+	Role                  string          `json:"role"`
+	Permissions           []string        `json:"permissions"`
+	PermissionsConfigured bool            `json:"permissions_configured"`
+	MustChangePassword    bool            `json:"must_change_password"`
+	AppPermissions        map[string]bool `json:"app_permissions,omitempty"`
 	GoogleEmail           string     `json:"google_email,omitempty"`
 	GoogleAvatar          string     `json:"google_avatar,omitempty"`
 	IsGoogleLinked        bool       `json:"is_google_linked"`

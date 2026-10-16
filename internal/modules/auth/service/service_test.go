@@ -356,3 +356,73 @@ func TestPromoteEmployee(t *testing.T) {
 		t.Errorf("expected exactly 1 admin in repo, got %d", len(adminRepo.admins))
 	}
 }
+
+func TestHasAppAccess(t *testing.T) {
+	// 1. Super Admin has access to all apps
+	if !service.HasAppAccess("SUPER_ADMIN", []string{}, "ohda") {
+		t.Errorf("SUPER_ADMIN should have access to ohda")
+	}
+	if !service.HasAppAccess("SUPER_ADMIN", []string{}, "eshraf") {
+		t.Errorf("SUPER_ADMIN should have access to eshraf")
+	}
+
+	// 2. Granular permission apps.ohda
+	if !service.HasAppAccess("ACCOUNTANT", []string{"apps.ohda"}, "ohda") {
+		t.Errorf("user with apps.ohda should access ohda")
+	}
+	if service.HasAppAccess("ACCOUNTANT", []string{"apps.ohda"}, "edara") {
+		t.Errorf("user with only apps.ohda should not access edara")
+	}
+
+	// 3. Driver default access
+	if !service.HasAppAccess("DRIVER", []string{}, "manadeeb") {
+		t.Errorf("DRIVER should have access to manadeeb")
+	}
+	if service.HasAppAccess("DRIVER", []string{}, "dashboard") {
+		t.Errorf("DRIVER should not have access to dashboard without permissions")
+	}
+}
+
+func TestLogin_AppPermissionEnforcement(t *testing.T) {
+	adminRepo := &mockAdminRepo{admins: make(map[uuid.UUID]*domain.Admin)}
+	branchRepo := &mockBranchRepo{branches: make(map[uuid.UUID]*domain.Branch)}
+	cfg := &config.Config{JWTSecret: "test-secret-key-1234567890123456"}
+	svc := service.NewAuthService(adminRepo, branchRepo, cfg)
+
+	// Admin with only custody permissions
+	hash, _ := bcrypt.GenerateFromPassword([]byte("1234"), bcrypt.DefaultCost)
+	adminID := uuid.New()
+	adminRepo.admins[adminID] = &domain.Admin{
+		ID:          adminID,
+		Username:    "custody_user",
+		Phone:       "0555551234",
+		Password:    string(hash),
+		Role:        "ACCOUNTANT",
+		Permissions: `["apps.ohda","custody.view"]`,
+	}
+
+	ctx := context.Background()
+
+	// Allowed app login
+	resp, err := svc.Login(ctx, dto.LoginRequest{
+		Phone:    "0555551234",
+		Password: "1234",
+		App:      "ohda",
+	})
+	if err != nil {
+		t.Fatalf("expected successful login to ohda, got error: %v", err)
+	}
+	if resp.AppPermissions == nil || !resp.AppPermissions["ohda"] {
+		t.Errorf("expected ohda permission in app_permissions map")
+	}
+
+	// Denied app login
+	_, err = svc.Login(ctx, dto.LoginRequest{
+		Phone:    "0555551234",
+		Password: "1234",
+		App:      "edara",
+	})
+	if err == nil {
+		t.Fatalf("expected error when logging in to edara without permission, got nil")
+	}
+}

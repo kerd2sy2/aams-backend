@@ -27,6 +27,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	if req.App == "" {
+		req.App = c.GetHeader("X-App-ID")
+		if req.App == "" {
+			req.App = c.GetHeader("X-App-Name")
+		}
+	}
+
 	resp, err := h.svc.Login(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})

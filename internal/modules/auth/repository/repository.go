@@ -172,7 +172,9 @@ func NormalizeSaudiPhoneVariations(input string) []string {
 func (r *gormAdminRepository) FindByPhone(ctx context.Context, phone string) (*domain.Admin, error) {
 	var a domain.Admin
 	variations := NormalizeSaudiPhoneVariations(phone)
-	err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").Where("phone IN (?)", variations).First(&a).Error
+	err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").
+		Where("phone IN (?) OR employee_id IN (SELECT id FROM employees WHERE phone IN (?) AND deleted_at IS NULL)", variations, variations).
+		First(&a).Error
 	if err != nil {
 		return nil, err
 	}
@@ -220,12 +222,13 @@ func (r *gormAdminRepository) FindEmployeeByLogin(ctx context.Context, login str
 		MustChangePassword bool       `gorm:"column:must_change_password"`
 		BranchID           *uuid.UUID `gorm:"column:branch_id"`
 		BranchName         string     `gorm:"column:branch_name"`
+		Permissions        string     `gorm:"column:permissions"`
 	}
 
 	variations := NormalizeSaudiPhoneVariations(login)
 
 	err := r.db.WithContext(ctx).Table("employees").
-		Select("employees.id, employees.name, employees.national_id, employees.employee_number, employees.job_role, employees.phone, employees.personal_image, employees.motorcycle_number, employees.key_number, employees.vehicle_type, employees.shift, employees.password_hash, employees.must_change_password, employees.branch_id, branches.name as branch_name").
+		Select("employees.id, employees.name, employees.national_id, employees.employee_number, employees.job_role, employees.phone, employees.personal_image, employees.motorcycle_number, employees.key_number, employees.vehicle_type, employees.shift, employees.password_hash, employees.must_change_password, employees.branch_id, branches.name as branch_name, employees.permissions").
 		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
 		Where("(employees.national_id = ? OR employees.phone IN (?) OR employees.employee_number = ?) AND employees.deleted_at IS NULL", login, variations, login).
 		First(&emp).Error
@@ -250,6 +253,7 @@ func (r *gormAdminRepository) FindEmployeeByLogin(ctx context.Context, login str
 		"role":                 emp.JobRole,
 		"password_hash":        emp.PasswordHash,
 		"must_change_password": emp.MustChangePassword,
+		"permissions":          emp.Permissions,
 	}
 	if emp.BranchID != nil {
 		res["branch_id"] = emp.BranchID.String()
