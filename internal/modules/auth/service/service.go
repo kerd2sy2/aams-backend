@@ -136,7 +136,7 @@ func HasAppAccess(role string, permissions []string, appName string) bool {
 
 	switch cleanApp {
 	case "ohda", "custody":
-		if hasPerm("apps.ohda") || hasPerm("app.ohda") || hasPerm("custody") || hasPerm("custody.access") || hasPerm("custody.view") || hasPerm("custody.manage") || hasPerm("custody.add") {
+		if hasPerm("apps.ohda") || hasPerm("app.ohda") {
 			return true
 		}
 		if len(permissions) > 0 {
@@ -145,7 +145,7 @@ func HasAppAccess(role string, permissions []string, appName string) bool {
 		return normRole == "ACCOUNTANT" || normRole == "CUSTODY" || normRole == "CUSTODY_ADMIN"
 
 	case "eshraf", "supervision":
-		if hasPerm("apps.eshraf") || hasPerm("app.eshraf") || hasPerm("work.view") || hasPerm("work.start") || hasPerm("work.end") {
+		if hasPerm("apps.eshraf") || hasPerm("app.eshraf") {
 			return true
 		}
 		if len(permissions) > 0 {
