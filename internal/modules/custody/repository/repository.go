@@ -67,8 +67,7 @@ func (r *gormCustodyRepository) FindDayByDate(ctx context.Context, branchID *uui
 	var day domain.CustodyDay
 	query := r.db.WithContext(ctx).Preload("Expenses").Where("date = ?", date)
 	if branchID != nil {
-		query = query.Where("(branch_id = ? OR branch_id IS NULL)", *branchID).
-			Order("CASE WHEN branch_id IS NOT NULL THEN 0 ELSE 1 END")
+		query = query.Where("branch_id = ?", *branchID)
 	}
 	if err := query.First(&day).Error; err != nil {
 		return nil, err
@@ -80,9 +79,9 @@ func (r *gormCustodyRepository) FindLastDay(ctx context.Context, branchID *uuid.
 	var day domain.CustodyDay
 	query := r.db.WithContext(ctx).Preload("Expenses")
 	if branchID != nil {
-		query = query.Where("(branch_id = ? OR branch_id IS NULL)", *branchID)
+		query = query.Where("branch_id = ?", *branchID)
 	}
-	if err := query.Order("date DESC, CASE WHEN branch_id IS NOT NULL THEN 0 ELSE 1 END").First(&day).Error; err != nil {
+	if err := query.Order("date DESC").First(&day).Error; err != nil {
 		return nil, err
 	}
 	return &day, nil
@@ -92,7 +91,7 @@ func (r *gormCustodyRepository) FindAll(ctx context.Context, branchID *uuid.UUID
 	var days []domain.CustodyDay
 	query := r.db.WithContext(ctx).Preload("Expenses")
 	if branchID != nil {
-		query = query.Where("(branch_id = ? OR branch_id IS NULL)", *branchID)
+		query = query.Where("branch_id = ?", *branchID)
 	}
 	if err := query.Order("date DESC").Find(&days).Error; err != nil {
 		return nil, err
@@ -183,7 +182,7 @@ func (r *gormCustodyRepository) FindDaysFrom(ctx context.Context, branchID *uuid
 	var days []domain.CustodyDay
 	query := r.db.WithContext(ctx).Preload("Expenses").Where("date >= ?", startDate)
 	if branchID != nil {
-		query = query.Where("(branch_id = ? OR branch_id IS NULL)", *branchID)
+		query = query.Where("branch_id = ?", *branchID)
 	}
 	if err := query.Order("date ASC").Find(&days).Error; err != nil {
 		return nil, err
@@ -195,9 +194,9 @@ func (r *gormCustodyRepository) FindPreviousDay(ctx context.Context, branchID *u
 	var day domain.CustodyDay
 	query := r.db.WithContext(ctx).Preload("Expenses").Where("date < ?", beforeDate)
 	if branchID != nil {
-		query = query.Where("(branch_id = ? OR branch_id IS NULL)", *branchID)
+		query = query.Where("branch_id = ?", *branchID)
 	}
-	if err := query.Order("date DESC, CASE WHEN branch_id IS NOT NULL THEN 0 ELSE 1 END").First(&day).Error; err != nil {
+	if err := query.Order("date DESC").First(&day).Error; err != nil {
 		return nil, err
 	}
 	return &day, nil

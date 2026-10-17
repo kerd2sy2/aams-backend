@@ -942,7 +942,9 @@ func (s *adminService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateA
 	if req.PermissionsConfigured != nil {
 		admin.PermissionsConfigured = *req.PermissionsConfigured
 	}
-	if req.BranchID != nil {
+	if req.ClearBranch {
+		admin.BranchID = nil
+	} else if req.BranchID != nil {
 		admin.BranchID = req.BranchID
 	}
 	if req.Password != "" {
@@ -951,10 +953,12 @@ func (s *adminService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateA
 			admin.Password = string(hashed)
 		}
 	}
+	admin.Branch = nil
+	admin.RoleObj = nil
 	if err := s.repo.Update(ctx, admin); err != nil {
 		return nil, err
 	}
-	return admin, nil
+	return s.repo.FindByID(ctx, admin.ID)
 }
 
 func (s *adminService) Delete(ctx context.Context, id uuid.UUID) error {

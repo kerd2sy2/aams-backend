@@ -142,6 +142,7 @@ type UpdateAdminRequest struct {
 	Permissions           []string   `json:"permissions"`
 	PermissionsConfigured *bool      `json:"permissions_configured,omitempty"`
 	BranchID              *uuid.UUID `json:"branch_id"`
+	ClearBranch           bool       `json:"clear_branch"`
 }
 
 type PromoteEmployeeRequest struct {

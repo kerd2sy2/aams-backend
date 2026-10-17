@@ -81,7 +81,28 @@ func (r *gormAdminRepository) Create(ctx context.Context, admin *domain.Admin) e
 }
 
 func (r *gormAdminRepository) Update(ctx context.Context, admin *domain.Admin) error {
-	return r.db.WithContext(ctx).Save(admin).Error
+	updates := map[string]interface{}{
+		"name":                   admin.Name,
+		"email":                  admin.Email,
+		"username":               admin.Username,
+		"phone":                  admin.Phone,
+		"password":               admin.Password,
+		"role":                   admin.Role,
+		"role_id":                admin.RoleID,
+		"employee_id":            admin.EmployeeID,
+		"permissions":            admin.Permissions,
+		"permissions_configured": admin.PermissionsConfigured,
+		"must_change_password":    admin.MustChangePassword,
+		"branch_id":              admin.BranchID,
+		"updated_at":             time.Now(),
+	}
+	if err := r.db.WithContext(ctx).Model(&domain.Admin{}).Where("id = ?", admin.ID).Updates(updates).Error; err != nil {
+		return err
+	}
+	if admin.EmployeeID != nil {
+		_ = r.db.WithContext(ctx).Table("employees").Where("id = ?", *admin.EmployeeID).Update("branch_id", admin.BranchID).Error
+	}
+	return nil
 }
 
 func (r *gormAdminRepository) Delete(ctx context.Context, id uuid.UUID) error {

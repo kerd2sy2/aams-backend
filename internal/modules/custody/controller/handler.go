@@ -21,12 +21,9 @@ func NewCustodyHandler(svc service.CustodyService) *CustodyHandler {
 }
 
 func custodyBranchID(c *gin.Context) *uuid.UUID {
-	if bid, exists := c.Get("branch_id"); exists && bid != nil {
-		if val, ok := bid.(*uuid.UUID); ok && val != nil {
-			return val
-		}
-		if val, ok := bid.(uuid.UUID); ok && val != uuid.Nil {
-			return &val
+	if s := c.GetHeader("X-Branch-ID"); s != "" {
+		if id, err := uuid.Parse(s); err == nil {
+			return &id
 		}
 	}
 	if s := c.Query("branch_id"); s != "" {
@@ -34,9 +31,12 @@ func custodyBranchID(c *gin.Context) *uuid.UUID {
 			return &id
 		}
 	}
-	if s := c.GetHeader("X-Branch-ID"); s != "" {
-		if id, err := uuid.Parse(s); err == nil {
-			return &id
+	if bid, exists := c.Get("branch_id"); exists && bid != nil {
+		if val, ok := bid.(*uuid.UUID); ok && val != nil {
+			return val
+		}
+		if val, ok := bid.(uuid.UUID); ok && val != uuid.Nil {
+			return &val
 		}
 	}
 	return nil
