@@ -77,7 +77,9 @@ func (h *EmployeeHandler) GetAll(c *gin.Context) {
 	}
 
 	if !scope.IsGlobal {
-		filter.BranchID = scope.BranchID
+		if !filter.CrossBranch {
+			filter.BranchID = scope.BranchID
+		}
 	}
 
 	emps, total, err := h.svc.FindAll(c.Request.Context(), filter)
@@ -110,9 +112,11 @@ func (h *EmployeeHandler) Search(c *gin.Context) {
 	}
 
 	var branchFilter *uuid.UUID
-	if !scope.IsGlobal {
+	// When searching with a query (or all_branches=true), allow supervisor to find delegates across other branches
+	allowCrossBranch := c.Query("all_branches") == "true" || strings.TrimSpace(q) != ""
+	if !scope.IsGlobal && !allowCrossBranch {
 		branchFilter = scope.BranchID
-	} else if scope.BranchID != nil {
+	} else if scope.BranchID != nil && !allowCrossBranch {
 		branchFilter = scope.BranchID
 	}
 

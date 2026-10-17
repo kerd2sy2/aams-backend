@@ -85,6 +85,9 @@ func (r *gormEmployeeRepository) FindAll(ctx context.Context, filter dto.Employe
 	if filter.BranchID != nil && *filter.BranchID != uuid.Nil {
 		q = q.Where("branch_id = ?", *filter.BranchID)
 	}
+	if filter.JobRole != "" {
+		q = q.Where("job_role = ? OR role_name = ?", filter.JobRole, filter.JobRole)
+	}
 
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -113,7 +116,7 @@ func (r *gormEmployeeRepository) FindAll(ctx context.Context, filter dto.Employe
 func (r *gormEmployeeRepository) Search(ctx context.Context, query string, branchID *uuid.UUID) ([]domain.Employee, error) {
 	var emps []domain.Employee
 	s := "%" + strings.ToLower(query) + "%"
-	q := r.db.WithContext(ctx).Where("LOWER(name) LIKE ? OR national_id LIKE ? OR phone LIKE ? OR motorcycle_number LIKE ?", s, s, s, s)
+	q := r.db.WithContext(ctx).Where("LOWER(name) LIKE ? OR national_id LIKE ? OR phone LIKE ? OR motorcycle_number LIKE ? OR employee_number LIKE ?", s, s, s, s, s)
 	if branchID != nil && *branchID != uuid.Nil {
 		q = q.Where("branch_id = ?", *branchID)
 	}
@@ -123,7 +126,7 @@ func (r *gormEmployeeRepository) Search(ctx context.Context, query string, branc
 
 func (r *gormEmployeeRepository) GetWorkingEmployees(ctx context.Context, branchID *uuid.UUID) ([]domain.Employee, error) {
 	var emps []domain.Employee
-	q := r.db.WithContext(ctx).Where("is_working = ?", true)
+	q := r.db.WithContext(ctx).Where("is_working = ? AND (job_role = 'DRIVER' OR role_name = 'DRIVER' OR (job_role NOT IN ('SUPERVISOR', 'ADMIN', 'SUPER_ADMIN') AND role_name NOT IN ('SUPERVISOR', 'ADMIN', 'SUPER_ADMIN')))", true)
 	if branchID != nil && *branchID != uuid.Nil {
 		q = q.Where("branch_id = ?", *branchID)
 	}

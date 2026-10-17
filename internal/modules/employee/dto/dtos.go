@@ -129,6 +129,8 @@ type EmployeeFilter struct {
 	ApplicationID   string     `form:"application_id"`
 	ApplicationType string     `form:"application_type"`
 	BranchID        *uuid.UUID `form:"branch_id"`
+	JobRole         string     `form:"job_role"`
+	CrossBranch     bool       `form:"cross_branch"`
 	Page            int        `form:"page,default=1"`
 	Limit           int        `form:"limit,default=10"`
 	SortBy          string     `form:"sort_by,default=created_at"`
