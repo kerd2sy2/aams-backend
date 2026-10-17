@@ -79,6 +79,9 @@ func (h *CustodyHandler) Create(c *gin.Context) {
 
 	if bid := custodyBranchID(c); bid != nil {
 		req.BranchID = bid
+	} else if req.BranchID == nil {
+		primaryBranchID := uuid.MustParse("0b52c83c-4a37-4950-8040-fcb00fa718b3")
+		req.BranchID = &primaryBranchID
 	}
 
 	adminID, adminName, adminUsername := getAdminInfo(c)

@@ -65,6 +65,10 @@ func (m *mockCustodyService) GetDaySummary(ctx context.Context, branchID *uuid.U
 	return nil, nil
 }
 
+func (m *mockCustodyService) SetLedgerImage(ctx context.Context, branchID *uuid.UUID, date string, imageURL string) (*dto.CustodyDayResponse, error) {
+	return nil, nil
+}
+
 func TestCustodyHandler_Create(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

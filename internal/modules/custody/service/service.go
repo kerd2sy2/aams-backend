@@ -106,46 +106,90 @@ func (s *custodyService) List(ctx context.Context, branchID *uuid.UUID) ([]dto.C
 		return []dto.CustodyDayResponse{}, nil
 	}
 
-	// 1. Group and recalculate chain per branch in ascending date order
+	// 1. Group and recalculate chain in ascending date order
 	// so opening balance of each day strictly matches previous day's closing balance
 	sort.Slice(days, func(i, j int) bool {
 		return days[i].Date < days[j].Date
 	})
 
-	branchLastClosing := make(map[string]float64)
-	branchHasPrev := make(map[string]bool)
+	// When listing for a specific branch or single operational branch, maintain a single chronological timeline
+	if branchID != nil {
+		var prevClosing float64
+		hasPrev := false
 
-	for i := range days {
-		day := &days[i]
-		bKey := "global"
-		if day.BranchID != nil {
-			bKey = day.BranchID.String()
-		}
-
-		if !branchHasPrev[bKey] {
-			prev, errPrev := s.repo.FindPreviousDay(ctx, day.BranchID, day.Date)
-			if errPrev == nil && prev != nil {
-				s.recomputeClosing(prev)
-				if day.OpeningBalance != prev.ClosingBalance {
-					day.OpeningBalance = prev.ClosingBalance
+		for i := range days {
+			day := &days[i]
+			if !hasPrev {
+				prev, errPrev := s.repo.FindPreviousDay(ctx, branchID, day.Date)
+				if errPrev == nil && prev != nil {
+					s.recomputeClosing(prev)
+					if day.OpeningBalance != prev.ClosingBalance {
+						day.OpeningBalance = prev.ClosingBalance
+						_ = s.repo.UpdateDay(ctx, day)
+					}
+				}
+				s.recomputeClosing(day)
+				prevClosing = day.ClosingBalance
+				hasPrev = true
+			} else {
+				needsUpdate := false
+				if day.OpeningBalance != prevClosing {
+					day.OpeningBalance = prevClosing
+					needsUpdate = true
+				}
+				s.recomputeClosing(day)
+				if needsUpdate {
 					_ = s.repo.UpdateDay(ctx, day)
 				}
+				prevClosing = day.ClosingBalance
 			}
-			s.recomputeClosing(day)
-			branchLastClosing[bKey] = day.ClosingBalance
-			branchHasPrev[bKey] = true
-		} else {
-			prevClosing := branchLastClosing[bKey]
-			needsUpdate := false
-			if day.OpeningBalance != prevClosing {
-				day.OpeningBalance = prevClosing
-				needsUpdate = true
+		}
+	} else {
+		// Multi-branch fallback grouping
+		branchLastClosing := make(map[string]float64)
+		branchHasPrev := make(map[string]bool)
+
+		// Determine dominant branch key for any records missing branch_id
+		defaultBranchKey := "0b52c83c-4a37-4950-8040-fcb00fa718b3"
+		for _, d := range days {
+			if d.BranchID != nil {
+				defaultBranchKey = d.BranchID.String()
+				break
 			}
-			s.recomputeClosing(day)
-			if needsUpdate {
-				_ = s.repo.UpdateDay(ctx, day)
+		}
+
+		for i := range days {
+			day := &days[i]
+			bKey := defaultBranchKey
+			if day.BranchID != nil {
+				bKey = day.BranchID.String()
 			}
-			branchLastClosing[bKey] = day.ClosingBalance
+
+			if !branchHasPrev[bKey] {
+				prev, errPrev := s.repo.FindPreviousDay(ctx, day.BranchID, day.Date)
+				if errPrev == nil && prev != nil {
+					s.recomputeClosing(prev)
+					if day.OpeningBalance != prev.ClosingBalance {
+						day.OpeningBalance = prev.ClosingBalance
+						_ = s.repo.UpdateDay(ctx, day)
+					}
+				}
+				s.recomputeClosing(day)
+				branchLastClosing[bKey] = day.ClosingBalance
+				branchHasPrev[bKey] = true
+			} else {
+				prevClosing := branchLastClosing[bKey]
+				needsUpdate := false
+				if day.OpeningBalance != prevClosing {
+					day.OpeningBalance = prevClosing
+					needsUpdate = true
+				}
+				s.recomputeClosing(day)
+				if needsUpdate {
+					_ = s.repo.UpdateDay(ctx, day)
+				}
+				branchLastClosing[bKey] = day.ClosingBalance
+			}
 		}
 	}
 
@@ -190,6 +234,10 @@ func (s *custodyService) cascadeRecalculateChain(ctx context.Context, branchID *
 }
 
 func (s *custodyService) Create(ctx context.Context, req dto.CreateCustodyDayRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error) {
+	if req.BranchID == nil {
+		primaryID := uuid.MustParse("0b52c83c-4a37-4950-8040-fcb00fa718b3")
+		req.BranchID = &primaryID
+	}
 	existing, err := s.repo.FindDayByDate(ctx, req.BranchID, req.Date)
 	if err == nil && existing != nil {
 		return nil, errors.New("يوجد سجل عهدة مسجل بالفعل لهذا اليوم")
