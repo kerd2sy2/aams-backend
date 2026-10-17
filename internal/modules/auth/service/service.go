@@ -330,7 +330,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 			}
 
 			if req.App != "" && !HasAppAccess(empRole, empPerms, req.App) {
-				return nil, fmt.Errorf("عذراً، ليس لديك صلاحية للدخول إلى %s (يرجى مراجعة إدارة النظام)", GetAppArabicName(req.App))
+				return nil, errors.New("ليس لديك صلاحية للدخول إلى التطبيق، يرجى مراجعة الإدارة")
 			}
 
 			appPerms := ComputeAppPermissions(empRole, empPerms)
@@ -409,7 +409,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 	}
 
 	if req.App != "" && !HasAppAccess(admin.Role, perms, req.App) {
-		return nil, fmt.Errorf("عذراً، ليس لديك صلاحية للدخول إلى %s (يرجى مراجعة إدارة النظام)", GetAppArabicName(req.App))
+		return nil, errors.New("ليس لديك صلاحية للدخول إلى التطبيق، يرجى مراجعة الإدارة")
 	}
 
 	appPerms := ComputeAppPermissions(admin.Role, perms)
