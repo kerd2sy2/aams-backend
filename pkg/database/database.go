@@ -80,13 +80,18 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		&domain.DailyOrder{},
 		&domain.TargetAlert{},
 		&domain.TargetSetting{},
+		&domain.OperationVideo{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("auto migration failed: %w", err)
 	}
 
-	// Performance indexes for target orders
+	// Performance indexes and schema upgrades
 	if rawDB, err := db.DB(); err == nil {
+		rawDB.Exec("ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS review_video_url text")
+		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_operation_videos_expires_at ON operation_videos (expires_at) WHERE is_deleted = false")
+		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_operation_videos_employee_name ON operation_videos (employee_name)")
+		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_operation_videos_order_number ON operation_videos (order_number)")
 		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS approved_by char(36)")
 		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS rejected_by char(36)")
 		rawDB.Exec("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS approved_by_name varchar(100)")

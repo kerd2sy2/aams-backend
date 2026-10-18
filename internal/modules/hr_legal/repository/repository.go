@@ -15,6 +15,7 @@ type HRLegalRepository interface {
 	// Investigation
 	CreateInvestigation(ctx context.Context, inv *domain.Investigation) error
 	UpdateInvestigation(ctx context.Context, inv *domain.Investigation) error
+	DeleteInvestigation(ctx context.Context, id uuid.UUID) error
 	FindInvestigations(ctx context.Context, branchID *uuid.UUID) ([]domain.Investigation, error)
 	FindInvestigationByID(ctx context.Context, id uuid.UUID) (*domain.Investigation, error)
 	CountPendingInvestigations(ctx context.Context) (int64, error)
@@ -76,6 +77,10 @@ func (r *gormHRLegalRepository) CreateInvestigation(ctx context.Context, inv *do
 
 func (r *gormHRLegalRepository) UpdateInvestigation(ctx context.Context, inv *domain.Investigation) error {
 	return r.db.WithContext(ctx).Save(inv).Error
+}
+
+func (r *gormHRLegalRepository) DeleteInvestigation(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&domain.Investigation{}).Error
 }
 
 func (r *gormHRLegalRepository) FindInvestigations(ctx context.Context, branchID *uuid.UUID) ([]domain.Investigation, error) {

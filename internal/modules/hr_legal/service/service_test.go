@@ -59,6 +59,11 @@ func (m *mockHRLegalRepo) FindInvestigationByID(ctx context.Context, id uuid.UUI
 	return inv, nil
 }
 
+func (m *mockHRLegalRepo) DeleteInvestigation(ctx context.Context, id uuid.UUID) error {
+	delete(m.investigations, id)
+	return nil
+}
+
 func (m *mockHRLegalRepo) CountPendingInvestigations(ctx context.Context) (int64, error) {
 	var count int64
 	for _, inv := range m.investigations {

@@ -374,6 +374,9 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 	if req.FuelCost != nil {
 		session.FuelCost = *req.FuelCost
 	}
+	if req.ReviewVideoURL != nil && *req.ReviewVideoURL != "" {
+		session.ReviewVideoURL = *req.ReviewVideoURL
+	}
 	if session.EndKM >= session.StartKM {
 		session.Distance = session.EndKM - session.StartKM
 	}

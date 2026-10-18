@@ -22,6 +22,7 @@ type HRLegalService interface {
 	// Investigation
 	CreateInvestigation(ctx context.Context, req dto.CreateInvestigationRequest, supervisorID uuid.UUID) (*dto.InvestigationResponse, error)
 	UpdateInvestigation(ctx context.Context, id uuid.UUID, req dto.UpdateInvestigationRequest) (*dto.InvestigationResponse, error)
+	DeleteInvestigation(ctx context.Context, id uuid.UUID) error
 	GetAllInvestigations(ctx context.Context, branchID *uuid.UUID) ([]dto.InvestigationResponse, error)
 	GetInvestigationByID(ctx context.Context, id uuid.UUID) (*dto.InvestigationResponse, error)
 	ApproveInvestigation(ctx context.Context, id uuid.UUID, adminID uuid.UUID, adminName, adminUsername string) (*dto.InvestigationResponse, error)
@@ -263,6 +264,10 @@ func (s *hrLegalService) UpdateInvestigation(ctx context.Context, id uuid.UUID, 
 		return nil, err
 	}
 	return s.toInvestigationResponse(inv), nil
+}
+
+func (s *hrLegalService) DeleteInvestigation(ctx context.Context, id uuid.UUID) error {
+	return s.repo.DeleteInvestigation(ctx, id)
 }
 
 func (s *hrLegalService) GetAllInvestigations(ctx context.Context, branchID *uuid.UUID) ([]dto.InvestigationResponse, error) {

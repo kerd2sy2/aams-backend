@@ -134,6 +134,20 @@ func (h *HRLegalHandler) UpdateInvestigation(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func (h *HRLegalHandler) DeleteInvestigation(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف غير صالح"})
+		return
+	}
+
+	if err := h.svc.DeleteInvestigation(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "تم حذف السجل بنجاح"})
+}
+
 func (h *HRLegalHandler) ApproveInvestigation(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

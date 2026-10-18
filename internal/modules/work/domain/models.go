@@ -27,6 +27,7 @@ type WorkSession struct {
 	IsReviewed           bool           `gorm:"default:false;index" json:"is_reviewed"`
 	ReviewNotes          string         `gorm:"type:text" json:"review_notes"`
 	ReviewedBy           *uuid.UUID     `gorm:"type:char(36)" json:"reviewed_by"`
+	ReviewVideoURL       string         `gorm:"type:text" json:"review_video_url"`
 	IsEditedBySupervisor bool           `gorm:"default:false;index" json:"is_edited_by_supervisor"`
 	EditedByName         string         `gorm:"type:varchar(100)" json:"edited_by_name"`
 	OriginalOrdersCount  int            `gorm:"default:0" json:"original_orders_count"`

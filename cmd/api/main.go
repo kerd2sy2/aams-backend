@@ -22,6 +22,7 @@ import (
 	"delivery-backend/internal/modules/hr_legal"
 	"delivery-backend/internal/modules/inventory"
 	"delivery-backend/internal/modules/maintenance"
+	"delivery-backend/internal/modules/operation_video"
 	"delivery-backend/internal/modules/system"
 	"delivery-backend/internal/modules/target"
 	"delivery-backend/internal/modules/ticket"
@@ -98,6 +99,10 @@ func main() {
 	workModule := work.NewModule(db, storageService, auditService)
 	targetModule := target.NewModule(db)
 	employeeModule := employee.NewModule(db, nil)
+	operationVideoModule := operation_video.NewModule(db, "./uploads")
+
+	// Start 60-day auto-purge worker for operation videos
+	startOperationVideoCleanupWorker(operationVideoModule.Service, "./uploads")
 
 	// Set Gin to release mode in production
 	ginMode := os.Getenv("GIN_MODE")
@@ -285,6 +290,7 @@ func main() {
 		ticketModule.RegisterRoutes(protected)
 		targetModule.RegisterRoutes(protected)
 		systemModule.RegisterRoutes(protected)
+		operationVideoModule.RegisterRoutes(protected)
 	}
 
 	// Create HTTP server with timeouts
@@ -427,4 +433,30 @@ func seedDemoReviewer(db *gorm.DB) {
 		_ = db.Model(&emp).Update("name", "تست جوجل").Error
 	}
 }
+
+func startOperationVideoCleanupWorker(svc operation_video_service_purge, uploadDir string) {
+	// Daily ticker checking every 24 hours
+	ticker := time.NewTicker(24 * time.Hour)
+	go func() {
+		// Run once on server startup
+		if purged, err := svc.PurgeExpiredVideos(context.Background(), uploadDir); err != nil {
+			log.Printf("[Cron-OperationVideo] Initial purge error: %v", err)
+		} else if purged > 0 {
+			log.Printf("[Cron-OperationVideo] Initial startup purge removed %d expired videos", purged)
+		}
+
+		for range ticker.C {
+			if purged, err := svc.PurgeExpiredVideos(context.Background(), uploadDir); err != nil {
+				log.Printf("[Cron-OperationVideo] Daily purge error: %v", err)
+			} else if purged > 0 {
+				log.Printf("[Cron-OperationVideo] Daily purge removed %d expired videos", purged)
+			}
+		}
+	}()
+}
+
+type operation_video_service_purge interface {
+	PurgeExpiredVideos(ctx context.Context, uploadBaseDir string) (int, error)
+}
+
 

@@ -36,6 +36,10 @@ func (m *mockHRLegalService) UpdateInvestigation(ctx context.Context, id uuid.UU
 	return nil, nil
 }
 
+func (m *mockHRLegalService) DeleteInvestigation(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
 func (m *mockHRLegalService) GetAllInvestigations(ctx context.Context, branchID *uuid.UUID) ([]dto.InvestigationResponse, error) {
 	return nil, nil
 }

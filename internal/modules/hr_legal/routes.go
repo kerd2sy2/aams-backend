@@ -41,6 +41,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/investigations/pending-count", m.Handler.GetPendingInvestigationCount)
 	rg.GET("/investigations/:id", m.Handler.GetInvestigationByID)
 	rg.PUT("/investigations/:id", m.Handler.UpdateInvestigation)
+	rg.DELETE("/investigations/:id", m.Handler.DeleteInvestigation)
 	rg.POST("/investigations/:id/approve", m.Handler.ApproveInvestigation)
 
 	// 2. Documents
