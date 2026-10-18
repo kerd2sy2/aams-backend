@@ -20,14 +20,34 @@ func NewInventoryHandler(invService service.InventoryService) *InventoryHandler 
 	return &InventoryHandler{invService: invService}
 }
 
-func (h *InventoryHandler) GetItems(c *gin.Context) {
-	itemType := c.Query("type")
-	var branchID *uuid.UUID
-	if bID, exists := c.Get("branch_id"); exists && bID != nil {
-		if val, ok := bID.(*uuid.UUID); ok && val != nil {
-			branchID = val
+func extractBranchID(c *gin.Context) *uuid.UUID {
+	if q := strings.TrimSpace(c.Query("branch_id")); q != "" {
+		if id, err := uuid.Parse(q); err == nil && id != uuid.Nil {
+			return &id
 		}
 	}
+	if bID, exists := c.Get("branch_id"); exists && bID != nil {
+		switch v := bID.(type) {
+		case *uuid.UUID:
+			if v != nil && *v != uuid.Nil {
+				return v
+			}
+		case uuid.UUID:
+			if v != uuid.Nil {
+				return &v
+			}
+		case string:
+			if id, err := uuid.Parse(v); err == nil && id != uuid.Nil {
+				return &id
+			}
+		}
+	}
+	return nil
+}
+
+func (h *InventoryHandler) GetItems(c *gin.Context) {
+	itemType := c.Query("type")
+	branchID := extractBranchID(c)
 
 	items, err := h.invService.GetAllItems(c.Request.Context(), itemType, branchID)
 	if err != nil {
@@ -169,12 +189,7 @@ func (h *InventoryHandler) DispenseOil(c *gin.Context) {
 	}
 
 	adminName := c.GetString("admin_name")
-	var branchID *uuid.UUID
-	if bID, exists := c.Get("branch_id"); exists && bID != nil {
-		if val, ok := bID.(*uuid.UUID); ok && val != nil {
-			branchID = val
-		}
-	}
+	branchID := extractBranchID(c)
 
 	txs, err := h.invService.DispenseOil(c.Request.Context(), req, adminName, branchID)
 	if err != nil {

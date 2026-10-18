@@ -40,11 +40,13 @@ type RemoveStockRequest struct {
 }
 
 type DispenseOilRequest struct {
-	EmployeeID uuid.UUID  `json:"employee_id" binding:"required"`
-	Quantity   int        `json:"quantity" binding:"required,gt=0"`
-	ItemID     *uuid.UUID `json:"item_id"` // اختياري
-	Notes      string     `json:"notes"`
-	BranchID   *uuid.UUID `json:"branch_id"`
+	EmployeeID  *uuid.UUID `json:"employee_id"`
+	PlateNumber string     `json:"plate_number"`
+	CurrentKM   float64    `json:"current_km"`
+	Quantity    int        `json:"quantity" binding:"required,gt=0"`
+	ItemID      *uuid.UUID `json:"item_id"` // اختياري
+	Notes       string     `json:"notes"`
+	BranchID    *uuid.UUID `json:"branch_id"`
 }
 
 type InventoryFilter struct {

@@ -114,6 +114,10 @@ func (m *mockInventoryRepo) FindPurchaseInvoiceByID(ctx context.Context, id uuid
 func (m *mockInventoryRepo) DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
+func (m *mockInventoryRepo) UpdateVehicleOilKM(ctx context.Context, plateNumber string, currentKM float64) error {
+	return nil
+}
+
 
 func TestInventoryService_AddAndRemoveStock(t *testing.T) {
 	repo := newMockInventoryRepo()

@@ -16,6 +16,7 @@ import (
 
 type InventoryItemWithStock struct {
 	*domain.InventoryItem
+	Quantity       int `json:"quantity"`
 	BranchQuantity int `json:"branch_quantity"`
 }
 
@@ -132,9 +133,11 @@ func (s *inventoryService) GetAllItems(ctx context.Context, itemType string, bra
 
 	result := make([]InventoryItemWithStock, len(items))
 	for i := range items {
+		qty := stock[items[i].ID]
 		result[i] = InventoryItemWithStock{
 			InventoryItem:  &items[i],
-			BranchQuantity: stock[items[i].ID],
+			Quantity:       qty,
+			BranchQuantity: qty,
 		}
 	}
 	return result, nil
@@ -303,18 +306,48 @@ func (s *inventoryService) DeletePurchaseInvoice(ctx context.Context, id uuid.UU
 }
 
 func (s *inventoryService) DispenseOil(ctx context.Context, req dto.DispenseOilRequest, adminName string, branchID *uuid.UUID) ([]*domain.InventoryTransaction, error) {
-	oilItems, err := s.repo.FindOilItemsWithStock(ctx, branchID)
-	if err != nil || len(oilItems) == 0 {
-		return nil, errors.New("لا يوجد زيت متاح في المخزن. يرجى إضافة زيت أولاً")
+	effectiveBranch := branchID
+	if req.BranchID != nil {
+		effectiveBranch = req.BranchID
+	}
+
+	var oilItems []domain.InventoryItem
+	if req.ItemID != nil && *req.ItemID != uuid.Nil {
+		specificItem, err := s.repo.FindItemByID(ctx, *req.ItemID)
+		if err == nil && specificItem != nil {
+			oilItems = []domain.InventoryItem{*specificItem}
+		}
+	}
+	if len(oilItems) == 0 {
+		var err error
+		oilItems, err = s.repo.FindOilItemsWithStock(ctx, effectiveBranch)
+		if err != nil || len(oilItems) == 0 {
+			return nil, errors.New("لا يوجد زيت متاح في المخزن. يرجى إضافة زيت أولاً")
+		}
 	}
 
 	totalOil := 0
 	for _, item := range oilItems {
-		stock, _ := s.repo.GetItemStock(ctx, item.ID, branchID)
+		stock, _ := s.repo.GetItemStock(ctx, item.ID, effectiveBranch)
 		totalOil += stock
 	}
 	if totalOil < req.Quantity {
 		return nil, fmt.Errorf("الكمية غير كافية. المتاح: %d جركن زيت", totalOil)
+	}
+
+	note := strings.TrimSpace(req.Notes)
+	if req.PlateNumber != "" {
+		plateInfo := fmt.Sprintf("صرف زيت للدباب (%s)", req.PlateNumber)
+		if req.CurrentKM > 0 {
+			plateInfo += fmt.Sprintf(" عداد: %.0f كم", req.CurrentKM)
+		}
+		if note == "" {
+			note = plateInfo
+		} else if !strings.Contains(note, req.PlateNumber) {
+			note = plateInfo + " - " + note
+		}
+	} else if note == "" {
+		note = fmt.Sprintf("صرف زيت بواسطة المشرف %s", adminName)
 	}
 
 	var txs []*domain.InventoryTransaction
@@ -323,24 +356,19 @@ func (s *inventoryService) DispenseOil(ctx context.Context, req dto.DispenseOilR
 		if remaining <= 0 {
 			break
 		}
-		stock, _ := s.repo.GetItemStock(ctx, item.ID, branchID)
+		stock, _ := s.repo.GetItemStock(ctx, item.ID, effectiveBranch)
 		if stock > 0 {
 			deduct := stock
 			if deduct > remaining {
 				deduct = remaining
 			}
 
-			note := req.Notes
-			if note == "" {
-				note = fmt.Sprintf("صرف زيت للمندوب - %d جركن", deduct)
-			}
-
 			tx := &domain.InventoryTransaction{
 				ItemID:     item.ID,
 				Type:       "out",
 				Quantity:   deduct,
-				EmployeeID: &req.EmployeeID,
-				BranchID:   branchID,
+				EmployeeID: req.EmployeeID,
+				BranchID:   effectiveBranch,
 				Notes:      note,
 			}
 			if txErr := s.repo.CreateTransaction(ctx, tx); txErr != nil {
@@ -349,6 +377,10 @@ func (s *inventoryService) DispenseOil(ctx context.Context, req dto.DispenseOilR
 			txs = append(txs, tx)
 			remaining -= deduct
 		}
+	}
+
+	if req.PlateNumber != "" && req.CurrentKM > 0 {
+		_ = s.repo.UpdateVehicleOilKM(ctx, req.PlateNumber, req.CurrentKM)
 	}
 
 	return txs, nil

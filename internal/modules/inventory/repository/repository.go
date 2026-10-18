@@ -28,6 +28,7 @@ type InventoryRepository interface {
 	FindPurchaseInvoices(ctx context.Context, branchID *uuid.UUID, search string, page, limit int) ([]domain.PurchaseInvoice, int64, error)
 	FindPurchaseInvoiceByID(ctx context.Context, id uuid.UUID) (*domain.PurchaseInvoice, error)
 	DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error
+	UpdateVehicleOilKM(ctx context.Context, plateNumber string, currentKM float64) error
 }
 
 type gormInventoryRepository struct {
@@ -219,3 +220,15 @@ func (r *gormInventoryRepository) FindPurchaseInvoiceByID(ctx context.Context, i
 func (r *gormInventoryRepository) DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.PurchaseInvoice{}, "id = ?", id).Error
 }
+
+func (r *gormInventoryRepository) UpdateVehicleOilKM(ctx context.Context, plateNumber string, currentKM float64) error {
+	if plateNumber == "" || currentKM <= 0 {
+		return nil
+	}
+	updates := map[string]interface{}{
+		"current_km":         currentKM,
+		"last_oil_change_km": currentKM,
+	}
+	return r.db.WithContext(ctx).Table("vehicles").Where("plate_number = ? AND deleted_at IS NULL", plateNumber).Updates(updates).Error
+}
+
