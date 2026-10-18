@@ -20,9 +20,11 @@ type OperationVideoService interface {
 	SaveVideo(ctx context.Context, video *domain.OperationVideo) (*dto.OperationVideoItem, error)
 	ListVideos(ctx context.Context, filter dto.OperationVideoFilter) ([]dto.OperationVideoItem, int64, error)
 	GetVideo(ctx context.Context, id uuid.UUID) (*dto.OperationVideoItem, error)
+	UpdateVideo(ctx context.Context, id uuid.UUID, orderNumber, notes string) error
 	DeleteVideo(ctx context.Context, id uuid.UUID, uploadBaseDir string) error
 	PurgeExpiredVideos(ctx context.Context, uploadBaseDir string) (int, error)
 }
+
 
 type operationVideoService struct {
 	repo repository.OperationVideoRepository
@@ -67,6 +69,20 @@ func (s *operationVideoService) GetVideo(ctx context.Context, id uuid.UUID) (*dt
 		return nil, err
 	}
 	return toDTO(video), nil
+}
+
+func (s *operationVideoService) UpdateVideo(ctx context.Context, id uuid.UUID, orderNumber, notes string) error {
+	updates := map[string]interface{}{}
+	if strings.TrimSpace(orderNumber) != "" {
+		updates["order_number"] = strings.TrimSpace(orderNumber)
+	}
+	if strings.TrimSpace(notes) != "" {
+		updates["notes"] = strings.TrimSpace(notes)
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return s.repo.Update(ctx, id, updates)
 }
 
 func (s *operationVideoService) DeleteVideo(ctx context.Context, id uuid.UUID, uploadBaseDir string) error {

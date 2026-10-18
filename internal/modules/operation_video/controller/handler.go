@@ -271,3 +271,30 @@ func (h *OperationVideoHandler) Delete(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "تم حذف الفيديو بنجاح"})
 }
+
+// Update updates video notes and/or order number
+func (h *OperationVideoHandler) Update(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الفيديو غير صالح"})
+		return
+	}
+
+	var req struct {
+		OrderNumber string `json:"order_number"`
+		Notes       string `json:"notes"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات التعديل غير صالحة"})
+		return
+	}
+
+	if err := h.service.UpdateVideo(c.Request.Context(), id, req.OrderNumber, req.Notes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل في تحديث بيانات الفيديو"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "تم تحديث بيانات الفيديو بنجاح"})
+}
+

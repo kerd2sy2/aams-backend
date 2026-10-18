@@ -16,10 +16,12 @@ type OperationVideoRepository interface {
 	Create(ctx context.Context, video *domain.OperationVideo) error
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.OperationVideo, error)
 	List(ctx context.Context, filter dto.OperationVideoFilter) ([]domain.OperationVideo, int64, error)
+	Update(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindExpiredVideos(ctx context.Context, now time.Time, limit int) ([]domain.OperationVideo, error)
 	MarkDeleted(ctx context.Context, id uuid.UUID) error
 }
+
 
 type gormOperationVideoRepository struct {
 	db *gorm.DB
@@ -87,6 +89,12 @@ func (r *gormOperationVideoRepository) List(ctx context.Context, filter dto.Oper
 	}
 
 	return videos, total, nil
+}
+
+func (r *gormOperationVideoRepository) Update(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
+	return r.db.WithContext(ctx).Model(&domain.OperationVideo{}).
+		Where("id = ? AND is_deleted = false", id).
+		Updates(updates).Error
 }
 
 func (r *gormOperationVideoRepository) Delete(ctx context.Context, id uuid.UUID) error {

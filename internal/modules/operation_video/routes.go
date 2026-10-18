@@ -33,6 +33,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 		group.GET("", m.Handler.List)
 		group.GET("/:id", m.Handler.GetByID)
 		group.GET("/:id/stream", m.Handler.StreamVideo)
+		group.PATCH("/:id", m.Handler.Update)
 		group.DELETE("/:id", m.Handler.Delete)
 	}
 }
