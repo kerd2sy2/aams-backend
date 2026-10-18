@@ -15,25 +15,27 @@ import (
 
 func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo repository.EmployeeRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var tokenStr string
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				tokenStr = parts[1]
+			}
+		}
+		if tokenStr == "" {
+			tokenStr = c.Query("token")
+		}
+
+		if tokenStr == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "لم يتم التوفير رمز المصادقة (Missing Authorization Header)",
+				"error": "لم يتم التوفير رمز المصادقة (Missing Authorization Token)",
 			})
 			c.Abort()
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "صيغة رمز المصادقة غير صالحة (Invalid Bearer Token Format)",
-			})
-			c.Abort()
-			return
-		}
-
-		claims, err := jwt.ValidateToken(parts[1], secret)
+		claims, err := jwt.ValidateToken(tokenStr, secret)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "جلسة الدخول منتهية أو غير صالحة (Invalid or Expired Token)",

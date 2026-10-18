@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -68,7 +69,23 @@ func (h *OperationVideoHandler) Upload(c *gin.Context) {
 		return
 	}
 
-	videoURL := fmt.Sprintf("/uploads/operation_videos/%s", targetFilename)
+	// Strip audio completely using ffmpeg to guarantee 100% silent operational proof video
+	silentPath := filepath.Join(targetDir, fmt.Sprintf("silent_%s", targetFilename))
+	cmd := exec.Command("ffmpeg", "-y", "-i", savePath, "-an", "-vcodec", "copy", silentPath)
+	if err := cmd.Run(); err == nil {
+		_ = os.Remove(savePath)
+		_ = os.Rename(silentPath, savePath)
+	} else {
+		_ = os.Remove(silentPath)
+	}
+	_ = os.Chmod(savePath, 0644)
+
+	fileSize := file.Size
+	if fi, err := os.Stat(savePath); err == nil {
+		fileSize = fi.Size()
+	}
+
+	videoURL := fmt.Sprintf("/api/v1/operation-videos/%s/stream", videoUUID.String())
 
 	// Extract form parameters
 	employeeName := strings.TrimSpace(c.PostForm("employee_name"))
@@ -119,7 +136,7 @@ func (h *OperationVideoHandler) Upload(c *gin.Context) {
 		SessionID:    sessionID,
 		VideoURL:     videoURL,
 		DurationSec:  durationSec,
-		FileSize:     file.Size,
+		FileSize:     fileSize,
 		Notes:        notes,
 		RecordedAt:   now,
 		ExpiresAt:    now.AddDate(0, 0, 60), // Strictly 60 days
@@ -137,6 +154,58 @@ func (h *OperationVideoHandler) Upload(c *gin.Context) {
 		"data":    result,
 	})
 }
+
+// StreamVideo streams the operational proof video with HTTP Range support.
+// Strictly requires authentication and allowed roles: SUPER_ADMIN, ADMIN, SUPERVISOR, MANAGEMENT
+func (h *OperationVideoHandler) StreamVideo(c *gin.Context) {
+	idStr := c.Param("id")
+	videoID, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الفيديو غير صالح"})
+		return
+	}
+
+	// Verify authorized role (Management / Admin / Supervisor)
+	roleVal, _ := c.Get("admin_role")
+	userRole, _ := roleVal.(string)
+	isEmployeeVal, _ := c.Get("is_employee")
+	isEmployee, _ := isEmployeeVal.(bool)
+
+	if isEmployee || (userRole != "SUPER_ADMIN" && userRole != "ADMIN" && userRole != "SUPERVISOR" && userRole != "MANAGEMENT") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: مشاهدة فيديوهات التوثيق مقتصرة على الإدارة والإشراف فقط"})
+		return
+	}
+
+	video, err := h.service.GetVideo(c.Request.Context(), videoID)
+	if err != nil || video == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "الفيديو غير موجود أو انتهت صلاحيته"})
+		return
+	}
+
+	// Find file on disk (handle both /api/v1/operation-videos/:id/stream and /uploads/... format)
+	var filePath string
+	if strings.Contains(video.VideoURL, "/uploads/operation_videos/") {
+		fileName := filepath.Base(video.VideoURL)
+		filePath = filepath.Join(h.uploadBaseDir, "operation_videos", fileName)
+	} else {
+		matches, _ := filepath.Glob(filepath.Join(h.uploadBaseDir, "operation_videos", fmt.Sprintf("%s.*", videoID.String())))
+		if len(matches) > 0 {
+			filePath = matches[0]
+		} else {
+			filePath = filepath.Join(h.uploadBaseDir, "operation_videos", fmt.Sprintf("%s.mp4", videoID.String()))
+		}
+	}
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ملف الفيديو غير موجود على السيرفر"})
+		return
+	}
+
+	c.Header("Content-Type", "video/mp4")
+	c.Header("Cache-Control", "private, no-cache, no-store, must-revalidate")
+	c.File(filePath)
+}
+
 
 // List returns operation videos filtered by date, employee name, or order number
 func (h *OperationVideoHandler) List(c *gin.Context) {

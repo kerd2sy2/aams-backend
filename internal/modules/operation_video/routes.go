@@ -32,6 +32,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 		group.POST("/upload", m.Handler.Upload)
 		group.GET("", m.Handler.List)
 		group.GET("/:id", m.Handler.GetByID)
+		group.GET("/:id/stream", m.Handler.StreamVideo)
 		group.DELETE("/:id", m.Handler.Delete)
 	}
 }
