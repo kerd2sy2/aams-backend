@@ -92,7 +92,7 @@ func StrictLoginLimiter() gin.HandlerFunc {
 			time.Sleep(5 * time.Minute)
 			mu.Lock()
 			for ip, v := range attempts {
-				if time.Since(v.lastSeen) > 15*time.Minute {
+				if time.Since(v.lastSeen) > 10*time.Minute {
 					delete(attempts, ip)
 				}
 			}
@@ -117,7 +117,7 @@ func StrictLoginLimiter() gin.HandlerFunc {
 			return
 		}
 
-		if time.Since(v.lastSeen) > 15*time.Minute {
+		if time.Since(v.lastSeen) > 10*time.Minute {
 			v.count = 1
 			v.lastSeen = time.Now()
 			mu.Unlock()
@@ -129,10 +129,10 @@ func StrictLoginLimiter() gin.HandlerFunc {
 		v.lastSeen = time.Now()
 		mu.Unlock()
 
-		// Block after 50 attempts in 15 minutes
-		if v.count > 50 {
+		// Block after 10 attempts in 10 minutes
+		if v.count > 10 {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "تم تجاوز عدد محاولات تسجيل الدخول. حاول مرة أخرى بعد 15 دقيقة",
+				"error": "تم تجاوز عدد محاولات تسجيل الدخول المسموحة. يرجى الانتظار 10 دقائق والمحاولة لاحقاً.",
 			})
 			return
 		}

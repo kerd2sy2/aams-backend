@@ -113,6 +113,9 @@ func main() {
 	// Setup Gin Router
 	r := gin.New()
 
+	// Trust Cloudflare connecting IP header
+	r.TrustedPlatform = gin.PlatformCloudflare
+
 	// CORS — restrict to allowed origins (configurable)
 	corsConfig := cors.DefaultConfig()
 	rawOrigins := strings.Split(cfg.AllowedOrigins, ",")
