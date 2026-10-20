@@ -65,7 +65,7 @@ func (m *mockCustodyService) GetDaySummary(ctx context.Context, branchID *uuid.U
 	return nil, nil
 }
 
-func (m *mockCustodyService) SetLedgerImage(ctx context.Context, branchID *uuid.UUID, date string, imageURL string) (*dto.CustodyDayResponse, error) {
+func (m *mockCustodyService) SetLedgerImage(ctx context.Context, branchID *uuid.UUID, req dto.SetLedgerImageRequest, adminID *uuid.UUID, adminName, adminUsername string) (*dto.CustodyDayResponse, error) {
 	return nil, nil
 }
 

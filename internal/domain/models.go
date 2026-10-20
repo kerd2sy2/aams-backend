@@ -436,6 +436,7 @@ type CustodyExpense struct {
 	Category          string     `gorm:"type:varchar(20);not null;index" json:"category"` // fuel, license, spare_parts, other
 	Amount            float64    `gorm:"default:0" json:"amount"`
 	RecipientName     string     `gorm:"type:varchar(150)" json:"recipient_name"`
+	ExportNumber      string     `gorm:"type:varchar(50);index" json:"export_number"`
 	CreatedByID       *uuid.UUID `gorm:"type:char(36);index" json:"created_by_id"`
 	CreatedByName     string     `gorm:"type:varchar(100)" json:"created_by_name"`
 	CreatedByUsername string     `gorm:"type:varchar(50)" json:"created_by_username"`
@@ -461,6 +462,7 @@ type CustodyLog struct {
 	Amount        float64    `gorm:"default:0" json:"amount"`
 	Description   string     `gorm:"type:varchar(255)" json:"description"`
 	RecipientName string     `gorm:"type:varchar(150)" json:"recipient_name"`
+	ExportNumber  string     `gorm:"type:varchar(50)" json:"export_number"`
 	AdminID       *uuid.UUID `gorm:"type:char(36);index" json:"admin_id"`
 	AdminName     string     `gorm:"type:varchar(100)" json:"admin_name"`
 	AdminUsername string     `gorm:"type:varchar(50)" json:"admin_username"`

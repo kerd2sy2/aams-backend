@@ -74,6 +74,7 @@ func (s *custodyService) toResponse(day *domain.CustodyDay) *dto.CustodyDayRespo
 			Category:      e.Category,
 			Amount:        e.Amount,
 			RecipientName: e.RecipientName,
+			ExportNumber:  e.ExportNumber,
 			ImageURL:      e.ImageURL,
 			CreatedAt:     e.CreatedAt,
 		})
@@ -343,6 +344,7 @@ func (s *custodyService) AddExpense(ctx context.Context, dayID uuid.UUID, branch
 		Category:          req.Category,
 		Amount:            req.Amount,
 		RecipientName:     req.RecipientName,
+		ExportNumber:      req.ExportNumber,
 		ImageURL:          req.ImageURL,
 		CreatedByID:       adminID,
 		CreatedByName:     adminName,
@@ -367,6 +369,7 @@ func (s *custodyService) AddExpense(ctx context.Context, dayID uuid.UUID, branch
 		Amount:        req.Amount,
 		Description:   fmt.Sprintf("إضافة مصروف: %s - %.2f", req.Category, req.Amount),
 		RecipientName: req.RecipientName,
+		ExportNumber:  req.ExportNumber,
 		ImageURL:      req.ImageURL,
 		AdminID:       adminID,
 		AdminName:     adminName,
@@ -411,6 +414,9 @@ func (s *custodyService) UpdateExpense(ctx context.Context, expenseID uuid.UUID,
 	if req.ImageURL != nil {
 		expense.ImageURL = *req.ImageURL
 	}
+	if req.ExportNumber != nil {
+		expense.ExportNumber = *req.ExportNumber
+	}
 
 	if err := s.repo.UpdateExpense(ctx, expense); err != nil {
 		return nil, err
@@ -425,6 +431,7 @@ func (s *custodyService) UpdateExpense(ctx context.Context, expenseID uuid.UUID,
 		Amount:        expense.Amount,
 		Description:   fmt.Sprintf("تعديل مصروف (%s): من %.2f إلى %.2f (مستلم: %s -> %s)", expense.Category, oldAmount, expense.Amount, oldRecipient, expense.RecipientName),
 		RecipientName: expense.RecipientName,
+		ExportNumber:  expense.ExportNumber,
 		ImageURL:      expense.ImageURL,
 		AdminID:       adminID,
 		AdminName:     adminName,

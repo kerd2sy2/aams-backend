@@ -626,6 +626,7 @@ type CustodyExpenseResponse struct {
 	Category      string    `json:"category"`
 	Amount        float64   `json:"amount"`
 	RecipientName string    `json:"recipient_name"`
+	ExportNumber  string    `json:"export_number"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
@@ -662,6 +663,7 @@ type CreateCustodyExpenseRequest struct {
 	Category      string  `json:"category" binding:"required"`
 	Amount        float64 `json:"amount" binding:"gte=0"`
 	RecipientName string  `json:"recipient_name"`
+	ExportNumber  string  `json:"export_number"`
 }
 
 type AddCustodyAmountRequest struct {
