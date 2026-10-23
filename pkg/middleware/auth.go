@@ -23,8 +23,24 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 				tokenStr = parts[1]
 			}
 		}
+		// Security: Restrict query parameter tokens exclusively to media streaming paths
+		// where browser/native video players cannot supply custom Authorization headers.
 		if tokenStr == "" {
-			tokenStr = c.Query("token")
+			reqPath := c.Request.URL.Path
+			isMediaStreamPath := strings.HasPrefix(reqPath, "/api/v1/operation-videos/") ||
+				strings.HasSuffix(reqPath, "/stream")
+
+			if isMediaStreamPath {
+				tokenStr = c.Query("token")
+				// Redact token from URL query string so downstream loggers do not leak sensitive JWTs
+				if tokenStr != "" && c.Request.URL != nil && c.Request.URL.RawQuery != "" {
+					q := c.Request.URL.Query()
+					if q.Has("token") {
+						q.Set("token", "[REDACTED]")
+						c.Request.URL.RawQuery = q.Encode()
+					}
+				}
+			}
 		}
 
 		if tokenStr == "" {
