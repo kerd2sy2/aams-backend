@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -156,7 +157,28 @@ func main() {
 
 	// Global security middleware
 	r.Use(middleware.SecurityHeaders())
-	r.Use(gin.Logger())
+	tokenQueryRegex := regexp.MustCompile(`(?i)(token=)[^&]+`)
+	r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		path := param.Path
+		if strings.Contains(strings.ToLower(path), "token=") {
+			path = tokenQueryRegex.ReplaceAllString(path, "${1}[REDACTED]")
+		}
+		var statusColor, methodColor, resetColor string
+		if param.IsOutputColor() {
+			statusColor = param.StatusCodeColor()
+			methodColor = param.MethodColor()
+			resetColor = param.ResetColor()
+		}
+		return fmt.Sprintf("[GIN] %v |%s %3d %s| %13v | %15s |%s %-7s %s %#v\n%s",
+			param.TimeStamp.Format("2006/01/02 - 15:04:05"),
+			statusColor, param.StatusCode, resetColor,
+			param.Latency,
+			param.ClientIP,
+			methodColor, param.Method, resetColor,
+			path,
+			param.ErrorMessage,
+		)
+	}))
 	r.Use(gin.Recovery())
 	r.Use(cors.New(corsConfig))
 	r.Use(middleware.RateLimiter(5000, time.Minute)) // 5000 req/min per IP
