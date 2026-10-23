@@ -94,13 +94,21 @@ func (r *gormAdminRepository) Update(ctx context.Context, admin *domain.Admin) e
 		"permissions_configured": admin.PermissionsConfigured,
 		"must_change_password":    admin.MustChangePassword,
 		"branch_id":              admin.BranchID,
+		"avatar":                 admin.Avatar,
+		"google_avatar":          admin.GoogleAvatar,
 		"updated_at":             time.Now(),
 	}
 	if err := r.db.WithContext(ctx).Model(&domain.Admin{}).Where("id = ?", admin.ID).Updates(updates).Error; err != nil {
 		return err
 	}
 	if admin.EmployeeID != nil {
-		_ = r.db.WithContext(ctx).Table("employees").Where("id = ?", *admin.EmployeeID).Update("branch_id", admin.BranchID).Error
+		empUpdates := map[string]interface{}{
+			"branch_id": admin.BranchID,
+		}
+		if admin.Avatar != "" {
+			empUpdates["personal_image"] = admin.Avatar
+		}
+		_ = r.db.WithContext(ctx).Table("employees").Where("id = ?", *admin.EmployeeID).Updates(empUpdates).Error
 	}
 	return nil
 }

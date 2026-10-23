@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -100,6 +101,11 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
+	effectiveAvatar := adminDTO.Avatar
+	if effectiveAvatar == "" {
+		effectiveAvatar = adminDTO.GoogleAvatar
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"user":             adminDTO,
 		"id":               adminDTO.ID,
@@ -113,6 +119,39 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		"is_google_linked": adminDTO.GoogleEmail != "",
 		"google_email":     adminDTO.GoogleEmail,
 		"google_avatar":    adminDTO.GoogleAvatar,
+		"avatar":           effectiveAvatar,
+		"personal_image":   effectiveAvatar,
+	})
+}
+
+func (h *AuthHandler) UpdateAvatar(c *gin.Context) {
+	var req dto.UpdateAvatarRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "الصورة مطلوبة"})
+		return
+	}
+
+	cleanAvatar := strings.TrimSpace(req.Avatar)
+	if cleanAvatar == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "رابط الصورة غير صالح"})
+		return
+	}
+
+	adminIDVal, exists := c.Get("admin_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
+		return
+	}
+	adminID, _ := adminIDVal.(uuid.UUID)
+
+	if err := h.svc.UpdateAvatar(c.Request.Context(), adminID, cleanAvatar); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "تم حفظ وتحديث الصورة الشخصية بنجاح",
+		"avatar":  cleanAvatar,
 	})
 }
 

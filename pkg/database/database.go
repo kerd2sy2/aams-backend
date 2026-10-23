@@ -127,7 +127,9 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		rawDB.Exec("ALTER TABLE otp_requests ALTER COLUMN employee_name DROP NOT NULL")
 		rawDB.Exec("ALTER TABLE otp_requests DROP CONSTRAINT IF EXISTS fk_otp_requests_employee")
 
-		// Safe DDL for User Linking, Password Reset, and Explicit Permissions
+		// Safe DDL for User Linking, Password Reset, Explicit Permissions, and User Avatar
+		rawDB.Exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS avatar text")
+		rawDB.Exec("UPDATE admins SET avatar = google_avatar WHERE (avatar IS NULL OR avatar = '') AND google_avatar IS NOT NULL AND google_avatar != ''")
 		rawDB.Exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS employee_id char(36)")
 		rawDB.Exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS must_change_password boolean DEFAULT false")
 		rawDB.Exec("ALTER TABLE admins ADD COLUMN IF NOT EXISTS permissions_configured boolean DEFAULT false")

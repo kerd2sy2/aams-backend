@@ -17,6 +17,7 @@ type AdminDTO struct {
 	Permissions  []string   `json:"permissions"`
 	GoogleEmail  string     `json:"google_email,omitempty"`
 	GoogleAvatar string     `json:"google_avatar,omitempty"`
+	Avatar       string     `json:"avatar,omitempty"`
 }
 
 type IAuthContract interface {

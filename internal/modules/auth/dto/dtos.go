@@ -44,9 +44,14 @@ type AdminInfo struct {
 	AppPermissions        map[string]bool `json:"app_permissions,omitempty"`
 	GoogleEmail           string     `json:"google_email,omitempty"`
 	GoogleAvatar          string     `json:"google_avatar,omitempty"`
+	Avatar                string     `json:"avatar,omitempty"`
 	IsGoogleLinked        bool       `json:"is_google_linked"`
 	BranchID              *uuid.UUID `json:"branch_id"`
 	BranchName            string     `json:"branch_name,omitempty"`
+}
+
+type UpdateAvatarRequest struct {
+	Avatar string `json:"avatar" binding:"required"`
 }
 
 type RefreshTokenRequest struct {
@@ -143,6 +148,7 @@ type UpdateAdminRequest struct {
 	PermissionsConfigured *bool      `json:"permissions_configured,omitempty"`
 	BranchID              *uuid.UUID `json:"branch_id"`
 	ClearBranch           bool       `json:"clear_branch"`
+	Avatar                string     `json:"avatar,omitempty"`
 }
 
 type PromoteEmployeeRequest struct {

@@ -62,6 +62,7 @@ type Admin struct {
 	GoogleID     string         `gorm:"type:varchar(100);index" json:"google_id,omitempty"`
 	GoogleEmail  string         `gorm:"type:varchar(150);index" json:"google_email,omitempty"`
 	GoogleAvatar string         `gorm:"type:varchar(255)" json:"google_avatar,omitempty"`
+	Avatar       string         `gorm:"type:text" json:"avatar,omitempty"`
 	BranchID     *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
 	Branch       *Branch        `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`

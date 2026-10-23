@@ -29,6 +29,7 @@ type AuthService interface {
 	GoogleLogin(ctx context.Context, req dto.GoogleLoginRequest) (*dto.LoginResponse, error)
 	LinkGoogle(ctx context.Context, adminID uuid.UUID, req dto.GoogleLinkRequest) error
 	UnlinkGoogle(ctx context.Context, adminID uuid.UUID) error
+	UpdateAvatar(ctx context.Context, adminID uuid.UUID, avatar string) error
 }
 
 type OTPService interface {
@@ -433,9 +434,13 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		AppPermissions:        appPerms,
 		GoogleEmail:           admin.GoogleEmail,
 		GoogleAvatar:          admin.GoogleAvatar,
+		Avatar:                admin.Avatar,
 		IsGoogleLinked:        admin.GoogleID != "",
 		BranchID:              admin.BranchID,
 		BranchName:            branchName,
+	}
+	if adminInfo.Avatar == "" {
+		adminInfo.Avatar = admin.GoogleAvatar
 	}
 
 	return &dto.LoginResponse{
@@ -493,9 +498,13 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*d
 		AppPermissions:        appPerms,
 		GoogleEmail:           admin.GoogleEmail,
 		GoogleAvatar:          admin.GoogleAvatar,
+		Avatar:                admin.Avatar,
 		IsGoogleLinked:        admin.GoogleID != "",
 		BranchID:              admin.BranchID,
 		BranchName:            branchName,
+	}
+	if adminInfo.Avatar == "" {
+		adminInfo.Avatar = admin.GoogleAvatar
 	}
 
 	return &dto.LoginResponse{
@@ -540,6 +549,11 @@ func (s *authService) GoogleLogin(ctx context.Context, req dto.GoogleLoginReques
 		branchName = admin.Branch.Name
 	}
 
+	effectiveAvatar := admin.Avatar
+	if effectiveAvatar == "" {
+		effectiveAvatar = admin.GoogleAvatar
+	}
+
 	adminInfo := &dto.AdminInfo{
 		ID:             admin.ID,
 		Email:          admin.Email,
@@ -549,6 +563,7 @@ func (s *authService) GoogleLogin(ctx context.Context, req dto.GoogleLoginReques
 		Permissions:    perms,
 		GoogleEmail:    admin.GoogleEmail,
 		GoogleAvatar:   admin.GoogleAvatar,
+		Avatar:         effectiveAvatar,
 		IsGoogleLinked: admin.GoogleID != "",
 		BranchID:       admin.BranchID,
 		BranchName:     branchName,
@@ -573,6 +588,9 @@ func (s *authService) LinkGoogle(ctx context.Context, adminID uuid.UUID, req dto
 	admin.GoogleID = req.GoogleID
 	admin.GoogleEmail = req.Email
 	admin.GoogleAvatar = req.Avatar
+	if admin.Avatar == "" && req.Avatar != "" {
+		admin.Avatar = req.Avatar
+	}
 	return s.adminRepo.Update(ctx, admin)
 }
 
@@ -584,6 +602,19 @@ func (s *authService) UnlinkGoogle(ctx context.Context, adminID uuid.UUID) error
 	admin.GoogleID = ""
 	admin.GoogleEmail = ""
 	admin.GoogleAvatar = ""
+	return s.adminRepo.Update(ctx, admin)
+}
+
+func (s *authService) UpdateAvatar(ctx context.Context, adminID uuid.UUID, avatar string) error {
+	admin, err := s.adminRepo.FindByID(ctx, adminID)
+	if err != nil {
+		return errors.New("المستخدم غير موجود")
+	}
+	cleanAvatar := strings.TrimSpace(avatar)
+	admin.Avatar = cleanAvatar
+	if admin.GoogleAvatar == "" {
+		admin.GoogleAvatar = cleanAvatar
+	}
 	return s.adminRepo.Update(ctx, admin)
 }
 
@@ -601,6 +632,10 @@ func (s *authService) GetAdminByID(ctx context.Context, id uuid.UUID) (*contract
 	if a.Permissions != "" {
 		_ = json.Unmarshal([]byte(a.Permissions), &perms)
 	}
+	effectiveAvatar := a.Avatar
+	if effectiveAvatar == "" {
+		effectiveAvatar = a.GoogleAvatar
+	}
 	return &contracts.AdminDTO{
 		ID:           a.ID,
 		Email:        a.Email,
@@ -612,6 +647,7 @@ func (s *authService) GetAdminByID(ctx context.Context, id uuid.UUID) (*contract
 		Permissions:  perms,
 		GoogleEmail:  a.GoogleEmail,
 		GoogleAvatar: a.GoogleAvatar,
+		Avatar:       effectiveAvatar,
 	}, nil
 }
 
@@ -951,6 +987,12 @@ func (s *adminService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateA
 		hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err == nil {
 			admin.Password = string(hashed)
+		}
+	}
+	if req.Avatar != "" {
+		admin.Avatar = req.Avatar
+		if admin.GoogleAvatar == "" {
+			admin.GoogleAvatar = req.Avatar
 		}
 	}
 	admin.Branch = nil

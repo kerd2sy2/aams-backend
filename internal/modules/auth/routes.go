@@ -68,8 +68,12 @@ func (m *Module) RegisterPublicRoutes(r *gin.Engine) {
 
 // RegisterRoutes registers protected routes under the authenticated /api/v1 group.
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
-	// Me & Google Auth links
+	// Me, Avatar & Google Auth links
 	rg.GET("/me", m.AuthHandler.Me)
+	rg.POST("/me/avatar", m.AuthHandler.UpdateAvatar)
+	rg.PUT("/me/avatar", m.AuthHandler.UpdateAvatar)
+	rg.POST("/auth/me/avatar", m.AuthHandler.UpdateAvatar)
+	rg.PUT("/auth/me/avatar", m.AuthHandler.UpdateAvatar)
 	rg.POST("/auth/google/link", m.AuthHandler.LinkGoogle)
 	rg.POST("/auth/google/unlink", m.AuthHandler.UnlinkGoogle)
 

@@ -50,6 +50,7 @@ type LoginResponse struct {
 		Permissions    []string   `json:"permissions"`
 		GoogleEmail    string     `json:"google_email,omitempty"`
 		GoogleAvatar   string     `json:"google_avatar,omitempty"`
+		Avatar         string     `json:"avatar,omitempty"`
 		IsGoogleLinked bool       `json:"is_google_linked"`
 		BranchID       *uuid.UUID `json:"branch_id"`
 		Branch         *struct {
