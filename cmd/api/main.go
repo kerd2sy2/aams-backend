@@ -145,14 +145,7 @@ func main() {
 					return true
 				}
 			}
-			if strings.HasPrefix(origin, "http://localhost:") ||
-				strings.HasPrefix(origin, "http://127.0.0.1:") ||
-				strings.HasPrefix(origin, "http://192.168.") ||
-				strings.HasPrefix(origin, "http://10.") ||
-				strings.HasSuffix(origin, "kerd2sy.com") ||
-				strings.HasSuffix(origin, "aams-logistic.com") ||
-				strings.HasSuffix(origin, "onrender.com") ||
-				strings.HasSuffix(origin, "vercel.app") {
+			if strings.HasSuffix(origin, "kerd2sy.com") {
 				return true
 			}
 			return false
