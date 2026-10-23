@@ -8,6 +8,7 @@ import (
 	"delivery-backend/internal/modules/fleet/controller"
 	"delivery-backend/internal/modules/fleet/repository"
 	"delivery-backend/internal/modules/fleet/service"
+	"delivery-backend/pkg/middleware"
 )
 
 // Module encapsulates the Fleet & Vehicles bounded context
@@ -36,11 +37,11 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	vehicles := rg.Group("/vehicles")
 	{
 		vehicles.GET("", m.Handler.GetAll)
-		vehicles.POST("", m.Handler.Create)
+		vehicles.POST("", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.Create)
 		vehicles.GET("/check-km", m.Handler.CheckKM)
 		vehicles.GET("/:id", m.Handler.GetByID)
-		vehicles.PUT("/:id", m.Handler.Update)
-		vehicles.DELETE("/:id", m.Handler.Delete)
-		vehicles.POST("/:id/oil-change", m.Handler.RecordOilChange)
+		vehicles.PUT("/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.Update)
+		vehicles.DELETE("/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.Handler.Delete)
+		vehicles.POST("/:id/oil-change", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.RecordOilChange)
 	}
 }

@@ -173,15 +173,15 @@ func (h *VehicleHandler) GetByID(c *gin.Context) {
 }
 
 func (h *VehicleHandler) GetAll(c *gin.Context) {
-	var filter dto.VehicleFilter
-	if err := c.ShouldBindQuery(&filter); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "معاملات بحث غير صالحة"})
-		return
-	}
-
 	scope, err := middleware.ResolveBranchScope(c)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	var filter dto.VehicleFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معاملات بحث غير صالحة"})
 		return
 	}
 

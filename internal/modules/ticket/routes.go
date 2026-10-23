@@ -8,6 +8,7 @@ import (
 	"delivery-backend/internal/modules/ticket/controller"
 	"delivery-backend/internal/modules/ticket/repository"
 	"delivery-backend/internal/modules/ticket/service"
+	"delivery-backend/pkg/middleware"
 )
 
 // Module encapsulates the Ticket bounded context
@@ -35,7 +36,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	{
 		tickets.GET("", m.Handler.GetAll)
 		tickets.POST("", m.Handler.Create)
-		tickets.PUT("/:id", m.Handler.Update)
-		tickets.DELETE("/:id", m.Handler.Delete)
+		tickets.PUT("/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.Update)
+		tickets.DELETE("/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.Handler.Delete)
 	}
 }

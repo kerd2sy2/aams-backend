@@ -7,6 +7,7 @@ import (
 	"delivery-backend/internal/modules/operation_video/controller"
 	"delivery-backend/internal/modules/operation_video/repository"
 	"delivery-backend/internal/modules/operation_video/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type Module struct {
@@ -30,10 +31,10 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	group := rg.Group("/operation-videos")
 	{
 		group.POST("/upload", m.Handler.Upload)
-		group.GET("", m.Handler.List)
-		group.GET("/:id", m.Handler.GetByID)
+		group.GET("", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "MANAGEMENT"), m.Handler.List)
+		group.GET("/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "MANAGEMENT"), m.Handler.GetByID)
 		group.GET("/:id/stream", m.Handler.StreamVideo)
-		group.PATCH("/:id", m.Handler.Update)
-		group.DELETE("/:id", m.Handler.Delete)
+		group.PATCH("/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "MANAGEMENT"), m.Handler.Update)
+		group.DELETE("/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.Handler.Delete)
 	}
 }

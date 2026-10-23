@@ -10,6 +10,7 @@ import (
 
 	"delivery-backend/internal/modules/inventory/dto"
 	"delivery-backend/internal/modules/inventory/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type InventoryHandler struct {
@@ -21,26 +22,17 @@ func NewInventoryHandler(invService service.InventoryService) *InventoryHandler 
 }
 
 func extractBranchID(c *gin.Context) *uuid.UUID {
-	if q := strings.TrimSpace(c.Query("branch_id")); q != "" {
-		if id, err := uuid.Parse(q); err == nil && id != uuid.Nil {
-			return &id
+	scope, err := middleware.ResolveBranchScope(c)
+	if err == nil && scope != nil {
+		if !scope.IsGlobal {
+			return scope.BranchID
 		}
-	}
-	if bID, exists := c.Get("branch_id"); exists && bID != nil {
-		switch v := bID.(type) {
-		case *uuid.UUID:
-			if v != nil && *v != uuid.Nil {
-				return v
-			}
-		case uuid.UUID:
-			if v != uuid.Nil {
-				return &v
-			}
-		case string:
-			if id, err := uuid.Parse(v); err == nil && id != uuid.Nil {
+		if q := strings.TrimSpace(c.Query("branch_id")); q != "" {
+			if id, err := uuid.Parse(q); err == nil && id != uuid.Nil {
 				return &id
 			}
 		}
+		return scope.BranchID
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 
 	"delivery-backend/internal/modules/custody/dto"
 	"delivery-backend/internal/modules/custody/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type CustodyHandler struct {
@@ -21,28 +22,36 @@ func NewCustodyHandler(svc service.CustodyService) *CustodyHandler {
 }
 
 func custodyBranchID(c *gin.Context) *uuid.UUID {
-	if s := c.GetHeader("X-Branch-ID"); s != "" {
-		if id, err := uuid.Parse(s); err == nil {
-			return &id
+	scope, err := middleware.ResolveBranchScope(c)
+	if err == nil && scope != nil {
+		if !scope.IsGlobal {
+			return scope.BranchID
 		}
-	}
-	if s := c.Query("branch_id"); s != "" {
-		if id, err := uuid.Parse(s); err == nil {
-			return &id
+		// When global scope (e.g. SUPER_ADMIN), client can optionally specify branch filter
+		if s := c.GetHeader("X-Branch-ID"); s != "" {
+			if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
+				return &id
+			}
 		}
-	}
-	if bid, exists := c.Get("branch_id"); exists && bid != nil {
-		if val, ok := bid.(*uuid.UUID); ok && val != nil {
-			return val
+		if s := c.Query("branch_id"); s != "" {
+			if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
+				return &id
+			}
 		}
-		if val, ok := bid.(uuid.UUID); ok && val != uuid.Nil {
-			return &val
-		}
+		return scope.BranchID
 	}
 	return nil
 }
 
 func getAdminInfo(c *gin.Context) (*uuid.UUID, string, string) {
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		return nil, "", ""
+	}
+	role := strings.ToUpper(c.GetString("admin_role"))
+	if role == "DRIVER" || role == "EMPLOYEE" {
+		return nil, "", ""
+	}
+
 	var adminID *uuid.UUID
 	if idVal, exists := c.Get("admin_id"); exists && idVal != nil {
 		if id, ok := idVal.(uuid.UUID); ok && id != uuid.Nil {

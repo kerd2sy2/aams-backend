@@ -10,6 +10,7 @@ import (
 	"delivery-backend/internal/modules/attendance/controller"
 	"delivery-backend/internal/modules/attendance/repository"
 	"delivery-backend/internal/modules/attendance/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type gormEmployeeFinder struct {
@@ -108,6 +109,6 @@ func NewModule(db *gorm.DB) *Module {
 }
 
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
-	rg.GET("/attendance", m.Handler.GetAttendance)
-	rg.POST("/attendance/:employee_id", m.Handler.ToggleAttendance)
+	rg.GET("/attendance", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.GetAttendance)
+	rg.POST("/attendance/:employee_id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.ToggleAttendance)
 }

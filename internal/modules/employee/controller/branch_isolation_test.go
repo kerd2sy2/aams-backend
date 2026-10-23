@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,7 +33,7 @@ func (m *branchIsolationMockEmployeeService) FindByID(ctx context.Context, id uu
 	if id == m.empB.ID {
 		return m.empB, nil
 	}
-	return nil, domain.ErrNotFound
+	return nil, errors.New("not found")
 }
 
 func (m *branchIsolationMockEmployeeService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateEmployeeRequest) (*domain.Employee, error) {

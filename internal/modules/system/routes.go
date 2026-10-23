@@ -7,6 +7,7 @@ import (
 	"delivery-backend/internal/modules/system/controller"
 	"delivery-backend/internal/modules/system/repository"
 	"delivery-backend/internal/modules/system/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type Module struct {
@@ -59,35 +60,42 @@ func (m *Module) RegisterPublicRoutes(r *gin.Engine) {
 
 // RegisterRoutes registers protected routes under the authenticated /api/v1 router group
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
-	// Analytics & Dashboard
-	rg.GET("/dashboard", m.DashboardHandler.GetStats)
+	// Analytics & Dashboard - Management and Supervisors
+	rg.GET("/dashboard", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.DashboardHandler.GetStats)
 
-	// Reports
-	rg.GET("/reports", m.ReportHandler.GetReports)
-	rg.GET("/reports/export", m.ReportHandler.ExportReports)
-	rg.GET("/reports/daily", m.ReportHandler.GetDailyReport)
-	rg.GET("/reports/daily/export", m.ReportHandler.ExportDailyReport)
+	// Reports - Management and Supervisors
+	reports := rg.Group("/reports")
+	reports.Use(middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"))
+	{
+		reports.GET("", m.ReportHandler.GetReports)
+		reports.GET("/export", m.ReportHandler.ExportReports)
+		reports.GET("/daily", m.ReportHandler.GetDailyReport)
+		reports.GET("/daily/export", m.ReportHandler.ExportDailyReport)
+	}
 
-	// Audit Logs
-	rg.GET("/audit-logs", m.AuditHandler.GetLogs)
-	rg.DELETE("/audit-logs/clear", m.AuditHandler.ClearLogs)
-	rg.DELETE("/audit-logs/bulk", m.AuditHandler.BulkDeleteLogs)
-	rg.DELETE("/audit-logs/:id", m.AuditHandler.DeleteLog)
+	// Audit Logs - Strictly SUPER_ADMIN (Clear/Bulk) and ADMIN (View)
+	auditLogs := rg.Group("/audit-logs")
+	{
+		auditLogs.GET("", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.AuditHandler.GetLogs)
+		auditLogs.DELETE("/clear", middleware.RequireRoles("SUPER_ADMIN"), m.AuditHandler.ClearLogs)
+		auditLogs.DELETE("/bulk", middleware.RequireRoles("SUPER_ADMIN"), m.AuditHandler.BulkDeleteLogs)
+		auditLogs.DELETE("/:id", middleware.RequireRoles("SUPER_ADMIN"), m.AuditHandler.DeleteLog)
+	}
 
-	// Settings
+	// Settings - Viewing allowed, Updating strictly SUPER_ADMIN and ADMIN
 	rg.GET("/settings", m.SettingHandler.GetSettings)
-	rg.PUT("/settings", m.SettingHandler.UpdateSettings)
+	rg.PUT("/settings", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.SettingHandler.UpdateSettings)
 
-	// Notifications
+	// Notifications - Personal
 	rg.GET("/notifications", m.NotificationHandler.GetMyNotifications)
 	rg.PUT("/notifications/read-all", m.NotificationHandler.MarkAllAsRead)
 	rg.PUT("/notifications/:id/read", m.NotificationHandler.MarkAsRead)
 
-	// Broadcast & Survey Notifications
-	rg.POST("/notifications/broadcast", m.NotificationHandler.SendBroadcast)
-	rg.GET("/notifications/broadcasts", m.NotificationHandler.GetBroadcasts)
-	rg.DELETE("/notifications/broadcasts/:id", m.NotificationHandler.DeleteBroadcast)
-	rg.GET("/notifications/broadcasts/:id/votes", m.NotificationHandler.GetBroadcastVotes)
+	// Broadcast & Survey Notifications - Sending/deleting restricted to Management/Supervisors
+	rg.POST("/notifications/broadcast", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.NotificationHandler.SendBroadcast)
+	rg.GET("/notifications/broadcasts", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.NotificationHandler.GetBroadcasts)
+	rg.DELETE("/notifications/broadcasts/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.NotificationHandler.DeleteBroadcast)
+	rg.GET("/notifications/broadcasts/:id/votes", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.NotificationHandler.GetBroadcastVotes)
 	rg.GET("/notifications/employee/broadcasts", m.NotificationHandler.GetEmployeeBroadcasts)
 	rg.GET("/notifications/employee/unread", m.NotificationHandler.GetEmployeeUnreadBroadcasts)
 	rg.POST("/notifications/employee/read/:id", m.NotificationHandler.MarkEmployeeBroadcastRead)
@@ -95,10 +103,14 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/notifications/employee/vote/:id", m.NotificationHandler.SubmitVote)
 	rg.POST("/employees/me/push-token", m.NotificationHandler.SaveEmployeePushToken)
 
-	// Archive & Trash
-	rg.GET("/archive", m.ArchiveHandler.GetArchived)
-	rg.POST("/archive/restore", m.ArchiveHandler.Restore)
-	rg.DELETE("/archive/permanent", m.ArchiveHandler.PermanentDelete)
-	rg.POST("/archive/restore-bulk", m.ArchiveHandler.BulkRestore)
-	rg.DELETE("/archive/permanent-bulk", m.ArchiveHandler.BulkPermanentDelete)
+	// Archive & Trash - Strictly SUPER_ADMIN and ADMIN
+	archive := rg.Group("/archive")
+	archive.Use(middleware.RequireRoles("SUPER_ADMIN", "ADMIN"))
+	{
+		archive.GET("", m.ArchiveHandler.GetArchived)
+		archive.POST("/restore", m.ArchiveHandler.Restore)
+		archive.DELETE("/permanent", m.ArchiveHandler.PermanentDelete)
+		archive.POST("/restore-bulk", m.ArchiveHandler.BulkRestore)
+		archive.DELETE("/permanent-bulk", m.ArchiveHandler.BulkPermanentDelete)
+	}
 }

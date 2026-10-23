@@ -77,9 +77,7 @@ func (h *EmployeeHandler) GetAll(c *gin.Context) {
 	}
 
 	if !scope.IsGlobal {
-		if !filter.CrossBranch {
-			filter.BranchID = scope.BranchID
-		}
+		filter.BranchID = scope.BranchID
 	}
 
 	emps, total, err := h.svc.FindAll(c.Request.Context(), filter)
@@ -164,6 +162,15 @@ func (h *EmployeeHandler) GetByID(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
+	}
+
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if authEmpID, exists := c.Get("employee_id"); exists {
+			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != id {
+				c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: لا يمكنك عرض بيانات موظف آخر"})
+				return
+			}
+		}
 	}
 
 	emp, err := h.svc.FindByID(c.Request.Context(), id)

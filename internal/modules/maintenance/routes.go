@@ -7,6 +7,7 @@ import (
 	"delivery-backend/internal/modules/maintenance/controller"
 	"delivery-backend/internal/modules/maintenance/repository"
 	"delivery-backend/internal/modules/maintenance/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type Module struct {
@@ -25,11 +26,11 @@ func NewModule(db *gorm.DB) *Module {
 }
 
 func (m *Module) RegisterRoutes(r *gin.RouterGroup) {
-	r.GET("/maintenance/logs", m.Handler.GetAllLogs)
+	r.GET("/maintenance/logs", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.GetAllLogs)
 	r.GET("/maintenance/employee-logs", m.Handler.GetEmployeeLogs)
 
 	r.GET("/maintenance-requests", m.Handler.GetAllRequests)
 	r.POST("/maintenance-requests", m.Handler.CreateRequest)
-	r.PUT("/maintenance-requests/:id", m.Handler.UpdateRequest)
-	r.DELETE("/maintenance-requests/:id", m.Handler.DeleteRequest)
+	r.PUT("/maintenance-requests/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.UpdateRequest)
+	r.DELETE("/maintenance-requests/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.Handler.DeleteRequest)
 }

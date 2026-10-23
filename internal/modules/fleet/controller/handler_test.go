@@ -116,6 +116,10 @@ func TestVehicleHandler_Create(t *testing.T) {
 
 	h := controller.NewVehicleHandler(mockSvc, nil)
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("admin_role", "ADMIN")
+		c.Next()
+	})
 	r.POST("/api/v1/vehicles", h.Create)
 
 	body, _ := json.Marshal(dto.CreateVehicleRequest{

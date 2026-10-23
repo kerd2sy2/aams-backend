@@ -20,10 +20,22 @@ func NewMaintenanceHandler(maintService service.MaintenanceService) *Maintenance
 }
 
 func (h *MaintenanceHandler) GetEmployeeLogs(c *gin.Context) {
-	empIDStr := c.Query("employee_id")
-	empID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
+	var empID uuid.UUID
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if authEmpID, exists := c.Get("employee_id"); exists {
+			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
+				empID = aUUID
+			}
+		}
+	} else if empIDStr := c.Query("employee_id"); empIDStr != "" {
+		parsed, err := uuid.Parse(empIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
+			return
+		}
+		empID = parsed
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف مطلوب"})
 		return
 	}
 

@@ -57,6 +57,15 @@ func (h *WorkHandler) StartWork(c *gin.Context) {
 		return
 	}
 
+	// Strict Ownership: If caller is an employee/courier, bind to verified token identity
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if authEmpID, exists := c.Get("employee_id"); exists {
+			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
+				req.EmployeeID = aUUID.String()
+			}
+		}
+	}
+
 	session, err := h.svc.StartWork(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -75,6 +84,15 @@ func (h *WorkHandler) EndWork(c *gin.Context) {
 
 	adminID, adminName := getAdminInfo(c)
 	isSupervisor := adminID != nil
+
+	// Strict Ownership: If caller is an employee/courier, bind to verified token identity
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if authEmpID, exists := c.Get("employee_id"); exists {
+			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
+				req.EmployeeID = aUUID.String()
+			}
+		}
+	}
 
 	session, err := h.svc.EndWork(c.Request.Context(), req, adminID, adminName, isSupervisor)
 	if err != nil {
@@ -151,14 +169,38 @@ func (h *WorkHandler) GetSessionByID(c *gin.Context) {
 		return
 	}
 
+	// Strict IDOR Check: If caller is an employee/courier, verify ownership
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if authEmpID, exists := c.Get("employee_id"); exists {
+			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
+				if session.EmployeeID == nil || *session.EmployeeID != aUUID {
+					c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: لا يمكنك عرض تفاصيل شفت موظف آخر"})
+					return
+				}
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, session)
 }
 
 func (h *WorkHandler) GetActiveSession(c *gin.Context) {
-	empIDStr := c.Query("employee_id")
-	empID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
+	var empID uuid.UUID
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if authEmpID, exists := c.Get("employee_id"); exists {
+			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
+				empID = aUUID
+			}
+		}
+	} else if empIDStr := c.Query("employee_id"); empIDStr != "" {
+		parsed, err := uuid.Parse(empIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف غير صالح"})
+			return
+		}
+		empID = parsed
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف الموظف مطلوب"})
 		return
 	}
 

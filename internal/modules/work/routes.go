@@ -288,9 +288,9 @@ func NewModule(db *gorm.DB, storage service.StorageProvider, audit ...contracts.
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/work/start", m.Handler.StartWork)
 	rg.POST("/work/end", m.Handler.EndWork)
-	rg.PUT("/work/:id", m.Handler.UpdateWorkSession)
-	rg.PUT("/work/:id/review", m.Handler.ReviewWorkSession)
-	rg.PUT("/work/sessions/:id/review", m.Handler.ReviewWorkSession)
+	rg.PUT("/work/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.UpdateWorkSession)
+	rg.PUT("/work/:id/review", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.ReviewWorkSession)
+	rg.PUT("/work/sessions/:id/review", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.ReviewWorkSession)
 	rg.GET("/work/sessions/:id", m.Handler.GetSessionByID)
 	rg.GET("/work/active", m.Handler.GetActiveSession)
 	rg.GET("/work/last-km", m.Handler.GetLastKM)

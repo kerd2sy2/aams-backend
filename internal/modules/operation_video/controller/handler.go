@@ -16,6 +16,7 @@ import (
 	"delivery-backend/internal/domain"
 	"delivery-backend/internal/modules/operation_video/dto"
 	"delivery-backend/internal/modules/operation_video/service"
+	"delivery-backend/pkg/middleware"
 )
 
 type OperationVideoHandler struct {
@@ -182,6 +183,21 @@ func (h *OperationVideoHandler) StreamVideo(c *gin.Context) {
 		return
 	}
 
+	// Branch verification: strictly enforce branch boundary for supervisors
+	scope, sErr := middleware.ResolveBranchScope(c)
+	if sErr == nil && scope != nil && !scope.IsGlobal {
+		var vBranchUUID *uuid.UUID
+		if video.BranchID != nil {
+			if parsed, pErr := uuid.Parse(*video.BranchID); pErr == nil {
+				vBranchUUID = &parsed
+			}
+		}
+		if !scope.AllowsBranch(vBranchUUID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: لا يمكنك مشاهدة فيديوهات توثيق فرع آخر"})
+			return
+		}
+	}
+
 	// Find file on disk (handle both /api/v1/operation-videos/:id/stream and /uploads/... format)
 	var filePath string
 	if strings.Contains(video.VideoURL, "/uploads/operation_videos/") {
@@ -215,13 +231,11 @@ func (h *OperationVideoHandler) List(c *gin.Context) {
 		return
 	}
 
-	// Restrict by supervisor branch if applicable
-	if filter.BranchID == "" {
-		if bVal, exists := c.Get("branch_id"); exists {
-			if bUUID, ok := bVal.(uuid.UUID); ok && bUUID != uuid.Nil {
-				bStr := bUUID.String()
-				filter.BranchID = bStr
-			}
+	// Restrict by supervisor branch if not global scope
+	scope, sErr := middleware.ResolveBranchScope(c)
+	if sErr == nil && scope != nil && !scope.IsGlobal {
+		if scope.BranchID != nil {
+			filter.BranchID = scope.BranchID.String()
 		}
 	}
 
@@ -252,11 +266,32 @@ func (h *OperationVideoHandler) GetByID(c *gin.Context) {
 		return
 	}
 
+	scope, sErr := middleware.ResolveBranchScope(c)
+	if sErr == nil && scope != nil && !scope.IsGlobal {
+		var vBranchUUID *uuid.UUID
+		if video.BranchID != nil {
+			if parsed, pErr := uuid.Parse(*video.BranchID); pErr == nil {
+				vBranchUUID = &parsed
+			}
+		}
+		if !scope.AllowsBranch(vBranchUUID) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "الفيديو غير موجود"})
+			return
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": video})
 }
 
 // Delete marks video deleted and purges disk file
 func (h *OperationVideoHandler) Delete(c *gin.Context) {
+	roleVal, _ := c.Get("admin_role")
+	userRole, _ := roleVal.(string)
+	if userRole != "SUPER_ADMIN" && userRole != "ADMIN" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: حذف الفيديوهات مقتصر على الإدارة العليا"})
+		return
+	}
+
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {

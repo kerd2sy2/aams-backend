@@ -77,32 +77,40 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/auth/google/link", m.AuthHandler.LinkGoogle)
 	rg.POST("/auth/google/unlink", m.AuthHandler.UnlinkGoogle)
 
-	// User (Admin) management
-	rg.GET("/users", m.AdminHandler.GetAll)
-	rg.POST("/users", m.AdminHandler.Create)
-	rg.POST("/users/promote", m.AdminHandler.Promote)
-	rg.PUT("/users/:id", m.AdminHandler.Update)
-	rg.DELETE("/users/:id", m.AdminHandler.Delete)
-	rg.POST("/users/change-password", m.AdminHandler.ChangePassword)
+	// User (Admin) management - Strictly SUPER_ADMIN and ADMIN
+	adminOnly := rg.Group("/users")
+	adminOnly.Use(middleware.RequireRoles("SUPER_ADMIN", "ADMIN"))
+	{
+		adminOnly.GET("", m.AdminHandler.GetAll)
+		adminOnly.POST("", m.AdminHandler.Create)
+		adminOnly.POST("/promote", middleware.RequireRoles("SUPER_ADMIN"), m.AdminHandler.Promote)
+		adminOnly.PUT("/:id", m.AdminHandler.Update)
+		adminOnly.DELETE("/:id", m.AdminHandler.Delete)
+		adminOnly.POST("/change-password", m.AdminHandler.ChangePassword)
+	}
 
-	// Roles & Permissions
-	rg.GET("/roles", m.RoleHandler.GetAll)
-	rg.POST("/roles", m.RoleHandler.Create)
-	rg.GET("/roles/:id", m.RoleHandler.GetByID)
-	rg.PUT("/roles/:id", m.RoleHandler.Update)
-	rg.DELETE("/roles/:id", m.RoleHandler.Delete)
-	rg.GET("/permissions", m.RoleHandler.GetPermissions)
+	// Roles & Permissions - Strictly SUPER_ADMIN and ADMIN
+	roleOnly := rg.Group("/roles")
+	roleOnly.Use(middleware.RequireRoles("SUPER_ADMIN", "ADMIN"))
+	{
+		roleOnly.GET("", m.RoleHandler.GetAll)
+		roleOnly.POST("", m.RoleHandler.Create)
+		roleOnly.GET("/:id", m.RoleHandler.GetByID)
+		roleOnly.PUT("/:id", m.RoleHandler.Update)
+		roleOnly.DELETE("/:id", m.RoleHandler.Delete)
+	}
+	rg.GET("/permissions", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.RoleHandler.GetPermissions)
 
 	// Branch management
 	rg.GET("/branches", m.BranchHandler.GetAll)
 	rg.GET("/branches/:id", m.BranchHandler.GetByID)
-	rg.POST("/branches", m.BranchHandler.Create)
-	rg.PUT("/branches/:id", m.BranchHandler.Update)
-	rg.DELETE("/branches/:id", m.BranchHandler.Delete)
+	rg.POST("/branches", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.BranchHandler.Create)
+	rg.PUT("/branches/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.BranchHandler.Update)
+	rg.DELETE("/branches/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.BranchHandler.Delete)
 
-	// OTP Requests & verification audit
-	rg.GET("/otp-requests", m.OTPHandler.GetOTPList)
-	rg.POST("/otp-requests/:id/cancel", m.OTPHandler.CancelOTP)
+	// OTP Requests & verification audit - Strictly SUPER_ADMIN and ADMIN
+	rg.GET("/otp-requests", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.OTPHandler.GetOTPList)
+	rg.POST("/otp-requests/:id/cancel", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.OTPHandler.CancelOTP)
 
 	// Trusted Devices Management
 	rg.GET("/devices/my-devices", m.OTPHandler.GetMyDevices)

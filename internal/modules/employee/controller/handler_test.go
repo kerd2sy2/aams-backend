@@ -44,6 +44,10 @@ func TestEmployeeHandler_CreateAndGetAll(t *testing.T) {
 	h := controller.NewEmployeeHandler(&mockEmployeeService{}, nil)
 
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("admin_role", "ADMIN")
+		c.Next()
+	})
 	r.POST("/employees", h.Create)
 	r.GET("/employees", h.GetAll)
 

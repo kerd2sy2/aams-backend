@@ -441,6 +441,15 @@ func (h *HRLegalHandler) GetAllLeaveRequests(c *gin.Context) {
 		return
 	}
 
+	// Strict Ownership: If caller is an employee/courier, force filter to their own leaves
+	if isEmp, _ := c.Get("is_employee"); isEmp == true {
+		if empIDVal, exists := c.Get("employee_id"); exists {
+			if empID, ok := empIDVal.(uuid.UUID); ok && empID != uuid.Nil {
+				filter.EmployeeID = &empID
+			}
+		}
+	}
+
 	list, total, err := h.svc.GetAllLeaveRequests(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
