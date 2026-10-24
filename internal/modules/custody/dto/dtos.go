@@ -67,6 +67,7 @@ type UpdateCustodyExpenseRequest struct {
 	RecipientName *string  `json:"recipient_name"`
 	ExportNumber  *string  `json:"export_number"`
 	ImageURL      *string  `json:"image_url"`
+	Date          *string  `json:"date"`
 }
 
 type AddCustodyAmountRequest struct {

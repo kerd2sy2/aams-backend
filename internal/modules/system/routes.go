@@ -73,18 +73,18 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 		reports.GET("/daily/export", m.ReportHandler.ExportDailyReport)
 	}
 
-	// Audit Logs - Strictly SUPER_ADMIN (Clear/Bulk) and ADMIN (View)
+	// Audit Logs - Executive roles, ADMIN (View), or audit_logs.view permission. Clear/Bulk strictly SUPER_ADMIN and OWNER.
 	auditLogs := rg.Group("/audit-logs")
 	{
-		auditLogs.GET("", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.AuditHandler.GetLogs)
-		auditLogs.DELETE("/clear", middleware.RequireRoles("SUPER_ADMIN"), m.AuditHandler.ClearLogs)
-		auditLogs.DELETE("/bulk", middleware.RequireRoles("SUPER_ADMIN"), m.AuditHandler.BulkDeleteLogs)
-		auditLogs.DELETE("/:id", middleware.RequireRoles("SUPER_ADMIN"), m.AuditHandler.DeleteLog)
+		auditLogs.GET("", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN", "OWNER", "GENERAL_MANAGER"}, "audit_logs.view"), m.AuditHandler.GetLogs)
+		auditLogs.DELETE("/clear", middleware.RequireRoles("SUPER_ADMIN", "OWNER"), m.AuditHandler.ClearLogs)
+		auditLogs.DELETE("/bulk", middleware.RequireRoles("SUPER_ADMIN", "OWNER"), m.AuditHandler.BulkDeleteLogs)
+		auditLogs.DELETE("/:id", middleware.RequireRoles("SUPER_ADMIN", "OWNER"), m.AuditHandler.DeleteLog)
 	}
 
-	// Settings - Viewing allowed, Updating strictly SUPER_ADMIN and ADMIN
+	// Settings - Viewing allowed, Updating strictly Executive roles, ADMIN, or settings.manage permission
 	rg.GET("/settings", m.SettingHandler.GetSettings)
-	rg.PUT("/settings", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.SettingHandler.UpdateSettings)
+	rg.PUT("/settings", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN", "OWNER", "GENERAL_MANAGER"}, "settings.manage"), m.SettingHandler.UpdateSettings)
 
 	// Notifications - Personal
 	rg.GET("/notifications", m.NotificationHandler.GetMyNotifications)

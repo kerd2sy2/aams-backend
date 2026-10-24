@@ -81,18 +81,20 @@ func TestResolveBranchScope_SecurityRules(t *testing.T) {
 		}
 	})
 
-	// Case 2: SUPER_ADMIN global access
-	t.Run("SUPER_ADMIN gets global access by default", func(t *testing.T) {
-		c, _ := gin.CreateTestContext(httptest.NewRecorder())
-		c.Set("admin_role", "SUPER_ADMIN")
-		scope, err := middleware.ResolveBranchScope(c)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !scope.IsGlobal {
-			t.Fatalf("expected IsGlobal=true for SUPER_ADMIN")
-		}
-	})
+	// Case 2: SUPER_ADMIN, OWNER, GENERAL_MANAGER global access
+	for _, execRole := range []string{"SUPER_ADMIN", "OWNER", "GENERAL_MANAGER"} {
+		t.Run(execRole+" gets global access by default", func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Set("admin_role", execRole)
+			scope, err := middleware.ResolveBranchScope(c)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !scope.IsGlobal {
+				t.Fatalf("expected IsGlobal=true for %s", execRole)
+			}
+		})
+	}
 
 	// Case 3: SUPER_ADMIN with explicit ?branch_id filter
 	t.Run("SUPER_ADMIN can filter to specific branch", func(t *testing.T) {

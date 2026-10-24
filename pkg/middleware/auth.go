@@ -63,10 +63,14 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 		// 1. Try finding Admin from DB
 		admin, err := adminRepo.FindByID(context.Background(), claims.AdminID)
 		if err == nil && admin != nil {
+			roleName := admin.Role
+			if roleName == "" && admin.RoleObj != nil {
+				roleName = admin.RoleObj.Name
+			}
 			c.Set("admin_id", claims.AdminID)
 			c.Set("admin_email", claims.Email)
 			c.Set("admin_name", admin.Name)
-			c.Set("admin_role", admin.Role)
+			c.Set("admin_role", roleName)
 			c.Set("admin_role_id", admin.RoleID)
 			c.Set("branch_id", admin.BranchID)
 			c.Set("must_change_password", admin.MustChangePassword)
@@ -103,25 +107,62 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 	}
 }
 
+// isExecutiveRole checks whether the role string is a top-level system management role.
+func isExecutiveRole(role string) bool {
+	trimmed := strings.TrimSpace(role)
+	return strings.EqualFold(trimmed, "SUPER_ADMIN") ||
+		strings.EqualFold(trimmed, "OWNER") ||
+		strings.EqualFold(trimmed, "GENERAL_MANAGER")
+}
+
 // RequireRoles restricts endpoint access to specified roles (e.g. "ADMIN", "SUPERVISOR")
 func RequireRoles(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleVal, exists := c.Get("admin_role")
-		if !exists {
+		var userRole string
+		if exists {
+			userRole, _ = roleVal.(string)
+		}
+
+		adminVal, _ := c.Get("admin")
+		admin, _ := adminVal.(*domain.Admin)
+
+		if userRole == "" && admin != nil {
+			userRole = admin.Role
+			if userRole == "" && admin.RoleObj != nil {
+				userRole = admin.RoleObj.Name
+			}
+		}
+
+		if userRole == "" && !exists {
 			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: لا توجد صلاحيات محددة"})
 			c.Abort()
 			return
 		}
 
-		userRole, _ := roleVal.(string)
-		// SUPER_ADMIN has access to everything
-		if userRole == "SUPER_ADMIN" {
+		// SUPER_ADMIN, OWNER, and GENERAL_MANAGER have full access to everything
+		if isExecutiveRole(userRole) {
+			c.Next()
+			return
+		}
+
+		if admin != nil && admin.RoleObj != nil && isExecutiveRole(admin.RoleObj.Name) {
+			c.Next()
+			return
+		}
+
+		// Wildcard '*' permission grants full access
+		if admin != nil && checkAdminPermission(admin, "*") {
 			c.Next()
 			return
 		}
 
 		for _, r := range allowedRoles {
 			if strings.EqualFold(userRole, r) {
+				c.Next()
+				return
+			}
+			if admin != nil && admin.RoleObj != nil && strings.EqualFold(admin.RoleObj.Name, r) {
 				c.Next()
 				return
 			}
@@ -134,12 +175,84 @@ func RequireRoles(allowedRoles ...string) gin.HandlerFunc {
 	}
 }
 
+// RequireRolesOrPermission restricts endpoint access to specified roles OR any of the specified permissions.
+func RequireRolesOrPermission(allowedRoles []string, allowedPermissions ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		roleVal, exists := c.Get("admin_role")
+		var userRole string
+		if exists {
+			userRole, _ = roleVal.(string)
+		}
+
+		adminVal, _ := c.Get("admin")
+		admin, _ := adminVal.(*domain.Admin)
+
+		if userRole == "" && admin != nil {
+			userRole = admin.Role
+			if userRole == "" && admin.RoleObj != nil {
+				userRole = admin.RoleObj.Name
+			}
+		}
+
+		// Executive roles have full access
+		if isExecutiveRole(userRole) {
+			c.Next()
+			return
+		}
+
+		if admin != nil && admin.RoleObj != nil && isExecutiveRole(admin.RoleObj.Name) {
+			c.Next()
+			return
+		}
+
+		// Wildcard '*' permission grants full access
+		if admin != nil && checkAdminPermission(admin, "*") {
+			c.Next()
+			return
+		}
+
+		// Check allowed roles
+		for _, r := range allowedRoles {
+			if strings.EqualFold(userRole, r) {
+				c.Next()
+				return
+			}
+			if admin != nil && admin.RoleObj != nil && strings.EqualFold(admin.RoleObj.Name, r) {
+				c.Next()
+				return
+			}
+		}
+
+		// Check allowed permissions
+		if admin != nil {
+			for _, perm := range allowedPermissions {
+				if checkAdminPermission(admin, perm) {
+					c.Next()
+					return
+				}
+			}
+		}
+
+		allRequired := append(allowedRoles, allowedPermissions...)
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "غير مصرح: هذه العملية تتطلب صلاحية (" + strings.Join(allRequired, " أو ") + ")",
+		})
+		c.Abort()
+	}
+}
+
 func checkAdminPermission(admin *domain.Admin, requiredPerm string) bool {
 	if admin == nil {
 		return false
 	}
 	roleUpper := strings.ToUpper(strings.TrimSpace(admin.Role))
-	if roleUpper == "SUPER_ADMIN" {
+	if roleUpper == "" && admin.RoleObj != nil {
+		roleUpper = strings.ToUpper(strings.TrimSpace(admin.RoleObj.Name))
+	}
+	if isExecutiveRole(roleUpper) {
+		return true
+	}
+	if admin.RoleObj != nil && isExecutiveRole(admin.RoleObj.Name) {
 		return true
 	}
 
@@ -171,7 +284,7 @@ func checkAdminPermission(admin *domain.Admin, requiredPerm string) bool {
 	}
 
 	// Default fallback for legacy ADMIN role
-	if roleUpper == "ADMIN" {
+	if roleUpper == "ADMIN" || (admin.RoleObj != nil && strings.ToUpper(strings.TrimSpace(admin.RoleObj.Name)) == "ADMIN") {
 		return true
 	}
 

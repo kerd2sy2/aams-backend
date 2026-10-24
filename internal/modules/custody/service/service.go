@@ -401,6 +401,7 @@ func (s *custodyService) UpdateExpense(ctx context.Context, expenseID uuid.UUID,
 
 	oldAmount := expense.Amount
 	oldRecipient := expense.RecipientName
+	oldDate := day.Date
 
 	if req.Category != nil && *req.Category != "" {
 		expense.Category = *req.Category
@@ -418,18 +419,52 @@ func (s *custodyService) UpdateExpense(ctx context.Context, expenseID uuid.UUID,
 		expense.ExportNumber = *req.ExportNumber
 	}
 
+	dateChanged := req.Date != nil && *req.Date != "" && *req.Date != day.Date
+	var targetDay *domain.CustodyDay
+
+	if dateChanged {
+		newDate := *req.Date
+		targetDay, err = s.repo.FindDayByDate(ctx, day.BranchID, newDate)
+		if err != nil || targetDay == nil {
+			var openingBalance float64
+			prevDay, err := s.repo.FindPreviousDay(ctx, day.BranchID, newDate)
+			if err == nil && prevDay != nil {
+				s.recomputeClosing(prevDay)
+				openingBalance = prevDay.ClosingBalance
+			}
+			targetDay = &domain.CustodyDay{
+				ID:             uuid.New(),
+				BranchID:       day.BranchID,
+				Date:           newDate,
+				OpeningBalance: openingBalance,
+				ClosingBalance: openingBalance,
+				CreatedAt:      time.Now(),
+				UpdatedAt:      time.Now(),
+			}
+			if err := s.repo.CreateDay(ctx, targetDay); err != nil {
+				return nil, err
+			}
+		}
+		expense.CustodyDayID = targetDay.ID
+	}
+
 	if err := s.repo.UpdateExpense(ctx, expense); err != nil {
 		return nil, err
 	}
 
+	desc := fmt.Sprintf("تعديل مصروف (%s): من %.2f إلى %.2f (مستلم: %s -> %s)", expense.Category, oldAmount, expense.Amount, oldRecipient, expense.RecipientName)
+	if dateChanged {
+		desc += fmt.Sprintf(" - نقل التاريخ من %s إلى %s", oldDate, *req.Date)
+	}
+
 	logEntry := &domain.CustodyLog{
 		BranchID:      day.BranchID,
-		CustodyDayID:  day.ID,
+		CustodyDayID:  expense.CustodyDayID,
 		Date:          day.Date,
 		ActionType:    "UPDATE_EXPENSE",
 		Category:      expense.Category,
 		Amount:        expense.Amount,
-		Description:   fmt.Sprintf("تعديل مصروف (%s): من %.2f إلى %.2f (مستلم: %s -> %s)", expense.Category, oldAmount, expense.Amount, oldRecipient, expense.RecipientName),
+		Description:   desc,
 		RecipientName: expense.RecipientName,
 		ExportNumber:  expense.ExportNumber,
 		ImageURL:      expense.ImageURL,
@@ -438,21 +473,35 @@ func (s *custodyService) UpdateExpense(ctx context.Context, expenseID uuid.UUID,
 		AdminUsername: adminUsername,
 		CreatedAt:     time.Now(),
 	}
+	if dateChanged {
+		logEntry.Date = *req.Date
+	}
 	_ = s.repo.CreateLog(ctx, logEntry)
 
-	// Fetch refreshed day with expenses
-	day, err = s.repo.FindDayByID(ctx, expense.CustodyDayID)
-	if err != nil {
-		return nil, err
+	// Fetch refreshed old day and recompute
+	refreshedOldDay, err := s.repo.FindDayByID(ctx, day.ID)
+	if err == nil && refreshedOldDay != nil {
+		s.recomputeClosing(refreshedOldDay)
+		_ = s.repo.UpdateDay(ctx, refreshedOldDay)
 	}
-	s.recomputeClosing(day)
-	_ = s.repo.UpdateDay(ctx, day)
 
-	_ = s.cascadeRecalculateChain(ctx, day.BranchID, day.Date)
+	earliestDate := day.Date
+	if dateChanged && targetDay != nil {
+		refreshedTargetDay, err := s.repo.FindDayByID(ctx, targetDay.ID)
+		if err == nil && refreshedTargetDay != nil {
+			s.recomputeClosing(refreshedTargetDay)
+			_ = s.repo.UpdateDay(ctx, refreshedTargetDay)
+		}
+		if *req.Date < earliestDate {
+			earliestDate = *req.Date
+		}
+	}
 
-	updatedDay, err := s.repo.FindDayByID(ctx, day.ID)
-	if err == nil && updatedDay != nil {
-		day = updatedDay
+	_ = s.cascadeRecalculateChain(ctx, day.BranchID, earliestDate)
+
+	updatedReturnDay, err := s.repo.FindDayByID(ctx, expense.CustodyDayID)
+	if err == nil && updatedReturnDay != nil {
+		return s.toResponse(updatedReturnDay), nil
 	}
 
 	return s.toResponse(day), nil

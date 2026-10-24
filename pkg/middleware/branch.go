@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 
+	"delivery-backend/internal/domain"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -52,10 +54,20 @@ func (s *BranchScope) AllowsBranch(targetBranchID *uuid.UUID) bool {
 // Fails closed if caller is not authorized or if a branch-scoped user lacks an assigned branch.
 func ResolveBranchScope(c *gin.Context) (*BranchScope, error) {
 	roleVal, exists := c.Get("admin_role")
-	if !exists {
+	role, _ := roleVal.(string)
+
+	adminVal, _ := c.Get("admin")
+	admin, _ := adminVal.(*domain.Admin)
+	if (role == "" || !exists) && admin != nil {
+		role = admin.Role
+		if role == "" && admin.RoleObj != nil {
+			role = admin.RoleObj.Name
+		}
+	}
+
+	if role == "" && !exists {
 		return nil, ErrUnauthenticatedScope
 	}
-	role, _ := roleVal.(string)
 
 	isEmployee := false
 	if isEmpVal, ok := c.Get("is_employee"); ok {
@@ -78,9 +90,17 @@ func ResolveBranchScope(c *gin.Context) (*BranchScope, error) {
 		}, nil
 	}
 
-	// 2. SUPER_ADMIN, OWNER, or unassigned ADMIN: explicitly authorized for cross-branch global access.
+	// 2. SUPER_ADMIN, OWNER, GENERAL_MANAGER, or unassigned ADMIN: explicitly authorized for cross-branch global access.
 	// Can optionally filter by branch if query param is explicitly provided.
-	if strings.EqualFold(role, "SUPER_ADMIN") || strings.EqualFold(role, "OWNER") || (strings.EqualFold(role, "ADMIN") && (extractContextBranchID(c) == nil || *extractContextBranchID(c) == uuid.Nil)) {
+	isSuperRole := isExecutiveRole(role)
+	if admin != nil && admin.RoleObj != nil && isExecutiveRole(admin.RoleObj.Name) {
+		isSuperRole = true
+	}
+	if !isSuperRole && admin != nil && checkAdminPermission(admin, "*") {
+		isSuperRole = true
+	}
+
+	if isSuperRole || (strings.EqualFold(role, "ADMIN") && (extractContextBranchID(c) == nil || *extractContextBranchID(c) == uuid.Nil)) {
 		scope := &BranchScope{
 			IsGlobal:  true,
 			Role:      role,
