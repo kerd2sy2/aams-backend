@@ -63,14 +63,13 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	// Analytics & Dashboard - Management and Supervisors
 	rg.GET("/dashboard", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.DashboardHandler.GetStats)
 
-	// Reports - Management and Supervisors
+	// Reports - Viewing allowed for Management, Supervisors, and Field Employees/Drivers (restricted to own records)
 	reports := rg.Group("/reports")
-	reports.Use(middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"))
 	{
-		reports.GET("", m.ReportHandler.GetReports)
-		reports.GET("/export", m.ReportHandler.ExportReports)
-		reports.GET("/daily", m.ReportHandler.GetDailyReport)
-		reports.GET("/daily/export", m.ReportHandler.ExportDailyReport)
+		reports.GET("", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT", "DRIVER", "EMPLOYEE", "DELEGATE"), m.ReportHandler.GetReports)
+		reports.GET("/export", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.ReportHandler.ExportReports)
+		reports.GET("/daily", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.ReportHandler.GetDailyReport)
+		reports.GET("/daily/export", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.ReportHandler.ExportDailyReport)
 	}
 
 	// Audit Logs - Executive roles, ADMIN (View), or audit_logs.view permission. Clear/Bulk strictly SUPER_ADMIN and OWNER.

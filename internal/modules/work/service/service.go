@@ -363,9 +363,27 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 	session.ReviewedBy = reviewerID
 
 	if req.OrdersCount != nil {
+		if session.OriginalOrdersCount == 0 && session.OrdersCount > 0 {
+			session.OriginalOrdersCount = session.OrdersCount
+		}
+		if *req.OrdersCount != session.OrdersCount {
+			session.IsEditedBySupervisor = true
+			if reviewerName != "" {
+				session.EditedByName = reviewerName
+			}
+		}
 		session.OrdersCount = *req.OrdersCount
 	}
 	if req.EndKM != nil {
+		if session.OriginalEndKM == 0 && session.EndKM > 0 {
+			session.OriginalEndKM = session.EndKM
+		}
+		if *req.EndKM != session.EndKM {
+			session.IsEditedBySupervisor = true
+			if reviewerName != "" {
+				session.EditedByName = reviewerName
+			}
+		}
 		session.EndKM = *req.EndKM
 	}
 	if req.StartKM != nil {

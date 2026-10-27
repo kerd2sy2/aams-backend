@@ -789,7 +789,8 @@ func (r *gormSystemRepository) GetReports(ctx context.Context, filter dto.Report
 	query := r.db.WithContext(ctx).Table("work_sessions").
 		Select("work_sessions.*, employees.name as employee_name, employees.national_id, employees.key_number, branches.name as branch_name").
 		Joins("LEFT JOIN employees ON employees.id = work_sessions.employee_id").
-		Joins("LEFT JOIN branches ON branches.id = employees.branch_id")
+		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
+		Where("work_sessions.deleted_at IS NULL")
 
 	if filter.BranchID != nil {
 		query = query.Where("employees.branch_id = ?", *filter.BranchID)

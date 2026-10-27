@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -61,9 +62,25 @@ func (h *ReportHandler) GetReports(c *gin.Context) {
 		return
 	}
 
-	branchID := getBranchID(c)
-	if branchID != nil {
-		filter.BranchID = branchID
+	// Strict IDOR Prevention & Field Ownership Enforcement:
+	// If caller is a field employee/driver/delegate, strictly bind filter to their verified identity
+	isEmp, _ := c.Get("is_employee")
+	role := strings.ToUpper(c.GetString("admin_role"))
+	if isEmp == true || role == "DRIVER" || role == "EMPLOYEE" || role == "DELEGATE" {
+		if authEmpID, exists := c.Get("employee_id"); exists {
+			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
+				filter.EmployeeID = aUUID.String()
+				filter.BranchID = nil // Avoid branch filter restricting employee's records
+			}
+		} else {
+			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح"})
+			return
+		}
+	} else {
+		branchID := getBranchID(c)
+		if branchID != nil {
+			filter.BranchID = branchID
+		}
 	}
 
 	reports, total, err := h.svc.GetReports(c.Request.Context(), filter)
