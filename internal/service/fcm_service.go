@@ -105,16 +105,18 @@ func SendFCMBroadcast(tokens []string, title, body string, extraData map[string]
 	var fcmTokens []string
 	var expoTokens []string
 
-	for _, tok := range tokens {
-		tok = strings.TrimSpace(tok)
-		if tok == "" {
-			continue
-		}
-		if strings.HasPrefix(tok, "ExponentPushToken[") || strings.HasPrefix(tok, "ExpoPushToken[") {
-			expoTokens = append(expoTokens, tok)
-		} else if len(tok) > 20 {
-			// Native FCM token
-			fcmTokens = append(fcmTokens, tok)
+	for _, rawTok := range tokens {
+		for _, tok := range strings.Split(rawTok, ",") {
+			tok = strings.TrimSpace(tok)
+			if tok == "" {
+				continue
+			}
+			if strings.HasPrefix(tok, "ExponentPushToken[") || strings.HasPrefix(tok, "ExpoPushToken[") {
+				expoTokens = append(expoTokens, tok)
+			} else if len(tok) > 20 {
+				// Native FCM token
+				fcmTokens = append(fcmTokens, tok)
+			}
 		}
 	}
 
