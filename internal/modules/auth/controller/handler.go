@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -79,6 +80,60 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 func (h *AuthHandler) Me(c *gin.Context) {
 	if isEmp, _ := c.Get("is_employee"); isEmp == true {
 		if empVal, exists := c.Get("employee"); exists && empVal != nil {
+			if emp, ok := empVal.(*domain.Employee); ok && emp != nil {
+				var perms []string
+				if emp.Permissions != "" {
+					_ = json.Unmarshal([]byte(emp.Permissions), &perms)
+				}
+				if len(perms) == 0 && emp.RoleObj != nil && emp.RoleObj.Permissions != "" {
+					_ = json.Unmarshal([]byte(emp.RoleObj.Permissions), &perms)
+				}
+				if perms == nil {
+					perms = []string{}
+				}
+
+				effectiveRole := strings.TrimSpace(emp.JobRole)
+				if effectiveRole == "" {
+					if emp.RoleName != "" {
+						effectiveRole = strings.TrimSpace(emp.RoleName)
+					} else {
+						effectiveRole = "DRIVER"
+					}
+				}
+
+				branchName := ""
+				if emp.Branch != nil {
+					branchName = emp.Branch.Name
+				}
+
+				effectiveAvatar := emp.PersonalImage
+
+				c.JSON(http.StatusOK, gin.H{
+					"user":                  emp,
+					"employee":              emp,
+					"id":                    emp.ID,
+					"name":                  emp.Name,
+					"phone":                 emp.Phone,
+					"national_id":           emp.NationalID,
+					"employee_number":       emp.EmployeeNumber,
+					"job_role":              emp.JobRole,
+					"role":                  effectiveRole,
+					"role_name":             emp.RoleName,
+					"role_id":               emp.RoleID,
+					"permissions":           perms,
+					"branch_id":             emp.BranchID,
+					"branch_name":           branchName,
+					"avatar":                effectiveAvatar,
+					"personal_image":        effectiveAvatar,
+					"is_employee":           true,
+					"must_change_password":  emp.MustChangePassword,
+					"motorcycle_number":     emp.MotorcycleNumber,
+					"key_number":            emp.KeyNumber,
+					"shift":                 emp.Shift,
+					"vehicle_type":          emp.VehicleType,
+				})
+				return
+			}
 			c.JSON(http.StatusOK, empVal)
 			return
 		}
@@ -414,20 +469,25 @@ func (h *RoleHandler) GetAll(c *gin.Context) {
 func (h *RoleHandler) GetPermissions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"permissions": []string{
 		"*",
+		"apps.ohda", "apps.eshraf", "apps.edara", "apps.manadeeb", "apps.dashboard",
+		"all_branches", "branches.manage",
 		"custody", "custody.access", "custody.view", "custody.add", "custody.delete", "custody.manage",
-		"employees.view", "employees.create", "employees.edit", "employees.cards",
+		"employees.view", "employees.create", "employees.edit", "employees.delete", "employees.cards",
 		"work.view", "work.start", "work.end",
 		"vehicles.view", "vehicles.manage", "vehicles.oil",
 		"fuel.view", "fuel.manage",
 		"maintenance.view", "maintenance.manage",
-		"attendance.view", "investigations.view", "investigations.create",
-		"inventory.view", "inventory.dispense",
+		"attendance.view", "investigations.view", "investigations.create", "investigations.approve",
+		"inventory.view", "inventory.manage", "inventory.dispense",
 		"tickets.view", "tickets.manage",
 		"bank_accounts.view", "bank_accounts.manage",
 		"violations.view", "violations.manage",
 		"reports.view", "reports.export",
 		"documents.view", "documents.manage",
 		"leaves.view", "leaves.manage",
+		"partners.view", "partners.manage",
+		"users.manage", "roles.manage", "settings.manage",
+		"audit_logs.view", "error_logs.view",
 	}})
 }
 

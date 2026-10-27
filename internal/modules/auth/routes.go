@@ -7,6 +7,7 @@ import (
 	"delivery-backend/internal/modules/auth/controller"
 	"delivery-backend/internal/modules/auth/repository"
 	"delivery-backend/internal/modules/auth/service"
+	sharedRepo "delivery-backend/internal/repository"
 	"delivery-backend/pkg/config"
 	"delivery-backend/pkg/middleware"
 )
@@ -27,10 +28,11 @@ type Module struct {
 
 func NewModule(db *gorm.DB, cfg *config.Config) *Module {
 	adminRepo, roleRepo, otpRepo, branchRepo := repository.NewAuthRepository(db)
+	empRepo := sharedRepo.NewEmployeeRepository(db)
 	authSvc := service.NewAuthService(adminRepo, branchRepo, cfg)
 	otpSvc := service.NewOTPService(otpRepo, cfg)
 	roleSvc := service.NewRoleService(roleRepo)
-	adminSvc := service.NewAdminService(adminRepo)
+	adminSvc := service.NewAdminService(adminRepo, empRepo)
 	branchSvc := service.NewBranchService(branchRepo)
 
 	return &Module{

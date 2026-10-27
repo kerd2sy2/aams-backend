@@ -7,6 +7,7 @@ import (
 	"delivery-backend/internal/modules/employee/controller"
 	"delivery-backend/internal/modules/employee/repository"
 	"delivery-backend/internal/modules/employee/service"
+	sharedRepo "delivery-backend/internal/repository"
 	"delivery-backend/pkg/middleware"
 )
 
@@ -17,7 +18,8 @@ type Module struct {
 
 func NewModule(db *gorm.DB, storage controller.StorageProvider) *Module {
 	repo := repository.NewEmployeeRepository(db)
-	svc := service.NewEmployeeService(repo)
+	adminRepo := sharedRepo.NewAdminRepository(db)
+	svc := service.NewEmployeeService(repo, adminRepo)
 	handler := controller.NewEmployeeHandler(svc, storage)
 
 	return &Module{

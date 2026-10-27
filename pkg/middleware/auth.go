@@ -68,6 +68,9 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 				roleName = admin.RoleObj.Name
 			}
 			c.Set("admin_id", claims.AdminID)
+			if admin.EmployeeID != nil {
+				c.Set("employee_id", *admin.EmployeeID)
+			}
 			c.Set("admin_email", claims.Email)
 			c.Set("admin_name", admin.Name)
 			c.Set("admin_role", roleName)
@@ -85,14 +88,60 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 		if empRepo != nil {
 			emp, empErr := empRepo.FindByID(context.Background(), claims.AdminID)
 			if empErr == nil && emp != nil {
+				empRole := strings.TrimSpace(emp.JobRole)
+				if empRole == "" {
+					if emp.RoleName != "" {
+						empRole = strings.TrimSpace(emp.RoleName)
+					} else {
+						empRole = "DRIVER"
+					}
+				}
+
+				// Check if there is an Admin linked to this Employee
+				var linkedAdmin *domain.Admin
+				if adminRepo != nil {
+					linkedAdmin, _ = adminRepo.FindByEmployeeID(context.Background(), emp.ID)
+				}
+
+				effectivePermissions := emp.Permissions
+				permissionsConfigured := emp.Permissions != ""
+				if linkedAdmin != nil {
+					if linkedAdmin.Permissions != "" {
+						effectivePermissions = linkedAdmin.Permissions
+						permissionsConfigured = true
+					}
+					if linkedAdmin.Role != "" {
+						empRole = linkedAdmin.Role
+					}
+				}
+
+				syntheticAdmin := &domain.Admin{
+					ID:                    emp.ID,
+					Name:                  emp.Name,
+					Phone:                 emp.Phone,
+					Role:                  empRole,
+					RoleID:                emp.RoleID,
+					RoleObj:               emp.RoleObj,
+					BranchID:              emp.BranchID,
+					Branch:                emp.Branch,
+					Permissions:           effectivePermissions,
+					PermissionsConfigured: permissionsConfigured,
+					MustChangePassword:    emp.MustChangePassword,
+				}
+				if linkedAdmin != nil && linkedAdmin.RoleObj != nil && syntheticAdmin.RoleObj == nil {
+					syntheticAdmin.RoleObj = linkedAdmin.RoleObj
+				}
+
 				c.Set("admin_id", claims.AdminID)
 				c.Set("employee_id", claims.AdminID)
 				c.Set("admin_email", claims.Email)
 				c.Set("admin_name", emp.Name)
-				c.Set("admin_role", "DRIVER")
+				c.Set("admin_role", empRole)
+				c.Set("admin_role_id", emp.RoleID)
 				c.Set("branch_id", emp.BranchID)
 				c.Set("must_change_password", emp.MustChangePassword)
-				c.Set("permissions_configured", false)
+				c.Set("permissions_configured", permissionsConfigured)
+				c.Set("admin", syntheticAdmin)
 				c.Set("employee", emp)
 				c.Set("is_employee", true)
 				c.Next()
@@ -241,6 +290,26 @@ func RequireRolesOrPermission(allowedRoles []string, allowedPermissions ...strin
 	}
 }
 
+func parsePermissionsList(raw string) []string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "[]" || trimmed == "null" {
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal([]byte(trimmed), &arr); err == nil {
+		return arr
+	}
+	// Fallback to comma-separated
+	var res []string
+	for _, part := range strings.Split(trimmed, ",") {
+		cleaned := strings.Trim(strings.TrimSpace(part), `[]"' `)
+		if cleaned != "" {
+			res = append(res, cleaned)
+		}
+	}
+	return res
+}
+
 func checkAdminPermission(admin *domain.Admin, requiredPerm string) bool {
 	if admin == nil {
 		return false
@@ -258,12 +327,10 @@ func checkAdminPermission(admin *domain.Admin, requiredPerm string) bool {
 
 	if admin.PermissionsConfigured {
 		// When permissions are explicitly configured, only the explicit permissions apply
-		var userPerms []string
-		if admin.Permissions != "" {
-			_ = json.Unmarshal([]byte(admin.Permissions), &userPerms)
-		}
+		userPerms := parsePermissionsList(admin.Permissions)
 		for _, p := range userPerms {
-			if p == "*" || strings.EqualFold(p, requiredPerm) {
+			trimmedP := strings.TrimSpace(p)
+			if trimmedP == "*" || strings.EqualFold(trimmedP, requiredPerm) {
 				return true
 			}
 		}
@@ -273,12 +340,11 @@ func checkAdminPermission(admin *domain.Admin, requiredPerm string) bool {
 
 	// Legacy unconfigured account: fallback to role permissions
 	if admin.RoleObj != nil && admin.RoleObj.Permissions != "" {
-		var rolePerms []string
-		if err := json.Unmarshal([]byte(admin.RoleObj.Permissions), &rolePerms); err == nil {
-			for _, p := range rolePerms {
-				if p == "*" || strings.EqualFold(p, requiredPerm) {
-					return true
-				}
+		rolePerms := parsePermissionsList(admin.RoleObj.Permissions)
+		for _, p := range rolePerms {
+			trimmedP := strings.TrimSpace(p)
+			if trimmedP == "*" || strings.EqualFold(trimmedP, requiredPerm) {
+				return true
 			}
 		}
 	}

@@ -91,6 +91,14 @@ func (r *gormAdminRepository) FindByID(ctx context.Context, id uuid.UUID) (*doma
 	return &admin, nil
 }
 
+func (r *gormAdminRepository) FindByEmployeeID(ctx context.Context, employeeID uuid.UUID) (*domain.Admin, error) {
+	var admin domain.Admin
+	if err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").Where("employee_id = ?", employeeID).First(&admin).Error; err != nil {
+		return nil, err
+	}
+	return &admin, nil
+}
+
 func (r *gormAdminRepository) FindByUsername(ctx context.Context, username string) (*domain.Admin, error) {
 	var admin domain.Admin
 	if err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").Where("LOWER(username) = LOWER(?)", username).First(&admin).Error; err != nil {

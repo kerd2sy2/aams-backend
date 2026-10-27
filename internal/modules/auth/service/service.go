@@ -18,6 +18,7 @@ import (
 	"delivery-backend/internal/modules/auth/domain"
 	"delivery-backend/internal/modules/auth/dto"
 	"delivery-backend/internal/modules/auth/repository"
+	sharedRepo "delivery-backend/internal/repository"
 	"delivery-backend/pkg/config"
 	"delivery-backend/pkg/jwt"
 )
@@ -907,11 +908,16 @@ func (s *roleService) FindAll(ctx context.Context) ([]dto.RoleResponse, error) {
 
 // AdminService
 type adminService struct {
-	repo repository.AdminRepository
+	repo    repository.AdminRepository
+	empRepo sharedRepo.EmployeeRepository
 }
 
-func NewAdminService(repo repository.AdminRepository) AdminService {
-	return &adminService{repo: repo}
+func NewAdminService(repo repository.AdminRepository, empRepo ...sharedRepo.EmployeeRepository) AdminService {
+	svc := &adminService{repo: repo}
+	if len(empRepo) > 0 {
+		svc.empRepo = empRepo[0]
+	}
+	return svc
 }
 
 func (s *adminService) Create(ctx context.Context, req dto.CreateAdminRequest) (*domain.Admin, error) {
@@ -1000,6 +1006,26 @@ func (s *adminService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateA
 	if err := s.repo.Update(ctx, admin); err != nil {
 		return nil, err
 	}
+
+	// Bidirectional sync: If this Admin is linked to an Employee, sync permissions & role to Employee
+	if admin.EmployeeID != nil && *admin.EmployeeID != uuid.Nil && s.empRepo != nil {
+		if emp, err := s.empRepo.FindByID(ctx, *admin.EmployeeID); err == nil && emp != nil {
+			if req.Role != "" {
+				emp.JobRole = req.Role
+			}
+			if req.RoleID != nil {
+				emp.RoleID = req.RoleID
+			}
+			if req.Permissions != nil {
+				emp.Permissions = admin.Permissions
+			}
+			if req.BranchID != nil || req.ClearBranch {
+				emp.BranchID = admin.BranchID
+			}
+			_ = s.empRepo.Update(ctx, emp)
+		}
+	}
+
 	return s.repo.FindByID(ctx, admin.ID)
 }
 

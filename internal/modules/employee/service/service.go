@@ -13,6 +13,7 @@ import (
 	"delivery-backend/internal/modules/employee/domain"
 	"delivery-backend/internal/modules/employee/dto"
 	"delivery-backend/internal/modules/employee/repository"
+	sharedRepo "delivery-backend/internal/repository"
 	"delivery-backend/pkg/barcode"
 )
 
@@ -36,11 +37,16 @@ type EmployeeService interface {
 }
 
 type employeeService struct {
-	repo repository.EmployeeRepository
+	repo      repository.EmployeeRepository
+	adminRepo sharedRepo.AdminRepository
 }
 
-func NewEmployeeService(repo repository.EmployeeRepository) EmployeeService {
-	return &employeeService{repo: repo}
+func NewEmployeeService(repo repository.EmployeeRepository, adminRepo ...sharedRepo.AdminRepository) EmployeeService {
+	svc := &employeeService{repo: repo}
+	if len(adminRepo) > 0 {
+		svc.adminRepo = adminRepo[0]
+	}
+	return svc
 }
 
 func (s *employeeService) Create(ctx context.Context, req dto.CreateEmployeeRequest) (*domain.Employee, error) {
@@ -168,16 +174,34 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req dto.Upda
 	if req.BranchID != nil {
 		emp.BranchID = req.BranchID
 	}
-	if req.RoleID != nil {
+	if req.ClearRole || (req.RoleID == nil && (req.Permissions == "" || req.Permissions == "[]")) {
+		emp.RoleID = nil
+		emp.RoleName = ""
+		emp.Permissions = ""
+	} else if req.RoleID != nil {
 		emp.RoleID = req.RoleID
 		emp.RoleName = req.RoleName
 		emp.Permissions = string(req.Permissions)
-	} else if req.Permissions != "" {
+	} else if req.Permissions != "" && req.Permissions != "[]" {
 		emp.Permissions = string(req.Permissions)
 	}
 
 	if err := s.repo.Update(ctx, emp); err != nil {
 		return nil, fmt.Errorf("فشل في تحديث بيانات الموظف: %w", err)
+	}
+
+	// Bidirectional sync: If there is an Admin linked to this Employee, keep them in sync
+	if s.adminRepo != nil {
+		if linkedAdmin, _ := s.adminRepo.FindByEmployeeID(ctx, emp.ID); linkedAdmin != nil {
+			linkedAdmin.RoleID = emp.RoleID
+			linkedAdmin.Permissions = emp.Permissions
+			linkedAdmin.PermissionsConfigured = (emp.Permissions != "")
+			if emp.JobRole != "" {
+				linkedAdmin.Role = emp.JobRole
+			}
+			linkedAdmin.BranchID = emp.BranchID
+			_ = s.adminRepo.Update(ctx, linkedAdmin)
+		}
 	}
 
 	return emp, nil

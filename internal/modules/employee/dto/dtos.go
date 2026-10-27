@@ -83,6 +83,7 @@ type UpdateEmployeeRequest struct {
 	BranchID                 *uuid.UUID          `json:"branch_id"`
 	RoleID                   *uuid.UUID          `json:"role_id"`
 	RoleName                 string              `json:"role_name"`
+	ClearRole                bool                `json:"clear_role"`
 	Permissions              FlexiblePermissions `json:"permissions"`
 }
 

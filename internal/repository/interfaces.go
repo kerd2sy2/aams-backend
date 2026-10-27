@@ -30,6 +30,7 @@ type AdminRepository interface {
 	UpdateGoogleLink(ctx context.Context, adminID uuid.UUID, googleEmail, googleID, googleAvatar string) error
 	UnlinkGoogle(ctx context.Context, adminID uuid.UUID) error
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.Admin, error)
+	FindByEmployeeID(ctx context.Context, employeeID uuid.UUID) (*domain.Admin, error)
 	Create(ctx context.Context, admin *domain.Admin) error
 	Update(ctx context.Context, admin *domain.Admin) error
 	Delete(ctx context.Context, id uuid.UUID) error
