@@ -96,7 +96,7 @@ func ResolveBranchScope(c *gin.Context) (*BranchScope, error) {
 	if admin != nil && admin.RoleObj != nil && isExecutiveRole(admin.RoleObj.Name) {
 		isSuperRole = true
 	}
-	if !isSuperRole && admin != nil && checkAdminPermission(admin, "*") {
+	if !isSuperRole && admin != nil && (checkAdminPermission(admin, "*") || checkAdminPermission(admin, "all_branches") || checkAdminPermission(admin, "branches.manage")) {
 		isSuperRole = true
 	}
 

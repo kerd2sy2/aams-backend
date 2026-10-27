@@ -174,8 +174,12 @@ func (h *EmployeeHandler) GetByID(c *gin.Context) {
 	}
 
 	emp, err := h.svc.FindByID(c.Request.Context(), id)
-	if err != nil || !scope.AllowsBranch(emp.BranchID) {
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+	if !scope.AllowsBranch(emp.BranchID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: لا تملك صلاحية الوصول لموظف في فرع آخر"})
 		return
 	}
 
@@ -197,8 +201,12 @@ func (h *EmployeeHandler) Update(c *gin.Context) {
 	}
 
 	existingEmp, err := h.svc.FindByID(c.Request.Context(), id)
-	if err != nil || !scope.AllowsBranch(existingEmp.BranchID) {
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+	if !scope.AllowsBranch(existingEmp.BranchID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: لا تملك صلاحية تعديل موظف في فرع آخر"})
 		return
 	}
 

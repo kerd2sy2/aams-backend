@@ -53,7 +53,12 @@ func (r *gormEmployeeRepository) Delete(ctx context.Context, id uuid.UUID) error
 
 func (r *gormEmployeeRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Employee, error) {
 	var emp domain.Employee
-	if err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").First(&emp, "id = ?", id).Error; err != nil {
+	err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").First(&emp, "id = ?", id).Error
+	if err != nil {
+		// Fallback without preloads to protect against relationship errors
+		if fallbackErr := r.db.WithContext(ctx).First(&emp, "id = ?", id).Error; fallbackErr == nil {
+			return &emp, nil
+		}
 		return nil, err
 	}
 	return &emp, nil
@@ -61,7 +66,12 @@ func (r *gormEmployeeRepository) FindByID(ctx context.Context, id uuid.UUID) (*d
 
 func (r *gormEmployeeRepository) FindByNationalID(ctx context.Context, nationalID string) (*domain.Employee, error) {
 	var emp domain.Employee
-	if err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").Where("national_id = ?", nationalID).First(&emp).Error; err != nil {
+	err := r.db.WithContext(ctx).Preload("RoleObj").Preload("Branch").Where("national_id = ?", nationalID).First(&emp).Error
+	if err != nil {
+		// Fallback without preloads to protect against relationship errors
+		if fallbackErr := r.db.WithContext(ctx).Where("national_id = ?", nationalID).First(&emp).Error; fallbackErr == nil {
+			return &emp, nil
+		}
 		return nil, err
 	}
 	return &emp, nil
