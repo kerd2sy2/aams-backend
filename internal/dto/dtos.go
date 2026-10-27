@@ -622,13 +622,16 @@ type UpdateInvestigationApprovalRequest struct {
 
 // Custody DTOs
 type CustodyExpenseResponse struct {
-	ID            uuid.UUID `json:"id"`
-	CustodyDayID  uuid.UUID `json:"custody_day_id"`
-	Category      string    `json:"category"`
-	Amount        float64   `json:"amount"`
-	RecipientName string    `json:"recipient_name"`
-	ExportNumber  string    `json:"export_number"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID                uuid.UUID `json:"id"`
+	CustodyDayID      uuid.UUID `json:"custody_day_id"`
+	Category          string    `json:"category"`
+	Amount            float64   `json:"amount"`
+	RecipientName     string    `json:"recipient_name"`
+	ExportNumber      string    `json:"export_number"`
+	ImageURL          string    `json:"image_url"`
+	CreatedByName     string    `json:"created_by_name"`
+	CreatedByUsername string    `json:"created_by_username"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type CustodyTotals struct {

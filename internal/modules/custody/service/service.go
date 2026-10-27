@@ -69,14 +69,16 @@ func (s *custodyService) toResponse(day *domain.CustodyDay) *dto.CustodyDayRespo
 			resp.Totals.Other += e.Amount
 		}
 		resp.Expenses = append(resp.Expenses, dto.CustodyExpenseResponse{
-			ID:            e.ID,
-			CustodyDayID:  e.CustodyDayID,
-			Category:      e.Category,
-			Amount:        e.Amount,
-			RecipientName: e.RecipientName,
-			ExportNumber:  e.ExportNumber,
-			ImageURL:      e.ImageURL,
-			CreatedAt:     e.CreatedAt,
+			ID:                e.ID,
+			CustodyDayID:      e.CustodyDayID,
+			Category:          e.Category,
+			Amount:            e.Amount,
+			RecipientName:     e.RecipientName,
+			ExportNumber:      e.ExportNumber,
+			ImageURL:          e.ImageURL,
+			CreatedByName:     e.CreatedByName,
+			CreatedByUsername: e.CreatedByUsername,
+			CreatedAt:         e.CreatedAt,
 		})
 	}
 	resp.TotalExpenses = totalExp
