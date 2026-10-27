@@ -509,7 +509,7 @@ func (h *RoleHandler) GetPermissions(c *gin.Context) {
 		"*",
 		"apps.ohda", "apps.eshraf", "apps.edara", "apps.manadeeb", "apps.dashboard",
 		"all_branches", "branches.manage",
-		"custody", "custody.access", "custody.view", "custody.add", "custody.delete", "custody.manage",
+		"custody", "custody.access", "custody.view", "custody.add", "custody.expense", "custody.delete", "custody.manage",
 		"employees.view", "employees.create", "employees.edit", "employees.delete", "employees.cards",
 		"work.view", "work.start", "work.end",
 		"vehicles.view", "vehicles.manage", "vehicles.oil",
@@ -525,6 +525,7 @@ func (h *RoleHandler) GetPermissions(c *gin.Context) {
 		"leaves.view", "leaves.manage",
 		"partners.view", "partners.manage",
 		"users.manage", "roles.manage", "settings.manage",
+		"archive.view",
 		"audit_logs.view", "error_logs.view",
 	}})
 }
