@@ -18,6 +18,7 @@ import (
 	"delivery-backend/internal/modules/auth/domain"
 	"delivery-backend/internal/modules/auth/dto"
 	"delivery-backend/internal/modules/auth/repository"
+	rootDomain "delivery-backend/internal/domain"
 	sharedRepo "delivery-backend/internal/repository"
 	"delivery-backend/pkg/config"
 	"delivery-backend/pkg/jwt"
@@ -138,22 +139,22 @@ func HasAppAccess(role string, permissions []string, appName string) bool {
 
 	switch cleanApp {
 	case "ohda", "custody":
-		if hasPerm("apps.ohda") || hasPerm("app.ohda") {
+		if hasPerm("apps.ohda") || hasPerm("app.ohda") || hasPerm("custody") || hasPerm("custody.view") || hasPerm("custody.add") || hasPerm("custody.manage") || hasPerm("custody.create") || hasPerm("custody.delete") {
 			return true
 		}
 		if len(permissions) > 0 {
-			return false
+			return normRole == "ADMIN" || normRole == "SUPER_ADMIN" || normRole == "OWNER" || normRole == "GENERAL_MANAGER"
 		}
-		return normRole == "ACCOUNTANT" || normRole == "CUSTODY" || normRole == "CUSTODY_ADMIN"
+		return normRole == "ACCOUNTANT" || normRole == "CUSTODY" || normRole == "CUSTODY_ADMIN" || normRole == "ADMIN" || normRole == "SUPER_ADMIN" || normRole == "OWNER" || normRole == "GENERAL_MANAGER"
 
 	case "eshraf", "supervision":
-		if hasPerm("apps.eshraf") || hasPerm("app.eshraf") {
+		if hasPerm("apps.eshraf") || hasPerm("app.eshraf") || hasPerm("work.view") || hasPerm("work.start") || hasPerm("work.end") || hasPerm("employees.view") {
 			return true
 		}
 		if len(permissions) > 0 {
-			return false
+			return normRole == "ADMIN" || normRole == "SUPER_ADMIN" || normRole == "OWNER" || normRole == "GENERAL_MANAGER"
 		}
-		return normRole == "SUPERVISOR"
+		return normRole == "SUPERVISOR" || normRole == "ADMIN" || normRole == "SUPER_ADMIN" || normRole == "OWNER" || normRole == "GENERAL_MANAGER"
 
 	case "edara", "admin", "management":
 		if hasPerm("apps.edara") || hasPerm("app.edara") {
@@ -633,7 +634,8 @@ func (s *authService) GetAdminByID(ctx context.Context, id uuid.UUID) (*contract
 	if a.Permissions != "" {
 		_ = json.Unmarshal([]byte(a.Permissions), &perms)
 	}
-	if len(perms) == 0 && a.RoleObj != nil && a.RoleObj.Permissions != "" {
+	// Fallback to role permissions ONLY if permissions have not been explicitly configured
+	if !a.PermissionsConfigured && len(perms) == 0 && a.RoleObj != nil && a.RoleObj.Permissions != "" {
 		_ = json.Unmarshal([]byte(a.RoleObj.Permissions), &perms)
 	}
 	roleUpper := strings.ToUpper(strings.TrimSpace(a.Role))
@@ -1029,21 +1031,38 @@ func (s *adminService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateA
 	}
 
 	// Bidirectional sync: If this Admin is linked to an Employee, sync permissions & role to Employee
-	if admin.EmployeeID != nil && *admin.EmployeeID != uuid.Nil && s.empRepo != nil {
-		if emp, err := s.empRepo.FindByID(ctx, *admin.EmployeeID); err == nil && emp != nil {
+	if s.empRepo != nil {
+		var targetEmp *rootDomain.Employee
+		if admin.EmployeeID != nil && *admin.EmployeeID != uuid.Nil {
+			targetEmp, _ = s.empRepo.FindByID(ctx, *admin.EmployeeID)
+		}
+		if targetEmp == nil && admin.Phone != "" {
+			variations := repository.NormalizeSaudiPhoneVariations(admin.Phone)
+			for _, v := range variations {
+				if emps, err := s.empRepo.FindBySearchTerm(ctx, v, nil); err == nil && len(emps) > 0 {
+					targetEmp = &emps[0]
+					break
+				}
+			}
+		}
+		if targetEmp != nil {
+			if admin.EmployeeID == nil || *admin.EmployeeID == uuid.Nil {
+				admin.EmployeeID = &targetEmp.ID
+				_ = s.repo.Update(ctx, admin)
+			}
 			if req.Role != "" {
-				emp.JobRole = req.Role
+				targetEmp.JobRole = req.Role
 			}
 			if req.RoleID != nil {
-				emp.RoleID = req.RoleID
+				targetEmp.RoleID = req.RoleID
 			}
 			if req.Permissions != nil {
-				emp.Permissions = admin.Permissions
+				targetEmp.Permissions = admin.Permissions
 			}
 			if req.BranchID != nil || req.ClearBranch {
-				emp.BranchID = admin.BranchID
+				targetEmp.BranchID = admin.BranchID
 			}
-			_ = s.empRepo.Update(ctx, emp)
+			_ = s.empRepo.Update(ctx, targetEmp)
 		}
 	}
 

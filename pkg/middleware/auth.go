@@ -101,20 +101,21 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 				var linkedAdmin *domain.Admin
 				if adminRepo != nil {
 					linkedAdmin, _ = adminRepo.FindByEmployeeID(context.Background(), emp.ID)
+					if linkedAdmin == nil && emp.Phone != "" {
+						linkedAdmin, _ = adminRepo.FindByPhone(context.Background(), emp.Phone)
+					}
 				}
 
 				effectivePermissions := emp.Permissions
 				permissionsConfigured := emp.Permissions != ""
 				if linkedAdmin != nil {
-					if linkedAdmin.Permissions != "" {
-						effectivePermissions = linkedAdmin.Permissions
-						permissionsConfigured = true
-					}
+					effectivePermissions = linkedAdmin.Permissions
+					permissionsConfigured = linkedAdmin.PermissionsConfigured
 					if linkedAdmin.Role != "" {
 						empRole = linkedAdmin.Role
 					}
 				}
-				if effectivePermissions == "" && emp.RoleObj != nil && emp.RoleObj.Permissions != "" {
+				if !permissionsConfigured && effectivePermissions == "" && emp.RoleObj != nil && emp.RoleObj.Permissions != "" {
 					effectivePermissions = emp.RoleObj.Permissions
 				}
 

@@ -86,18 +86,23 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		if empVal, exists := c.Get("employee"); exists && empVal != nil {
 			if emp, ok := empVal.(*domain.Employee); ok && emp != nil {
 				var perms []string
+				permsConfigured := false
 				// 1. Check syntheticAdmin (resolved by auth middleware with linkedAdmin)
 				if adminVal, adminExists := c.Get("admin"); adminExists && adminVal != nil {
-					if synAdmin, synOk := adminVal.(*domain.Admin); synOk && synAdmin != nil && synAdmin.Permissions != "" {
-						_ = json.Unmarshal([]byte(synAdmin.Permissions), &perms)
+					if synAdmin, synOk := adminVal.(*domain.Admin); synOk && synAdmin != nil {
+						permsConfigured = synAdmin.PermissionsConfigured
+						if synAdmin.Permissions != "" {
+							_ = json.Unmarshal([]byte(synAdmin.Permissions), &perms)
+						}
 					}
 				}
-				// 2. Check employee permissions
-				if len(perms) == 0 && emp.Permissions != "" {
+				// 2. Check employee permissions if not configured via admin
+				if !permsConfigured && len(perms) == 0 && emp.Permissions != "" {
 					_ = json.Unmarshal([]byte(emp.Permissions), &perms)
+					permsConfigured = true
 				}
-				// 3. Fallback to RoleObj permissions
-				if len(perms) == 0 && emp.RoleObj != nil && emp.RoleObj.Permissions != "" {
+				// 3. Fallback to RoleObj permissions ONLY if NOT configured
+				if !permsConfigured && len(perms) == 0 && emp.RoleObj != nil && emp.RoleObj.Permissions != "" {
 					_ = json.Unmarshal([]byte(emp.RoleObj.Permissions), &perms)
 				}
 				if perms == nil {
