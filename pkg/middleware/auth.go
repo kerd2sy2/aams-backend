@@ -258,10 +258,13 @@ func RequireRolesOrPermission(allowedRoles []string, allowedPermissions ...strin
 			return
 		}
 
-		// Wildcard '*' permission grants full access
+		// Wildcard '*' permission grants full access only if account is unconfigured or '*' is the sole permission
 		if admin != nil && checkAdminPermission(admin, "*") {
-			c.Next()
-			return
+			userPerms := parsePermissionsList(admin.Permissions)
+			if !admin.PermissionsConfigured || (len(userPerms) == 1 && strings.TrimSpace(userPerms[0]) == "*") {
+				c.Next()
+				return
+			}
 		}
 
 		// When permissions are explicitly configured on this account:
@@ -350,9 +353,12 @@ func checkAdminPermission(admin *domain.Admin, requiredPerm string) bool {
 	if admin.PermissionsConfigured {
 		// When permissions are explicitly configured, only the explicit permissions apply
 		userPerms := parsePermissionsList(admin.Permissions)
+		if len(userPerms) == 1 && strings.TrimSpace(userPerms[0]) == "*" {
+			return true
+		}
 		for _, p := range userPerms {
 			trimmedP := strings.TrimSpace(p)
-			if trimmedP == "*" || strings.EqualFold(trimmedP, requiredPerm) {
+			if trimmedP != "*" && strings.EqualFold(trimmedP, requiredPerm) {
 				return true
 			}
 		}

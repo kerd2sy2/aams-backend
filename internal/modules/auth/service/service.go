@@ -1000,7 +1000,8 @@ func (s *adminService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateA
 		admin.EmployeeID = req.EmployeeID
 	}
 	if req.Permissions != nil {
-		permsJSON, _ := json.Marshal(req.Permissions)
+		cleanPerms := sanitizePermissions(req.Permissions)
+		permsJSON, _ := json.Marshal(cleanPerms)
 		admin.Permissions = string(permsJSON)
 		admin.PermissionsConfigured = true
 	}
@@ -1145,7 +1146,8 @@ func (s *adminService) PromoteEmployee(ctx context.Context, req dto.PromoteEmplo
 	var permsJSON []byte
 	hasCustomPerms := false
 	if req.Permissions != nil {
-		permsJSON, _ = json.Marshal(req.Permissions)
+		cleanPerms := sanitizePermissions(req.Permissions)
+		permsJSON, _ = json.Marshal(cleanPerms)
 		hasCustomPerms = true
 	}
 
@@ -1266,3 +1268,21 @@ func (s *branchService) FindAll(ctx context.Context) ([]dto.BranchResponse, erro
 	}
 	return res, nil
 }
+
+func sanitizePermissions(perms []string) []string {
+	if len(perms) <= 1 {
+		return perms
+	}
+	var res []string
+	for _, p := range perms {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" && trimmed != "*" {
+			res = append(res, trimmed)
+		}
+	}
+	if len(res) == 0 {
+		return []string{"*"}
+	}
+	return res
+}
+
