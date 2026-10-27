@@ -78,13 +78,25 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {
+	c.Header("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+
 	if isEmp, _ := c.Get("is_employee"); isEmp == true {
 		if empVal, exists := c.Get("employee"); exists && empVal != nil {
 			if emp, ok := empVal.(*domain.Employee); ok && emp != nil {
 				var perms []string
-				if emp.Permissions != "" {
+				// 1. Check syntheticAdmin (resolved by auth middleware with linkedAdmin)
+				if adminVal, adminExists := c.Get("admin"); adminExists && adminVal != nil {
+					if synAdmin, synOk := adminVal.(*domain.Admin); synOk && synAdmin != nil && synAdmin.Permissions != "" {
+						_ = json.Unmarshal([]byte(synAdmin.Permissions), &perms)
+					}
+				}
+				// 2. Check employee permissions
+				if len(perms) == 0 && emp.Permissions != "" {
 					_ = json.Unmarshal([]byte(emp.Permissions), &perms)
 				}
+				// 3. Fallback to RoleObj permissions
 				if len(perms) == 0 && emp.RoleObj != nil && emp.RoleObj.Permissions != "" {
 					_ = json.Unmarshal([]byte(emp.RoleObj.Permissions), &perms)
 				}
@@ -98,6 +110,20 @@ func (h *AuthHandler) Me(c *gin.Context) {
 						effectiveRole = strings.TrimSpace(emp.RoleName)
 					} else {
 						effectiveRole = "DRIVER"
+					}
+				}
+
+				roleUpper := strings.ToUpper(effectiveRole)
+				if roleUpper == "SUPER_ADMIN" || roleUpper == "SUPERADMIN" || roleUpper == "OWNER" || roleUpper == "GENERAL_MANAGER" {
+					hasWildcard := false
+					for _, p := range perms {
+						if p == "*" {
+							hasWildcard = true
+							break
+						}
+					}
+					if !hasWildcard {
+						perms = append([]string{"*"}, perms...)
 					}
 				}
 

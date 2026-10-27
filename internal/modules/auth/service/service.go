@@ -633,20 +633,40 @@ func (s *authService) GetAdminByID(ctx context.Context, id uuid.UUID) (*contract
 	if a.Permissions != "" {
 		_ = json.Unmarshal([]byte(a.Permissions), &perms)
 	}
+	if len(perms) == 0 && a.RoleObj != nil && a.RoleObj.Permissions != "" {
+		_ = json.Unmarshal([]byte(a.RoleObj.Permissions), &perms)
+	}
+	roleUpper := strings.ToUpper(strings.TrimSpace(a.Role))
+	if roleUpper == "SUPER_ADMIN" || roleUpper == "SUPERADMIN" || roleUpper == "OWNER" || roleUpper == "GENERAL_MANAGER" {
+		hasWildcard := false
+		for _, p := range perms {
+			if p == "*" {
+				hasWildcard = true
+				break
+			}
+		}
+		if !hasWildcard {
+			perms = append([]string{"*"}, perms...)
+		}
+	}
+	if perms == nil {
+		perms = []string{}
+	}
+
 	effectiveAvatar := a.Avatar
 	if effectiveAvatar == "" {
 		effectiveAvatar = a.GoogleAvatar
 	}
 	return &contracts.AdminDTO{
-		ID:           a.ID,
-		Email:        a.Email,
-		Username:     a.Username,
-		Name:         a.Name,
-		Role:         a.Role,
-		BranchID:     a.BranchID,
-		BranchName:   branchName,
-		Permissions:  perms,
-		GoogleEmail:  a.GoogleEmail,
+		ID:                    a.ID,
+		Email:                 a.Email,
+		Username:              a.Username,
+		Name:                  a.Name,
+		Role:                  a.Role,
+		BranchID:              a.BranchID,
+		BranchName:            branchName,
+		Permissions:           perms,
+		GoogleEmail:           a.GoogleEmail,
 		GoogleAvatar:          a.GoogleAvatar,
 		Avatar:                effectiveAvatar,
 		PermissionsConfigured: a.PermissionsConfigured,

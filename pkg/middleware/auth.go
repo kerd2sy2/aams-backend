@@ -114,6 +114,9 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 						empRole = linkedAdmin.Role
 					}
 				}
+				if effectivePermissions == "" && emp.RoleObj != nil && emp.RoleObj.Permissions != "" {
+					effectivePermissions = emp.RoleObj.Permissions
+				}
 
 				syntheticAdmin := &domain.Admin{
 					ID:                    emp.ID,
