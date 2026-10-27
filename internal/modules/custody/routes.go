@@ -32,16 +32,16 @@ func NewModule(db *gorm.DB) *Module {
 
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	c := rg.Group("/custody")
-	c.Use(middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"}, "custody", "custody.access", "custody.view", "custody.manage"))
+	c.Use(middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"}, "apps.ohda", "app.ohda", "custody", "custody.access", "custody.view", "custody.manage"))
 	{
 		c.GET("", m.Handler.List)
-		c.POST("", m.Handler.Create)
-		c.POST("/add-amount", m.Handler.AddAmount)
+		c.POST("", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN"}, "custody.create", "custody.manage"), m.Handler.Create)
+		c.POST("/add-amount", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN"}, "custody.create", "custody.manage"), m.Handler.AddAmount)
 		c.GET("/logs", m.Handler.GetLogs)
 		c.DELETE("/logs/:id", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN"}, "custody.delete", "custody.manage"), m.Handler.DeleteLog)
-		c.POST("/:id/expenses", m.Handler.AddExpense)
-		c.PUT("/expenses/:id", m.Handler.UpdateExpense)
+		c.POST("/:id/expenses", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN"}, "custody.create", "custody.manage"), m.Handler.AddExpense)
+		c.PUT("/expenses/:id", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN"}, "custody.manage"), m.Handler.UpdateExpense)
 		c.DELETE("/expenses/:id", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN"}, "custody.delete", "custody.manage"), m.Handler.DeleteExpense)
-		c.POST("/ledger-image", m.Handler.SetLedgerImage)
+		c.POST("/ledger-image", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN"}, "custody.create", "custody.manage"), m.Handler.SetLedgerImage)
 	}
 }

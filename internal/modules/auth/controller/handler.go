@@ -107,30 +107,33 @@ func (h *AuthHandler) Me(c *gin.Context) {
 				}
 
 				effectiveAvatar := emp.PersonalImage
+				appPerms := service.ComputeAppPermissions(effectiveRole, perms)
 
 				c.JSON(http.StatusOK, gin.H{
-					"user":                  emp,
-					"employee":              emp,
-					"id":                    emp.ID,
-					"name":                  emp.Name,
-					"phone":                 emp.Phone,
-					"national_id":           emp.NationalID,
-					"employee_number":       emp.EmployeeNumber,
-					"job_role":              emp.JobRole,
-					"role":                  effectiveRole,
-					"role_name":             emp.RoleName,
-					"role_id":               emp.RoleID,
-					"permissions":           perms,
-					"branch_id":             emp.BranchID,
-					"branch_name":           branchName,
-					"avatar":                effectiveAvatar,
-					"personal_image":        effectiveAvatar,
-					"is_employee":           true,
-					"must_change_password":  emp.MustChangePassword,
-					"motorcycle_number":     emp.MotorcycleNumber,
-					"key_number":            emp.KeyNumber,
-					"shift":                 emp.Shift,
-					"vehicle_type":          emp.VehicleType,
+					"user":                   emp,
+					"employee":               emp,
+					"id":                     emp.ID,
+					"name":                   emp.Name,
+					"phone":                  emp.Phone,
+					"national_id":            emp.NationalID,
+					"employee_number":        emp.EmployeeNumber,
+					"job_role":               emp.JobRole,
+					"role":                   effectiveRole,
+					"role_name":              emp.RoleName,
+					"role_id":                emp.RoleID,
+					"permissions":            perms,
+					"app_permissions":        appPerms,
+					"permissions_configured": true,
+					"branch_id":              emp.BranchID,
+					"branch_name":            branchName,
+					"avatar":                 effectiveAvatar,
+					"personal_image":         effectiveAvatar,
+					"is_employee":            true,
+					"must_change_password":   emp.MustChangePassword,
+					"motorcycle_number":      emp.MotorcycleNumber,
+					"key_number":             emp.KeyNumber,
+					"shift":                  emp.Shift,
+					"vehicle_type":           emp.VehicleType,
 				})
 				return
 			}
@@ -161,21 +164,25 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		effectiveAvatar = adminDTO.GoogleAvatar
 	}
 
+	adminAppPerms := service.ComputeAppPermissions(adminDTO.Role, adminDTO.Permissions)
+
 	c.JSON(http.StatusOK, gin.H{
-		"user":             adminDTO,
-		"id":               adminDTO.ID,
-		"name":             adminDTO.Name,
-		"email":            adminDTO.Email,
-		"username":         adminDTO.Username,
-		"role":             adminDTO.Role,
-		"permissions":      adminDTO.Permissions,
-		"branch_id":        adminDTO.BranchID,
-		"branch_name":      adminDTO.BranchName,
-		"is_google_linked": adminDTO.GoogleEmail != "",
-		"google_email":     adminDTO.GoogleEmail,
-		"google_avatar":    adminDTO.GoogleAvatar,
-		"avatar":           effectiveAvatar,
-		"personal_image":   effectiveAvatar,
+		"user":                   adminDTO,
+		"id":                     adminDTO.ID,
+		"name":                   adminDTO.Name,
+		"email":                  adminDTO.Email,
+		"username":               adminDTO.Username,
+		"role":                   adminDTO.Role,
+		"permissions":            adminDTO.Permissions,
+		"app_permissions":        adminAppPerms,
+		"permissions_configured": adminDTO.PermissionsConfigured,
+		"branch_id":              adminDTO.BranchID,
+		"branch_name":            adminDTO.BranchName,
+		"is_google_linked":       adminDTO.GoogleEmail != "",
+		"google_email":           adminDTO.GoogleEmail,
+		"google_avatar":          adminDTO.GoogleAvatar,
+		"avatar":                 effectiveAvatar,
+		"personal_image":         effectiveAvatar,
 	})
 }
 

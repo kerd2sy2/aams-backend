@@ -647,8 +647,9 @@ func (s *authService) GetAdminByID(ctx context.Context, id uuid.UUID) (*contract
 		BranchName:   branchName,
 		Permissions:  perms,
 		GoogleEmail:  a.GoogleEmail,
-		GoogleAvatar: a.GoogleAvatar,
-		Avatar:       effectiveAvatar,
+		GoogleAvatar:          a.GoogleAvatar,
+		Avatar:                effectiveAvatar,
+		PermissionsConfigured: a.PermissionsConfigured,
 	}, nil
 }
 

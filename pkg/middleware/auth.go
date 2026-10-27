@@ -260,7 +260,25 @@ func RequireRolesOrPermission(allowedRoles []string, allowedPermissions ...strin
 			return
 		}
 
-		// Check allowed roles
+		// When permissions are explicitly configured on this account:
+		// If specific permissions are required by this endpoint, the explicit permissions MUST be checked.
+		// Generic role names (e.g. ADMIN, SUPERVISOR) must NOT bypass configured permissions.
+		if admin != nil && admin.PermissionsConfigured && len(allowedPermissions) > 0 {
+			for _, perm := range allowedPermissions {
+				if checkAdminPermission(admin, perm) {
+					c.Next()
+					return
+				}
+			}
+			allRequired := append(allowedRoles, allowedPermissions...)
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "غير مصرح: لا تملك الصلاحية المطلوبة (" + strings.Join(allRequired, " أو ") + ")",
+			})
+			c.Abort()
+			return
+		}
+
+		// Legacy or unconfigured account: check allowed roles
 		for _, r := range allowedRoles {
 			if strings.EqualFold(userRole, r) {
 				c.Next()
