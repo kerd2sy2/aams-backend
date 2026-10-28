@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -186,10 +187,45 @@ func (r *gormVehicleRepository) UpdateOdometer(ctx context.Context, plateNumber 
 }
 
 func (r *gormVehicleRepository) RecordOilChange(ctx context.Context, id uuid.UUID, currentKM float64) error {
-	return r.db.WithContext(ctx).Model(&domain.Vehicle{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"last_oil_change_km": currentKM,
-		"updated_at":         time.Now(),
+	now := time.Now()
+	err := r.db.WithContext(ctx).Model(&domain.Vehicle{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"last_oil_change_km":   currentKM,
+		"last_oil_change_date": now,
+		"updated_at":           now,
 	}).Error
+	if err != nil {
+		return err
+	}
+
+	// Connect to Warehouse (Inventory): Automatically deduct 1 oil container for this vehicle
+	var veh struct {
+		PlateNumber string     `gorm:"column:plate_number"`
+		BranchID    *uuid.UUID `gorm:"column:branch_id"`
+	}
+	if err := r.db.WithContext(ctx).Table("vehicles").Where("id = ?", id).First(&veh).Error; err == nil {
+		var oilItem struct {
+			ID uuid.UUID `gorm:"column:id"`
+		}
+		itemQuery := r.db.WithContext(ctx).Table("inventory_items").
+			Where("deleted_at IS NULL AND type = 'oil'")
+		if veh.BranchID != nil {
+			itemQuery = itemQuery.Where("branch_id = ? OR branch_id IS NULL", veh.BranchID).Order("branch_id DESC NULLS LAST")
+		}
+		if err := itemQuery.First(&oilItem).Error; err == nil && oilItem.ID != uuid.Nil {
+			note := fmt.Sprintf("صرف وتغيير زيت للدباب (%s) عداد: %.0f كم", veh.PlateNumber, currentKM)
+			_ = r.db.WithContext(ctx).Table("inventory_transactions").Create(map[string]interface{}{
+				"id":         uuid.New(),
+				"item_id":    oilItem.ID,
+				"branch_id":  veh.BranchID,
+				"type":       "out",
+				"quantity":   1,
+				"notes":      note,
+				"created_at": now,
+			}).Error
+		}
+	}
+
+	return nil
 }
 
 func (r *gormVehicleRepository) FindLatestVehicleKM(ctx context.Context, plateNumber string) (float64, error) {

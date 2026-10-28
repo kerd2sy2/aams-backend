@@ -416,10 +416,27 @@ func (r *gormSystemRepository) FindVotesForBroadcast(ctx context.Context, broadc
 }
 
 func (r *gormSystemRepository) UpdateEmployeePushToken(ctx context.Context, empID uuid.UUID, token, language string) error {
+	cleanToken := strings.TrimSpace(token)
 	updates := map[string]interface{}{}
-	if strings.TrimSpace(token) != "" {
-		updates["push_token"] = strings.TrimSpace(token)
+
+	if cleanToken != "" {
+		updates["push_token"] = cleanToken
+
+		// Ensure token uniqueness: remove this physical device's token from any other employee
+		parts := strings.Split(cleanToken, ",")
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				_ = r.db.WithContext(ctx).Table("employees").
+					Where("id != ? AND push_token ILIKE ?", empID, "%"+trimmed+"%").
+					Update("push_token", nil).Error
+			}
+		}
+	} else {
+		// Empty token passed (e.g. employee logged out)
+		updates["push_token"] = nil
 	}
+
 	cleanLang := strings.ToLower(strings.TrimSpace(language))
 	if cleanLang != "" {
 		updates["language"] = cleanLang

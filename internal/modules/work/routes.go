@@ -161,6 +161,7 @@ func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context,
 		sid := sessionID.String()
 		go legacyService.SendFCMBroadcast([]string{token}, title, body, map[string]string{
 			"type":        "SESSION_APPROVED",
+			"employee_id": empID.String(),
 			"sessionId":   sid,
 			"session_id":  sid,
 			"ordersCount": fmt.Sprintf("%d", ordersCount),
@@ -239,18 +240,18 @@ func (v *gormVehicleAdapter) UpdateVehicleKM(ctx context.Context, plateNumber st
 		if delta < 0 {
 			delta = 0
 		}
-		updates := map[string]interface{}{}
+		updates := map[string]interface{}{
+			"status": "AVAILABLE",
+		}
 		if km > vehicle.CurrentKM {
 			updates["current_km"] = km
 		}
 		if delta > 0 {
 			updates["total_distance"] = gorm.Expr("COALESCE(total_distance, 0) + ?", delta)
 		}
-		if len(updates) > 0 {
-			return v.db.WithContext(ctx).Table("vehicles").
-				Where("id = ?", vehicle.ID).
-				Updates(updates).Error
-		}
+		return v.db.WithContext(ctx).Table("vehicles").
+			Where("id = ?", vehicle.ID).
+			Updates(updates).Error
 	}
 	return nil
 }
