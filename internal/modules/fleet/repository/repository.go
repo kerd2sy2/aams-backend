@@ -101,6 +101,7 @@ func (r *gormVehicleRepository) RestoreVehicle(ctx context.Context, vehicle *dom
 		"last_oil_change_km": vehicle.LastOilChangeKM,
 		"status":             vehicle.Status,
 		"is_odometer_broken": vehicle.IsOdometerBroken,
+		"registration_image": vehicle.RegistrationImage,
 		"branch_id":          vehicle.BranchID,
 		"notes":              vehicle.Notes,
 		"vehicle_type":       vehicle.VehicleType,
