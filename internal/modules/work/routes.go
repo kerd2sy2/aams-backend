@@ -228,8 +228,9 @@ func (v *gormVehicleAdapter) UpdateVehicleKM(ctx context.Context, plateNumber st
 		return nil
 	}
 	var vehicle struct {
-		ID        uuid.UUID `gorm:"column:id"`
-		CurrentKM float64   `gorm:"column:current_km"`
+		ID              uuid.UUID `gorm:"column:id"`
+		CurrentKM       float64   `gorm:"column:current_km"`
+		LastOilChangeKM float64   `gorm:"column:last_oil_change_km"`
 	}
 	err := v.db.WithContext(ctx).Table("vehicles").
 		Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?)", clean, clean+"%", "%"+clean+"%").
@@ -245,6 +246,9 @@ func (v *gormVehicleAdapter) UpdateVehicleKM(ctx context.Context, plateNumber st
 		}
 		if km > vehicle.CurrentKM {
 			updates["current_km"] = km
+		}
+		if vehicle.LastOilChangeKM <= 0 && vehicle.CurrentKM <= 0 && km > 0 {
+			updates["last_oil_change_km"] = km
 		}
 		if delta > 0 {
 			updates["total_distance"] = gorm.Expr("COALESCE(total_distance, 0) + ?", delta)

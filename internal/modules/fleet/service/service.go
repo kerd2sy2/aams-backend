@@ -116,6 +116,11 @@ func (s *vehicleService) Create(ctx context.Context, req dto.CreateVehicleReques
 		return nil, fmt.Errorf("المركبة برقم اللوحة %s مسجلة بالفعل", plate)
 	}
 
+	lastOilKM := req.LastOilChangeKM
+	if lastOilKM <= 0 && req.CurrentKM > 0 {
+		lastOilKM = req.CurrentKM
+	}
+
 	vehicle := &domain.Vehicle{
 		ID:                uuid.New(),
 		PlateNumber:       plate,
@@ -124,7 +129,7 @@ func (s *vehicleService) Create(ctx context.Context, req dto.CreateVehicleReques
 		ModelYear:         req.ModelYear,
 		KeyNumber:         req.KeyNumber,
 		CurrentKM:         req.CurrentKM,
-		LastOilChangeKM:   req.LastOilChangeKM,
+		LastOilChangeKM:   lastOilKM,
 		IsOdometerBroken:  req.IsOdometerBroken,
 		RegistrationImage: regImage,
 		TotalDistance:     0,

@@ -152,9 +152,24 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 			currKM = req.StartKM
 		}
 
-		distanceSinceOil := currKM - vehicleInfo.LastOilChangeKM
-		if distanceSinceOil < 0 {
-			distanceSinceOil = 0
+		var distanceSinceOil float64
+		if vehicleInfo.LastOilChangeKM > 0 {
+			distanceSinceOil = currKM - vehicleInfo.LastOilChangeKM
+			if distanceSinceOil < 0 {
+				distanceSinceOil = 0
+			}
+		} else {
+			// Vehicle has no prior oil change recorded in system.
+			// If it has tracked distance in AAMS, use that; otherwise this initial shift establishes the baseline.
+			if vehicleInfo.TotalDistance > 0 {
+				distanceSinceOil = vehicleInfo.TotalDistance
+			} else {
+				distanceSinceOil = 0
+				vehicleInfo.LastOilChangeKM = req.StartKM
+				if s.vehicleProvider != nil && motorcycleNumber != "" {
+					_ = s.vehicleProvider.UpdateVehicleKM(ctx, motorcycleNumber, req.StartKM)
+				}
+			}
 		}
 
 		if distanceSinceOil >= interval {
@@ -162,8 +177,13 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 		}
 	} else if motorcycleNumber == "" {
 		// Fallback for employee with no bike assigned
-		distanceSinceOil := emp.TotalDistance - emp.LastOilChangeDistance
-		if distanceSinceOil < 0 {
+		var distanceSinceOil float64
+		if emp.LastOilChangeDistance > 0 {
+			distanceSinceOil = emp.TotalDistance - emp.LastOilChangeDistance
+			if distanceSinceOil < 0 {
+				distanceSinceOil = 0
+			}
+		} else {
 			distanceSinceOil = 0
 		}
 		interval := oilChangeInterval(vehicleType)
@@ -445,9 +465,18 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 			resp.IsOdometerBroken = vInfo.IsOdometerBroken
 
 			interval := oilChangeInterval(vInfo.VehicleType)
-			distanceSinceOil := vInfo.CurrentKM - vInfo.LastOilChangeKM
-			if distanceSinceOil < 0 {
-				distanceSinceOil = 0
+			var distanceSinceOil float64
+			if vInfo.LastOilChangeKM > 0 {
+				distanceSinceOil = vInfo.CurrentKM - vInfo.LastOilChangeKM
+				if distanceSinceOil < 0 {
+					distanceSinceOil = 0
+				}
+			} else {
+				if vInfo.TotalDistance > 0 {
+					distanceSinceOil = vInfo.TotalDistance
+				} else {
+					distanceSinceOil = 0
+				}
 			}
 			remaining := interval - distanceSinceOil
 			if remaining < 0 {
@@ -499,9 +528,18 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 			vType = emp.VehicleType
 		}
 		interval := oilChangeInterval(vType)
-		distanceSinceOil := vehicleInfo.CurrentKM - vehicleInfo.LastOilChangeKM
-		if distanceSinceOil < 0 {
-			distanceSinceOil = 0
+		var distanceSinceOil float64
+		if vehicleInfo.LastOilChangeKM > 0 {
+			distanceSinceOil = vehicleInfo.CurrentKM - vehicleInfo.LastOilChangeKM
+			if distanceSinceOil < 0 {
+				distanceSinceOil = 0
+			}
+		} else {
+			if vehicleInfo.TotalDistance > 0 {
+				distanceSinceOil = vehicleInfo.TotalDistance
+			} else {
+				distanceSinceOil = 0
+			}
 		}
 		needsOil := distanceSinceOil >= interval
 		remaining := interval - distanceSinceOil
@@ -534,8 +572,13 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 
 	// Fallback to employee profile if no vehicle is found
 	interval := oilChangeInterval(emp.VehicleType)
-	distanceSinceOil := emp.TotalDistance - emp.LastOilChangeDistance
-	if distanceSinceOil < 0 {
+	var distanceSinceOil float64
+	if emp.LastOilChangeDistance > 0 {
+		distanceSinceOil = emp.TotalDistance - emp.LastOilChangeDistance
+		if distanceSinceOil < 0 {
+			distanceSinceOil = 0
+		}
+	} else {
 		distanceSinceOil = 0
 	}
 	needsOil := distanceSinceOil >= interval
