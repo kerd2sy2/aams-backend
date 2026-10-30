@@ -119,7 +119,7 @@ func (r *gormEmployeeRepository) FindAll(ctx context.Context, filter dto.Employe
 		}
 	}
 
-	err := q.Order(orderClause).Offset(offset).Limit(filter.Limit).Find(&emps).Error
+	err := q.Preload("Branch").Preload("RoleObj").Order(orderClause).Offset(offset).Limit(filter.Limit).Find(&emps).Error
 	return emps, total, err
 }
 
@@ -130,7 +130,7 @@ func (r *gormEmployeeRepository) Search(ctx context.Context, query string, branc
 	if branchID != nil && *branchID != uuid.Nil {
 		q = q.Where("branch_id = ?", *branchID)
 	}
-	err := q.Limit(50).Find(&emps).Error
+	err := q.Preload("Branch").Preload("RoleObj").Limit(50).Find(&emps).Error
 	return emps, err
 }
 
