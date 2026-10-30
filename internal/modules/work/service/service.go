@@ -60,6 +60,7 @@ type ExternalVehicleProvider interface {
 	GetVehicleInfo(ctx context.Context, plateNumber string) (*VehicleData, error)
 	UpdateVehicleKM(ctx context.Context, plateNumber string, km float64) error
 	HasActiveMaintenance(ctx context.Context, motorcycleNumber string) (bool, error)
+	EnsureVehicleExists(ctx context.Context, plateNumber string, vehicleType string, branchID *uuid.UUID, startKM float64) (*VehicleData, error)
 }
 
 type StorageProvider interface {
@@ -138,7 +139,7 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 	// 1. Vehicle-based Oil Check: Calculate oil based on motorcycle rather than employee
 	var vehicleInfo *VehicleData
 	if motorcycleNumber != "" && s.vehicleProvider != nil {
-		vehicleInfo, _ = s.vehicleProvider.GetVehicleInfo(ctx, motorcycleNumber)
+		vehicleInfo, _ = s.vehicleProvider.EnsureVehicleExists(ctx, motorcycleNumber, vehicleType, emp.BranchID, req.StartKM)
 	}
 
 	if vehicleInfo != nil {
@@ -456,7 +457,7 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 	}
 
 	if targetBike != "" && s.vehicleProvider != nil {
-		vInfo, err := s.vehicleProvider.GetVehicleInfo(ctx, targetBike)
+		vInfo, err := s.vehicleProvider.EnsureVehicleExists(ctx, targetBike, "", nil, 0)
 		if err == nil && vInfo != nil {
 			resp.VehicleLastKM = vInfo.CurrentKM
 			resp.LastKM = vInfo.CurrentKM
@@ -734,6 +735,10 @@ func (s *workService) SupervisorStartShift(
 		Notes:                req.Notes,
 		Status:               "ACTIVE",
 		OriginalStartKM:      req.StartKM,
+	}
+
+	if req.MotorcycleNumber != "" && s.vehicleProvider != nil {
+		_, _ = s.vehicleProvider.EnsureVehicleExists(ctx, req.MotorcycleNumber, req.VehicleType, supervisorBranchID, req.StartKM)
 	}
 
 	err := s.repo.ExecInTx(ctx, func(txRepo repository.WorkRepository) error {

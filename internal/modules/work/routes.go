@@ -222,6 +222,54 @@ func (v *gormVehicleAdapter) GetVehicleInfo(ctx context.Context, plateNumber str
 	}, nil
 }
 
+func (v *gormVehicleAdapter) EnsureVehicleExists(ctx context.Context, plateNumber string, vehicleType string, branchID *uuid.UUID, startKM float64) (*service.VehicleData, error) {
+	clean := strings.TrimSpace(plateNumber)
+	if clean == "" {
+		return nil, errors.New("رقم اللوحة فارغ")
+	}
+
+	existing, err := v.GetVehicleInfo(ctx, clean)
+	if err == nil && existing != nil {
+		if startKM > 0 && existing.CurrentKM == 0 {
+			_ = v.UpdateVehicleKM(ctx, clean, startKM)
+		}
+		return existing, nil
+	}
+
+	vType := "motorcycle"
+	if strings.EqualFold(vehicleType, "car") || strings.Contains(clean, "2459") || strings.Contains(clean, "STA") || strings.Contains(clean, "س ط ا") {
+		vType = "car"
+	}
+
+	newID := uuid.New()
+	now := time.Now()
+	newVehicle := map[string]interface{}{
+		"id":                 newID,
+		"plate_number":       clean,
+		"vehicle_type":       vType,
+		"current_km":         startKM,
+		"last_oil_change_km": startKM,
+		"total_distance":     0.0,
+		"status":             "IN_USE",
+		"branch_id":          branchID,
+		"created_at":         now,
+		"updated_at":         now,
+	}
+
+	if err := v.db.WithContext(ctx).Table("vehicles").Create(newVehicle).Error; err != nil {
+		return v.GetVehicleInfo(ctx, clean)
+	}
+
+	return &service.VehicleData{
+		ID:              newID,
+		PlateNumber:     clean,
+		VehicleType:     vType,
+		CurrentKM:       startKM,
+		LastOilChangeKM: startKM,
+		Status:          "IN_USE",
+	}, nil
+}
+
 func (v *gormVehicleAdapter) UpdateVehicleKM(ctx context.Context, plateNumber string, km float64) error {
 	clean := strings.TrimSpace(plateNumber)
 	if clean == "" {

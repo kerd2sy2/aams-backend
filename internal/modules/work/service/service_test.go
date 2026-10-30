@@ -137,6 +137,10 @@ func (v *mockVehicleProvider) HasActiveMaintenance(ctx context.Context, motorcyc
 	return false, nil
 }
 
+func (v *mockVehicleProvider) EnsureVehicleExists(ctx context.Context, plateNumber string, vehicleType string, branchID *uuid.UUID, startKM float64) (*service.VehicleData, error) {
+	return v.GetVehicleInfo(ctx, plateNumber)
+}
+
 func TestWorkService_StartAndEndWork(t *testing.T) {
 	empID := uuid.New()
 	empProvider := &mockEmployeeProvider{
