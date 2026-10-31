@@ -37,6 +37,7 @@ type ReportFilter struct {
 	EmployeeID    string     `form:"employee_id"`
 	ApplicationID string     `form:"application_id"`
 	BranchID      *uuid.UUID `form:"branch_id"`
+	Status        string     `form:"status"`
 	IsReviewed    *bool      `form:"is_reviewed"`
 	Page          int        `form:"page,default=1"`
 	Limit         int        `form:"limit,default=50"`

@@ -889,6 +889,9 @@ func (r *gormSystemRepository) GetReports(ctx context.Context, filter dto.Report
 	if filter.IsReviewed != nil {
 		query = query.Where("work_sessions.is_reviewed = ?", *filter.IsReviewed)
 	}
+	if filter.Status != "" {
+		query = query.Where("work_sessions.status = ?", filter.Status)
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
