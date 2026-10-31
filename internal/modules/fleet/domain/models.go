@@ -28,6 +28,7 @@ type Vehicle struct {
 	KeyNumber         string         `gorm:"type:varchar(50)" json:"key_number"`                                                   // رقم المفتاح المرتبط
 	CurrentKM         float64        `gorm:"default:0" json:"current_km"`                                                          // العداد الحالي المسجل
 	LastOilChangeKM   float64        `gorm:"default:0" json:"last_oil_change_km"`                                                  // قراءة العداد عند آخر تغيير زيت
+	LastOilChangeDate *time.Time     `json:"last_oil_change_date"`                                                                 // تاريخ آخر تغيير زيت
 	TotalDistance     float64        `gorm:"default:0" json:"total_distance"`                                                      // إجمالي الكيلومترات المقطوعة
 	Status            string         `gorm:"type:varchar(20);default:'AVAILABLE';index" json:"status"`                             // "AVAILABLE", "IN_USE", "MAINTENANCE"
 	IsOdometerBroken  bool           `gorm:"default:false;index" json:"is_odometer_broken"`                                        // عداد المسافات تالف / معطل

@@ -122,6 +122,8 @@ func (r *gormSystemRepository) ClearAuditLogs(ctx context.Context, branchID *uui
 	query := r.db.WithContext(ctx)
 	if branchID != nil {
 		query = query.Where("branch_id = ?", *branchID)
+	} else {
+		query = query.Where("1 = 1")
 	}
 	return query.Delete(&domain.AuditLog{}).Error
 }
@@ -597,14 +599,23 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 		return q
 	}
 
-	// Today unique employees worked
-	baseQuery().Where("work_sessions.start_time >= ?", startOfDay).Distinct("work_sessions.employee_id").Count(&resp.TodayEmployees)
+	// Today unique employees worked (either started today or currently active)
+	baseQuery().Where("work_sessions.start_time >= ? OR work_sessions.status = ?", startOfDay, "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.TodayEmployees)
 
-	// Currently active working sessions
-	baseQuery().Where("work_sessions.status = ?", "ACTIVE").Count(&resp.WorkingEmployees)
+	// Currently active working sessions (unique employees)
+	baseQuery().Where("work_sessions.status = ?", "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.WorkingEmployees)
 
-	// Finished shifts today
-	baseQuery().Where("work_sessions.start_time >= ? AND work_sessions.status = ?", startOfDay, "COMPLETED").Count(&resp.FinishedEmployees)
+	// Finished shifts today (unique employees who completed a session today and have NO active session right now)
+	baseQuery().
+		Where("work_sessions.start_time >= ? AND work_sessions.status = ?", startOfDay, "COMPLETED").
+		Where("work_sessions.employee_id NOT IN (SELECT ws2.employee_id FROM work_sessions ws2 WHERE ws2.status = 'ACTIVE' AND ws2.employee_id IS NOT NULL)").
+		Distinct("work_sessions.employee_id").
+		Count(&resp.FinishedEmployees)
+
+	// Guarantee mathematical consistency: TodayEmployees = WorkingEmployees + FinishedEmployees
+	if resp.TodayEmployees >= resp.WorkingEmployees && resp.FinishedEmployees > (resp.TodayEmployees-resp.WorkingEmployees) {
+		resp.FinishedEmployees = resp.TodayEmployees - resp.WorkingEmployees
+	}
 
 	// Today's Orders Sum (only reviewed sessions approved by supervisor)
 	var ordersSum struct{ Total int64 }

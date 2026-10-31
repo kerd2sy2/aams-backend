@@ -494,6 +494,7 @@ type Vehicle struct {
 	KeyNumber        string         `gorm:"type:varchar(50)" json:"key_number"`                        // ط±ظ‚ظ… ط§ظ„ظ…ظپطھط§ط­ ط§ظ„ظ…ط±طھط¨ط·
 	CurrentKM        float64        `gorm:"default:0" json:"current_km"`                               // ط§ظ„ط¹ط¯ط§ط¯ ط§ظ„ط­ط§ظ„ظٹ ط§ظ„ظ…ط³ط¬ظ„
 	LastOilChangeKM  float64        `gorm:"default:0" json:"last_oil_change_km"`                       // ظ‚ط±ط§ط،ط© ط§ظ„ط¹ط¯ط§ط¯ ط¹ظ†ط¯ ط¢ط®ط± طھط؛ظٹظٹط± ط²ظٹطھ
+	LastOilChangeDate *time.Time    `json:"last_oil_change_date"`                                      // تاريخ آخر تغيير زيت
 	TotalDistance    float64        `gorm:"default:0" json:"total_distance"`                           // ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ظƒظٹظ„ظˆظ…طھط±ط§طھ ط§ظ„ظ…ظ‚ط·ظˆط¹ط©
 	Status           string         `gorm:"type:varchar(20);default:'AVAILABLE';index" json:"status"`  // "AVAILABLE", "IN_USE", "MAINTENANCE"
 	IsOdometerBroken bool           `gorm:"default:false;index" json:"is_odometer_broken"`             // عداد المسافات تالف / معطل

@@ -72,13 +72,13 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 		reports.GET("/daily/export", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.ReportHandler.ExportDailyReport)
 	}
 
-	// Audit Logs - Executive roles, ADMIN (View), or audit_logs.view permission. Clear/Bulk strictly SUPER_ADMIN and OWNER.
+	// Audit Logs - Executive roles, ADMIN (View), or audit_logs.view permission. Clear/Bulk allowed for ADMIN/OWNER/SUPER_ADMIN.
 	auditLogs := rg.Group("/audit-logs")
 	{
 		auditLogs.GET("", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN", "OWNER", "GENERAL_MANAGER"}, "audit_logs.view"), m.AuditHandler.GetLogs)
-		auditLogs.DELETE("/clear", middleware.RequireRoles("SUPER_ADMIN", "OWNER"), m.AuditHandler.ClearLogs)
-		auditLogs.DELETE("/bulk", middleware.RequireRoles("SUPER_ADMIN", "OWNER"), m.AuditHandler.BulkDeleteLogs)
-		auditLogs.DELETE("/:id", middleware.RequireRoles("SUPER_ADMIN", "OWNER"), m.AuditHandler.DeleteLog)
+		auditLogs.DELETE("/clear", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN", "OWNER", "GENERAL_MANAGER"}, "audit_logs.delete"), m.AuditHandler.ClearLogs)
+		auditLogs.DELETE("/bulk", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN", "OWNER", "GENERAL_MANAGER"}, "audit_logs.delete"), m.AuditHandler.BulkDeleteLogs)
+		auditLogs.DELETE("/:id", middleware.RequireRolesOrPermission([]string{"SUPER_ADMIN", "ADMIN", "OWNER", "GENERAL_MANAGER"}, "audit_logs.delete"), m.AuditHandler.DeleteLog)
 	}
 
 	// Settings - Viewing allowed, Updating strictly Executive roles, ADMIN, or settings.manage permission

@@ -480,14 +480,23 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 		return q
 	}
 
-	// Total employees worked today (unique employees)
-	baseQuery().Where("start_time >= ?", startOfDay).Distinct("employee_id").Count(&resp.TodayEmployees)
+	// Total employees worked today (unique employees - either started today or currently active)
+	baseQuery().Where("start_time >= ? OR status = ?", startOfDay, domain.StatusActive).Distinct("employee_id").Count(&resp.TodayEmployees)
 
-	// Currently active working employees
-	baseQuery().Where("status = ?", domain.StatusActive).Count(&resp.WorkingEmployees)
+	// Currently active working employees (unique employees)
+	baseQuery().Where("status = ?", domain.StatusActive).Distinct("employee_id").Count(&resp.WorkingEmployees)
 
-	// Finished employees today
-	baseQuery().Where("start_time >= ? AND status = ?", startOfDay, domain.StatusCompleted).Count(&resp.FinishedEmployees)
+	// Finished employees today (unique employees who completed a session today and have NO active session right now)
+	baseQuery().
+		Where("start_time >= ? AND status = ?", startOfDay, domain.StatusCompleted).
+		Where("employee_id NOT IN (SELECT ws2.employee_id FROM work_sessions ws2 WHERE ws2.status = ? AND ws2.employee_id IS NOT NULL)", domain.StatusActive).
+		Distinct("employee_id").
+		Count(&resp.FinishedEmployees)
+
+	// Guarantee mathematical consistency: TodayEmployees = WorkingEmployees + FinishedEmployees
+	if resp.TodayEmployees >= resp.WorkingEmployees && resp.FinishedEmployees > (resp.TodayEmployees-resp.WorkingEmployees) {
+		resp.FinishedEmployees = resp.TodayEmployees - resp.WorkingEmployees
+	}
 
 	// Today's Orders Sum - only count reviewed / approved shifts
 	var ordersSum struct{ Total int64 }
