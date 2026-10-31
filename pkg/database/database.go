@@ -383,11 +383,12 @@ func seedAdmin(db *gorm.DB) {
 		roleID = &superRole.ID
 	}
 
-	if err := db.Where("phone = ? OR username = ?", "0500626432", "0500626432").First(&admin0500).Error; err == nil {
-		db.Model(&domain.Admin{}).Where("id = ?", admin0500.ID).Updates(map[string]interface{}{
-			"role":      "SUPER_ADMIN",
-			"role_id":   roleID,
-			"branch_id": nil,
+	if err := db.Unscoped().Where("phone = ? OR username = ?", "0500626432", "0500626432").First(&admin0500).Error; err == nil {
+		db.Unscoped().Model(&domain.Admin{}).Where("id = ?", admin0500.ID).Updates(map[string]interface{}{
+			"role":       "SUPER_ADMIN",
+			"role_id":    roleID,
+			"branch_id":  nil,
+			"deleted_at": nil,
 		})
 	} else {
 		defaultAdminPassword := os.Getenv("DEFAULT_ADMIN_PASSWORD")

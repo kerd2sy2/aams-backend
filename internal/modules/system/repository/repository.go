@@ -743,46 +743,62 @@ func (r *gormSystemRepository) GetDailyReport(ctx context.Context, dateStr strin
 		Date:         dateStr,
 		AppSummaries: make([]dto.DailyAppSummary, 0),
 		Employees:    make([]dto.DailyEmployeeRow, 0),
+		Rows:         make([]dto.DailyEmployeeRow, 0),
 	}
 
 	query := r.db.WithContext(ctx).Table("work_sessions").
 		Select("work_sessions.*, employees.name as employee_name, employees.key_number, branches.name as branch_name").
 		Joins("LEFT JOIN employees ON employees.id = work_sessions.employee_id").
-		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
-		Where("DATE(work_sessions.start_time) = ?", dateStr)
+		Joins("LEFT JOIN branches ON branches.id = employees.branch_id")
+
+	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
+	if t, err := time.ParseInLocation("2006-01-02", dateStr, riyadh); err == nil {
+		startOfDay := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, riyadh)
+		endOfDay := startOfDay.Add(24 * time.Hour)
+		query = query.Where("work_sessions.start_time >= ? AND work_sessions.start_time < ?", startOfDay, endOfDay)
+	} else {
+		query = query.Where("DATE(work_sessions.start_time) = ?", dateStr)
+	}
 
 	if branchID != nil {
 		query = query.Where("employees.branch_id = ?", *branchID)
 	}
 
 	var rows []struct {
-		EmployeeID       string    `gorm:"column:employee_id"`
-		EmployeeName     string    `gorm:"column:employee_name"`
-		BranchName       string    `gorm:"column:branch_name"`
-		KeyNumber        string    `gorm:"column:key_number"`
-		ApplicationID    string    `gorm:"column:application_id"`
-		ApplicationType  string    `gorm:"column:application_type"`
-		MotorcycleNumber string    `gorm:"column:motorcycle_number"`
-		OrdersCount      int       `gorm:"column:orders_count"`
-		Distance         float64   `gorm:"column:distance"`
-		FuelCost         float64   `gorm:"column:fuel_cost"`
-		StartTime        time.Time `gorm:"column:start_time"`
+		EmployeeID       string     `gorm:"column:employee_id"`
+		EmployeeName     string     `gorm:"column:employee_name"`
+		BranchName       string     `gorm:"column:branch_name"`
+		KeyNumber        string     `gorm:"column:key_number"`
+		ApplicationID    string     `gorm:"column:application_id"`
+		ApplicationType  string     `gorm:"column:application_type"`
+		MotorcycleNumber string     `gorm:"column:motorcycle_number"`
+		OrdersCount      int        `gorm:"column:orders_count"`
+		Distance         float64    `gorm:"column:distance"`
+		FuelCost         float64    `gorm:"column:fuel_cost"`
+		StartTime        time.Time  `gorm:"column:start_time"`
 		EndTime          *time.Time `gorm:"column:end_time"`
-		Status           string    `gorm:"column:status"`
-		ReviewNotes      string    `gorm:"column:review_notes"`
-		IsReviewed       bool      `gorm:"column:is_reviewed"`
+		Status           string     `gorm:"column:status"`
+		ReviewNotes      string     `gorm:"column:review_notes"`
+		IsReviewed       bool       `gorm:"column:is_reviewed"`
 	}
 
 	if err := query.Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 
+	appSummaryMap := make(map[string]*dto.DailyAppSummary)
+	appDriversMap := make(map[string]map[string]bool)
+	appMap := map[string]string{
+		"ninja":  "نينجا",
+		"keeta":  "كيتا",
+		"hunger": "هنجر",
+		"toyou":  "تو يو",
+	}
+
 	for _, row := range rows {
-		if row.IsReviewed {
-			resp.TotalOrders += row.OrdersCount
-			resp.TotalKM += row.Distance
-			resp.TotalFuel += row.FuelCost
-		}
+		resp.TotalOrders += row.OrdersCount
+		resp.TotalKM += row.Distance
+		resp.TotalFuel += row.FuelCost
 		resp.TotalSessions++
 
 		dur := "0 ساعة"
@@ -791,23 +807,61 @@ func (r *gormSystemRepository) GetDailyReport(ctx context.Context, dateStr strin
 			dur = fmt.Sprintf("%.1f ساعة", d.Hours())
 		}
 
-		resp.Employees = append(resp.Employees, dto.DailyEmployeeRow{
+		appType := strings.ToLower(strings.TrimSpace(row.ApplicationType))
+		appName := appMap[appType]
+		if appName == "" {
+			appName = row.ApplicationID
+		}
+		if appName == "" {
+			appName = row.ApplicationType
+		}
+
+		empRow := dto.DailyEmployeeRow{
 			EmployeeID:       row.EmployeeID,
 			EmployeeName:     row.EmployeeName,
 			BranchName:       row.BranchName,
 			KeyNumber:        row.KeyNumber,
 			AppType:          row.ApplicationType,
-			AppName:          row.ApplicationID,
+			AppName:          appName,
 			MotorcycleNumber: row.MotorcycleNumber,
+			SessionsCount:    1,
 			OrdersCount:      row.OrdersCount,
+			TotalOrders:      row.OrdersCount,
 			Distance:         row.Distance,
+			TotalKM:          row.Distance,
 			FuelCost:         row.FuelCost,
+			TotalFuel:        row.FuelCost,
 			WorkingDuration:  dur,
 			Status:           row.Status,
 			ReviewNotes:      row.ReviewNotes,
 			IsReviewed:       row.IsReviewed,
-		})
+		}
+		resp.Employees = append(resp.Employees, empRow)
+
+		if appType == "" {
+			appType = "other"
+		}
+		if _, ok := appSummaryMap[appType]; !ok {
+			appSummaryMap[appType] = &dto.DailyAppSummary{
+				AppType: appType,
+				AppName: appName,
+			}
+			appDriversMap[appType] = make(map[string]bool)
+		}
+		s := appSummaryMap[appType]
+		s.TotalOrders += row.OrdersCount
+		s.TotalKM += row.Distance
+		s.TotalFuel += row.FuelCost
+		if row.EmployeeID != "" && !appDriversMap[appType][row.EmployeeID] {
+			appDriversMap[appType][row.EmployeeID] = true
+			s.Count++
+		}
 	}
+
+	for _, s := range appSummaryMap {
+		resp.AppSummaries = append(resp.AppSummaries, *s)
+	}
+	resp.Rows = resp.Employees
 
 	return resp, nil
 }

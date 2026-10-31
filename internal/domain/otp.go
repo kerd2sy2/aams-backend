@@ -10,10 +10,10 @@ import (
 // OTPRequest represents a 4-digit one-time password request for employee login/device verification
 type OTPRequest struct {
 	ID           uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
-	EmployeeID   uuid.UUID      `gorm:"type:char(36);index;not null" json:"employee_id"`
+	EmployeeID   *uuid.UUID     `gorm:"type:char(36);index" json:"employee_id,omitempty"`
 	Employee     *Employee      `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
 	NationalID   string         `gorm:"type:varchar(50);index;not null" json:"national_id"`
-	EmployeeName string         `gorm:"type:varchar(150);not null" json:"employee_name"`
+	EmployeeName string         `gorm:"type:varchar(150)" json:"employee_name"`
 	BranchID     *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id,omitempty"`
 	BranchName   string         `gorm:"type:varchar(100)" json:"branch_name"`
 	OTPCode      string         `gorm:"type:varchar(10);not null" json:"otp_code"` // 4-digit code e.g. "4829"

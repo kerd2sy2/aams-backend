@@ -59,9 +59,13 @@ type DailyEmployeeRow struct {
 	AppType          string  `json:"app_type"`
 	AppName          string  `json:"app_name"`
 	MotorcycleNumber string  `json:"motorcycle_number"`
+	SessionsCount    int     `json:"sessions_count"`
 	OrdersCount      int     `json:"orders_count"`
+	TotalOrders      int     `json:"total_orders"`
 	Distance         float64 `json:"distance"`
+	TotalKM          float64 `json:"total_km"`
 	FuelCost         float64 `json:"fuel_cost"`
+	TotalFuel        float64 `json:"total_fuel"`
 	WorkingDuration  string  `json:"working_duration"`
 	Status           string  `json:"status"`
 	ReviewNotes      string  `json:"review_notes"`
@@ -76,6 +80,7 @@ type DailyReportResponse struct {
 	TotalSessions int                `json:"total_sessions"`
 	AppSummaries  []DailyAppSummary  `json:"app_summaries"`
 	Employees     []DailyEmployeeRow `json:"employees"`
+	Rows          []DailyEmployeeRow `json:"rows"`
 }
 
 // Audit Log DTOs
