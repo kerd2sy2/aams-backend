@@ -450,7 +450,13 @@ func (r *gormSystemRepository) UpdateEmployeePushToken(ctx context.Context, empI
 		return nil
 	}
 	_ = r.db.WithContext(ctx).Table("employees").Where("id = ?", empID).Updates(updates).Error
-	_ = r.db.WithContext(ctx).Table("admins").Where("id = ? OR employee_id = ?", empID, empID).Updates(updates).Error
+	adminUpdates := map[string]interface{}{}
+	if pt, exists := updates["push_token"]; exists {
+		adminUpdates["push_token"] = pt
+	}
+	if len(adminUpdates) > 0 {
+		_ = r.db.WithContext(ctx).Table("admins").Where("id = ? OR employee_id = ?", empID, empID).Updates(adminUpdates).Error
+	}
 	return nil
 }
 

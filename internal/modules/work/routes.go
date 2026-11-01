@@ -210,7 +210,7 @@ func (a *gormEmployeeAdapter) SendShiftEndedNotificationToSupervisor(ctx context
 	}
 	var empSupervisors []supervisorRec
 	empQuery := a.db.WithContext(ctx).Table("employees").
-		Where("(LOWER(role) = 'supervisor' OR LOWER(job_role) = 'supervisor') AND deleted_at IS NULL AND push_token IS NOT NULL AND push_token != ''")
+		Where("(LOWER(job_role) = 'supervisor' OR LOWER(role_name) = 'supervisor') AND deleted_at IS NULL AND push_token IS NOT NULL AND push_token != ''")
 	if emp.BranchID != nil {
 		empQuery = empQuery.Where("branch_id = ? OR branch_id IS NULL", *emp.BranchID)
 	}
@@ -427,7 +427,7 @@ func (v *gormVehicleAdapter) HasActiveMaintenance(ctx context.Context, motorcycl
 	var count int64
 	clean := strings.TrimSpace(motorcycleNumber)
 	err := v.db.WithContext(ctx).Table("maintenance_requests").
-		Where("(TRIM(motorcycle_number) = ? OR motorcycle_number ILIKE ?) AND status IN ?", clean, clean+"%", []string{"pending", "in_progress", "OPEN"}).
+		Where("(TRIM(vehicle_plate) = ? OR vehicle_plate ILIKE ?) AND status IN ?", clean, clean+"%", []string{"pending", "in_progress", "OPEN"}).
 		Count(&count).Error
 	return count > 0, err
 }
