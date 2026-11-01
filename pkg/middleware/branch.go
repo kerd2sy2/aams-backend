@@ -50,6 +50,60 @@ func (s *BranchScope) AllowsBranch(targetBranchID *uuid.UUID) bool {
 	return *s.BranchID == *targetBranchID
 }
 
+// extractRequestedBranchID extracts an explicit branch UUID requested by the client via query parameter or header.
+func extractRequestedBranchID(c *gin.Context) *uuid.UUID {
+	if c == nil || c.Request == nil {
+		return nil
+	}
+	if s := c.Query("branch_id"); s != "" {
+		if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
+			return &id
+		}
+	}
+	if s := c.GetHeader("X-Branch-ID"); s != "" {
+		if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
+			return &id
+		}
+	}
+	return nil
+}
+
+// hasCrossBranchPermission checks if the user has permission to access or switch between multiple branches.
+func hasCrossBranchPermission(admin *domain.Admin, role string) bool {
+	if isExecutiveRole(role) {
+		return true
+	}
+	if admin != nil && admin.RoleObj != nil && isExecutiveRole(admin.RoleObj.Name) {
+		return true
+	}
+	if admin != nil {
+		multiBranchPerms := []string{
+			"*",
+			"all_branches",
+			"branches.manage",
+			"branches:all",
+			"view_all_branches",
+			"manage_branches",
+			"custody:all_branches",
+			"custody.all_branches",
+			"custody",
+			"custody.view",
+			"custody.manage",
+			"apps.ohda",
+			"app.ohda",
+		}
+		for _, p := range multiBranchPerms {
+			if checkAdminPermission(admin, p) {
+				return true
+			}
+		}
+	}
+	if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "ACCOUNTANT") || strings.EqualFold(role, "OPERATIONS") {
+		return true
+	}
+	return false
+}
+
 // ResolveBranchScope derives and verifies the branch authorization scope from trusted server-side authentication context.
 // Fails closed if caller is not authorized or if a branch-scoped user lacks an assigned branch.
 func ResolveBranchScope(c *gin.Context) (*BranchScope, error) {
@@ -76,91 +130,62 @@ func ResolveBranchScope(c *gin.Context) (*BranchScope, error) {
 		}
 	}
 
-	// 1. Employee / Driver: strictly scoped to employee's assigned branch
+	// 1. Employee / Driver: strictly scoped to employee's assigned branch unless granted cross-branch
 	if isEmployee || strings.EqualFold(role, "DRIVER") || strings.EqualFold(role, "EMPLOYEE") {
-		bid := extractContextBranchID(c)
-		if bid == nil || *bid == uuid.Nil {
-			return nil, ErrBranchContextMissing
+		if !hasCrossBranchPermission(admin, role) {
+			bid := extractContextBranchID(c)
+			if bid == nil || *bid == uuid.Nil {
+				return nil, ErrBranchContextMissing
+			}
+			return &BranchScope{
+				IsGlobal:  false,
+				BranchID:  bid,
+				Role:      role,
+				HasBranch: true,
+			}, nil
 		}
+	}
+
+	// 2. Roles with cross-branch global or multi-branch permission:
+	// SUPER_ADMIN, OWNER, GENERAL_MANAGER, ADMIN, ACCOUNTANT, OPERATIONS, or users with explicit multi-branch/custody permissions.
+	if hasCrossBranchPermission(admin, role) {
+		if reqBranch := extractRequestedBranchID(c); reqBranch != nil {
+			return &BranchScope{
+				IsGlobal:  false,
+				BranchID:  reqBranch,
+				Role:      role,
+				HasBranch: true,
+			}, nil
+		}
+
+		assignedBranch := extractContextBranchID(c)
 		return &BranchScope{
-			IsGlobal:  false,
-			BranchID:  bid,
-			Role:      role,
-			HasBranch: true,
-		}, nil
-	}
-
-	// 2. SUPER_ADMIN, OWNER, GENERAL_MANAGER, or unassigned ADMIN: explicitly authorized for cross-branch global access.
-	// Can optionally filter by branch if query param is explicitly provided.
-	isSuperRole := isExecutiveRole(role)
-	if admin != nil && admin.RoleObj != nil && isExecutiveRole(admin.RoleObj.Name) {
-		isSuperRole = true
-	}
-	if !isSuperRole && admin != nil && (checkAdminPermission(admin, "*") || checkAdminPermission(admin, "all_branches") || checkAdminPermission(admin, "branches.manage")) {
-		isSuperRole = true
-	}
-
-	if isSuperRole || (strings.EqualFold(role, "ADMIN") && (extractContextBranchID(c) == nil || *extractContextBranchID(c) == uuid.Nil)) {
-		scope := &BranchScope{
 			IsGlobal:  true,
+			BranchID:  assignedBranch,
 			Role:      role,
-			HasBranch: false,
-		}
-		if s := c.Query("branch_id"); s != "" {
-			if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
-				scope.BranchID = &id
-				scope.HasBranch = true
-				scope.IsGlobal = false // explicitly filtered to specific branch
-			}
-		}
-		return scope, nil
-	}
-
-	// 3. SUPERVISOR: strictly scoped to the server-side assigned branch
-	if strings.EqualFold(role, "SUPERVISOR") {
-		bid := extractContextBranchID(c)
-		if bid == nil || *bid == uuid.Nil {
-			return nil, ErrBranchContextMissing
-		}
-
-		// Security check: if client sent a conflicting branch_id query param, fail closed
-		if clientBranchStr := c.Query("branch_id"); clientBranchStr != "" {
-			if clientID, err := uuid.Parse(clientBranchStr); err == nil {
-				if clientID != *bid {
-					return nil, ErrUnauthorizedCrossBranch
-				}
-			}
-		}
-
-		return &BranchScope{
-			IsGlobal:  false,
-			BranchID:  bid,
-			Role:      role,
-			HasBranch: true,
+			HasBranch: assignedBranch != nil && *assignedBranch != uuid.Nil,
 		}, nil
 	}
 
-	// 4. Other Roles (e.g. ADMIN, OPERATIONS, ACCOUNTANT):
-	// Must have an assigned branch or fail closed. Do NOT grant global access implicitly.
+	// 3. Single-branch scoped roles (e.g. SUPERVISOR without cross-branch permissions):
+	// Strictly scoped to server-side assigned branch. Forbids cross-branch access.
 	bid := extractContextBranchID(c)
-	if bid != nil && *bid != uuid.Nil {
-		if clientBranchStr := c.Query("branch_id"); clientBranchStr != "" {
-			if clientID, err := uuid.Parse(clientBranchStr); err == nil {
-				if clientID != *bid {
-					return nil, ErrUnauthorizedCrossBranch
-				}
-			}
-		}
-		return &BranchScope{
-			IsGlobal:  false,
-			BranchID:  bid,
-			Role:      role,
-			HasBranch: true,
-		}, nil
+	if bid == nil || *bid == uuid.Nil {
+		return nil, ErrBranchContextMissing
 	}
 
-	// Missing branch context for non-SUPER_ADMIN: fail closed
-	return nil, ErrBranchContextMissing
+	if reqBranch := extractRequestedBranchID(c); reqBranch != nil {
+		if *reqBranch != *bid {
+			return nil, ErrUnauthorizedCrossBranch
+		}
+	}
+
+	return &BranchScope{
+		IsGlobal:  false,
+		BranchID:  bid,
+		Role:      role,
+		HasBranch: true,
+	}, nil
 }
 
 func extractContextBranchID(c *gin.Context) *uuid.UUID {

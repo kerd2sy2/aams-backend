@@ -24,21 +24,34 @@ func NewCustodyHandler(svc service.CustodyService) *CustodyHandler {
 func custodyBranchID(c *gin.Context) *uuid.UUID {
 	scope, err := middleware.ResolveBranchScope(c)
 	if err == nil && scope != nil {
-		if !scope.IsGlobal {
+		if scope.BranchID != nil && *scope.BranchID != uuid.Nil {
 			return scope.BranchID
 		}
-		// When global scope (e.g. SUPER_ADMIN), client can optionally specify branch filter
-		if s := c.GetHeader("X-Branch-ID"); s != "" {
-			if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
-				return &id
+		if scope.IsGlobal {
+			if s := c.GetHeader("X-Branch-ID"); s != "" {
+				if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
+					return &id
+				}
 			}
-		}
-		if s := c.Query("branch_id"); s != "" {
-			if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
-				return &id
+			if s := c.Query("branch_id"); s != "" {
+				if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
+					return &id
+				}
 			}
 		}
 		return scope.BranchID
+	}
+
+	// Fallback to explicit requested branch if scope resolution failed or unauthenticated test
+	if s := c.Query("branch_id"); s != "" {
+		if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
+			return &id
+		}
+	}
+	if s := c.GetHeader("X-Branch-ID"); s != "" {
+		if id, err := uuid.Parse(s); err == nil && id != uuid.Nil {
+			return &id
+		}
 	}
 	return nil
 }
