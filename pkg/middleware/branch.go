@@ -78,7 +78,6 @@ func hasCrossBranchPermission(admin *domain.Admin, role string) bool {
 	}
 	if admin != nil {
 		multiBranchPerms := []string{
-			"*",
 			"all_branches",
 			"branches.manage",
 			"branches:all",
@@ -86,11 +85,6 @@ func hasCrossBranchPermission(admin *domain.Admin, role string) bool {
 			"manage_branches",
 			"custody:all_branches",
 			"custody.all_branches",
-			"custody",
-			"custody.view",
-			"custody.manage",
-			"apps.ohda",
-			"app.ohda",
 		}
 		for _, p := range multiBranchPerms {
 			if checkAdminPermission(admin, p) {
@@ -98,7 +92,9 @@ func hasCrossBranchPermission(admin *domain.Admin, role string) bool {
 			}
 		}
 	}
-	if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "ACCOUNTANT") || strings.EqualFold(role, "OPERATIONS") {
+	// An unassigned Admin, Accountant, or Operations manager (no specific branch_id) has global cross-branch access
+	if (strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "ACCOUNTANT") || strings.EqualFold(role, "OPERATIONS")) &&
+		(admin == nil || admin.BranchID == nil || *admin.BranchID == uuid.Nil) {
 		return true
 	}
 	return false
