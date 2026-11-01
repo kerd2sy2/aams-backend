@@ -202,7 +202,7 @@ func (a *gormEmployeeAdapter) SendShiftEndedNotificationToSupervisor(ctx context
 	var tokens []string
 	tokenSet := make(map[string]bool)
 
-	// A) Query supervisors from employees table
+	// A) Query supervisors from employees table for this employee's branch ONLY
 	type supervisorRec struct {
 		ID        uuid.UUID  `gorm:"column:id"`
 		BranchID  *uuid.UUID `gorm:"column:branch_id"`
@@ -212,7 +212,9 @@ func (a *gormEmployeeAdapter) SendShiftEndedNotificationToSupervisor(ctx context
 	empQuery := a.db.WithContext(ctx).Table("employees").
 		Where("(LOWER(job_role) = 'supervisor' OR LOWER(role_name) = 'supervisor') AND deleted_at IS NULL AND push_token IS NOT NULL AND push_token != ''")
 	if emp.BranchID != nil {
-		empQuery = empQuery.Where("branch_id = ? OR branch_id IS NULL", *emp.BranchID)
+		empQuery = empQuery.Where("branch_id = ?", *emp.BranchID)
+	} else {
+		empQuery = empQuery.Where("branch_id IS NULL")
 	}
 	_ = empQuery.Find(&empSupervisors).Error
 
@@ -235,7 +237,7 @@ func (a *gormEmployeeAdapter) SendShiftEndedNotificationToSupervisor(ctx context
 		}).Error
 	}
 
-	// B) Query supervisors / admins from admins table
+	// B) Query supervisors from admins table for this employee's branch ONLY
 	type adminRec struct {
 		ID        uuid.UUID  `gorm:"column:id"`
 		BranchID  *uuid.UUID `gorm:"column:branch_id"`
@@ -244,9 +246,11 @@ func (a *gormEmployeeAdapter) SendShiftEndedNotificationToSupervisor(ctx context
 	}
 	var adminSupervisors []adminRec
 	adminQuery := a.db.WithContext(ctx).Table("admins").
-		Where("(LOWER(role) IN ('supervisor', 'admin', 'super_admin')) AND deleted_at IS NULL AND push_token IS NOT NULL AND push_token != ''")
+		Where("(LOWER(role) = 'supervisor') AND deleted_at IS NULL AND push_token IS NOT NULL AND push_token != ''")
 	if emp.BranchID != nil {
-		adminQuery = adminQuery.Where("branch_id = ? OR branch_id IS NULL", *emp.BranchID)
+		adminQuery = adminQuery.Where("branch_id = ?", *emp.BranchID)
+	} else {
+		adminQuery = adminQuery.Where("branch_id IS NULL")
 	}
 	_ = adminQuery.Find(&adminSupervisors).Error
 
