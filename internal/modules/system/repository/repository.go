@@ -424,12 +424,15 @@ func (r *gormSystemRepository) UpdateEmployeePushToken(ctx context.Context, empI
 	if cleanToken != "" {
 		updates["push_token"] = cleanToken
 
-		// Ensure token uniqueness: remove this physical device's token from any other employee
+		// Ensure token uniqueness: remove this physical device's token from any other employee or admin
 		parts := strings.Split(cleanToken, ",")
 		for _, part := range parts {
 			trimmed := strings.TrimSpace(part)
 			if trimmed != "" {
 				_ = r.db.WithContext(ctx).Table("employees").
+					Where("id != ? AND push_token ILIKE ?", empID, "%"+trimmed+"%").
+					Update("push_token", nil).Error
+				_ = r.db.WithContext(ctx).Table("admins").
 					Where("id != ? AND push_token ILIKE ?", empID, "%"+trimmed+"%").
 					Update("push_token", nil).Error
 			}
@@ -446,7 +449,9 @@ func (r *gormSystemRepository) UpdateEmployeePushToken(ctx context.Context, empI
 	if len(updates) == 0 {
 		return nil
 	}
-	return r.db.WithContext(ctx).Table("employees").Where("id = ?", empID).Updates(updates).Error
+	_ = r.db.WithContext(ctx).Table("employees").Where("id = ?", empID).Updates(updates).Error
+	_ = r.db.WithContext(ctx).Table("admins").Where("id = ? OR employee_id = ?", empID, empID).Updates(updates).Error
+	return nil
 }
 
 // ---------------- Archive & Trash ----------------

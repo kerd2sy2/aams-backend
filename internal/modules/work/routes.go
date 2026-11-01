@@ -13,6 +13,7 @@ import (
 
 	"delivery-backend/internal/modules/work/contracts"
 	"delivery-backend/internal/modules/work/controller"
+	"delivery-backend/internal/modules/work/domain"
 	"delivery-backend/internal/modules/work/repository"
 	"delivery-backend/internal/modules/work/service"
 	legacyService "delivery-backend/internal/service"
@@ -168,6 +169,120 @@ func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context,
 			"fuelCost":    fmt.Sprintf("%.2f", fuelCost),
 		})
 	}
+	return nil
+}
+
+func (a *gormEmployeeAdapter) SendShiftEndedNotificationToSupervisor(ctx context.Context, empID uuid.UUID, session *domain.WorkSession) error {
+	var emp struct {
+		Name             string     `gorm:"column:name"`
+		KeyNumber        string     `gorm:"column:key_number"`
+		EmployeeNumber   string     `gorm:"column:employee_number"`
+		MotorcycleNumber string     `gorm:"column:motorcycle_number"`
+		BranchID         *uuid.UUID `gorm:"column:branch_id"`
+	}
+	if err := a.db.WithContext(ctx).Table("employees").Where("id = ? AND deleted_at IS NULL", empID).First(&emp).Error; err != nil {
+		return err
+	}
+
+	empName := strings.TrimSpace(emp.Name)
+	if empName == "" {
+		empName = "المندوب"
+	}
+	bikeNum := strings.TrimSpace(session.MotorcycleNumber)
+	if bikeNum == "" {
+		bikeNum = strings.TrimSpace(emp.MotorcycleNumber)
+	}
+
+	title := "إنهاء وردية مندوب"
+	body := fmt.Sprintf("أنهى المندوب %s الشفت (الطلبات: %d، المسافة: %.1f كم) وبانتظار الاعتماد", empName, session.OrdersCount, session.Distance)
+	if bikeNum != "" {
+		body = fmt.Sprintf("أنهى المندوب %s شفت الدباب (%s) - الطلبات: %d، المسافة: %.1f كم", empName, bikeNum, session.OrdersCount, session.Distance)
+	}
+
+	var tokens []string
+	tokenSet := make(map[string]bool)
+
+	// A) Query supervisors from employees table
+	type supervisorRec struct {
+		ID        uuid.UUID  `gorm:"column:id"`
+		BranchID  *uuid.UUID `gorm:"column:branch_id"`
+		PushToken string     `gorm:"column:push_token"`
+	}
+	var empSupervisors []supervisorRec
+	empQuery := a.db.WithContext(ctx).Table("employees").
+		Where("(LOWER(role) = 'supervisor' OR LOWER(job_role) = 'supervisor') AND deleted_at IS NULL AND push_token IS NOT NULL AND push_token != ''")
+	if emp.BranchID != nil {
+		empQuery = empQuery.Where("branch_id = ? OR branch_id IS NULL", *emp.BranchID)
+	}
+	_ = empQuery.Find(&empSupervisors).Error
+
+	for _, s := range empSupervisors {
+		tok := strings.TrimSpace(s.PushToken)
+		if tok != "" && !tokenSet[tok] {
+			tokenSet[tok] = true
+			tokens = append(tokens, tok)
+		}
+		_ = a.db.WithContext(ctx).Table("notifications").Create(map[string]interface{}{
+			"id":          uuid.New(),
+			"employee_id": s.ID,
+			"branch_id":   s.BranchID,
+			"title":       title,
+			"body":        body,
+			"type":        "SHIFT_COMPLETED_PENDING_REVIEW",
+			"status":      "unread",
+			"created_at":  time.Now(),
+			"updated_at":  time.Now(),
+		}).Error
+	}
+
+	// B) Query supervisors / admins from admins table
+	type adminRec struct {
+		ID        uuid.UUID  `gorm:"column:id"`
+		BranchID  *uuid.UUID `gorm:"column:branch_id"`
+		PushToken string     `gorm:"column:push_token"`
+		Role      string     `gorm:"column:role"`
+	}
+	var adminSupervisors []adminRec
+	adminQuery := a.db.WithContext(ctx).Table("admins").
+		Where("(LOWER(role) IN ('supervisor', 'admin', 'super_admin')) AND deleted_at IS NULL AND push_token IS NOT NULL AND push_token != ''")
+	if emp.BranchID != nil {
+		adminQuery = adminQuery.Where("branch_id = ? OR branch_id IS NULL", *emp.BranchID)
+	}
+	_ = adminQuery.Find(&adminSupervisors).Error
+
+	for _, adm := range adminSupervisors {
+		tok := strings.TrimSpace(adm.PushToken)
+		if tok != "" && !tokenSet[tok] {
+			tokenSet[tok] = true
+			tokens = append(tokens, tok)
+		}
+		_ = a.db.WithContext(ctx).Table("notifications").Create(map[string]interface{}{
+			"id":         uuid.New(),
+			"admin_id":   adm.ID,
+			"branch_id":  adm.BranchID,
+			"title":      title,
+			"body":       body,
+			"type":       "SHIFT_COMPLETED_PENDING_REVIEW",
+			"status":     "unread",
+			"created_at": time.Now(),
+			"updated_at": time.Now(),
+		}).Error
+	}
+
+	// 2. Send push notification to all collected supervisor devices
+	if len(tokens) > 0 {
+		sid := session.ID.String()
+		go legacyService.SendFCMBroadcast(tokens, title, body, map[string]string{
+			"type":         "SHIFT_COMPLETED_PENDING_REVIEW",
+			"employee_id":  empID.String(),
+			"employeeName": empName,
+			"sessionId":    sid,
+			"session_id":   sid,
+			"ordersCount":  fmt.Sprintf("%d", session.OrdersCount),
+			"distance":     fmt.Sprintf("%.1f", session.Distance),
+		})
+	}
+
 	return nil
 }
 

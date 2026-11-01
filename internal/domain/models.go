@@ -59,6 +59,7 @@ type Admin struct {
 	Permissions           string         `gorm:"type:text" json:"permissions"` // Optional user-specific permissions
 	PermissionsConfigured bool           `gorm:"default:false" json:"permissions_configured"`
 	MustChangePassword    bool           `gorm:"default:false" json:"must_change_password"`
+	PushToken    string         `gorm:"type:text" json:"push_token"`
 	GoogleID     string         `gorm:"type:varchar(100);index" json:"google_id,omitempty"`
 	GoogleEmail  string         `gorm:"type:varchar(150);index" json:"google_email,omitempty"`
 	GoogleAvatar string         `gorm:"type:varchar(255)" json:"google_avatar,omitempty"`

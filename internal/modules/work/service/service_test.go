@@ -113,6 +113,10 @@ func (m *mockEmployeeProvider) SendShiftApprovalNotification(ctx context.Context
 	return nil
 }
 
+func (m *mockEmployeeProvider) SendShiftEndedNotificationToSupervisor(ctx context.Context, empID uuid.UUID, session *domain.WorkSession) error {
+	return nil
+}
+
 type mockVehicleProvider struct{}
 
 func (v *mockVehicleProvider) GetVehicleLastKM(ctx context.Context, plateNumber string) (float64, error) {
