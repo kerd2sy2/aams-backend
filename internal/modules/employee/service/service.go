@@ -171,7 +171,9 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req dto.Upda
 	if req.Shift != "" {
 		emp.Shift = req.Shift
 	}
-	if req.BranchID != nil {
+	if req.ClearBranch {
+		emp.BranchID = nil
+	} else if req.BranchID != nil {
 		emp.BranchID = req.BranchID
 	}
 	if req.ClearRole || (req.RoleID == nil && (req.Permissions == "" || req.Permissions == "[]")) {

@@ -57,6 +57,7 @@ type CreateEmployeeRequest struct {
 	VehicleType              string              `json:"vehicle_type"`
 	Shift                    string              `json:"shift"`
 	BranchID                 *uuid.UUID          `json:"branch_id"`
+	ClearBranch              bool                `json:"clear_branch"`
 	RoleID                   *uuid.UUID          `json:"role_id"`
 	RoleName                 string              `json:"role_name"`
 	Permissions              FlexiblePermissions `json:"permissions"`
@@ -81,6 +82,7 @@ type UpdateEmployeeRequest struct {
 	VehicleType              string              `json:"vehicle_type"`
 	Shift                    string              `json:"shift"`
 	BranchID                 *uuid.UUID          `json:"branch_id"`
+	ClearBranch              bool                `json:"clear_branch"`
 	RoleID                   *uuid.UUID          `json:"role_id"`
 	RoleName                 string              `json:"role_name"`
 	ClearRole                bool                `json:"clear_role"`
