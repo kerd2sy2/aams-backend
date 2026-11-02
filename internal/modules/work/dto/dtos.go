@@ -1,6 +1,44 @@
 package dto
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+type FlexibleTime time.Time
+
+func (ft *FlexibleTime) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), "\"")
+	if s == "" || s == "null" {
+		return nil
+	}
+	formats := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+	for _, layout := range formats {
+		if t, err := time.Parse(layout, s); err == nil {
+			*ft = FlexibleTime(t)
+			return nil
+		}
+	}
+	return fmt.Errorf("cannot parse time: %s", s)
+}
+
+func (ft *FlexibleTime) Time() *time.Time {
+	if ft == nil {
+		return nil
+	}
+	t := time.Time(*ft)
+	return &t
+}
 
 type StartWorkRequest struct {
 	EmployeeID       string  `json:"employee_id" binding:"required,uuid"`
@@ -38,18 +76,18 @@ type ReviewWorkSessionRequest struct {
 }
 
 type UpdateWorkSessionRequest struct {
-	EmployeeID      string     `json:"employee_id"`
-	StartKM         float64    `json:"start_km"`
-	StartKMImage    string     `json:"start_km_image"`
-	StartPlateImage string     `json:"start_plate_image"`
-	EndKM           float64    `json:"end_km"`
-	EndKMImage      string     `json:"end_km_image"`
-	OrdersCount     int        `json:"orders_count"`
-	FuelCost        float64    `json:"fuel_cost"`
-	StartTime       *time.Time `json:"start_time"`
-	EndTime         *time.Time `json:"end_time"`
-	ApplicationType string     `json:"application_type"`
-	Notes           string     `json:"notes"`
+	EmployeeID      string        `json:"employee_id"`
+	StartKM         float64       `json:"start_km"`
+	StartKMImage    string        `json:"start_km_image"`
+	StartPlateImage string        `json:"start_plate_image"`
+	EndKM           float64       `json:"end_km"`
+	EndKMImage      string        `json:"end_km_image"`
+	OrdersCount     int           `json:"orders_count"`
+	FuelCost        float64       `json:"fuel_cost"`
+	StartTime       *FlexibleTime `json:"start_time"`
+	EndTime         *FlexibleTime `json:"end_time"`
+	ApplicationType string        `json:"application_type"`
+	Notes           string        `json:"notes"`
 }
 
 type OilChangeCheckResponse struct {

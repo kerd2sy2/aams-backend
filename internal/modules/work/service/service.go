@@ -347,6 +347,26 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 	session.IsEditedBySupervisor = true
 	session.EditedByName = adminName
 
+	if req.EmployeeID != "" {
+		if empUUID, parseErr := uuid.Parse(req.EmployeeID); parseErr == nil && empUUID != uuid.Nil {
+			session.EmployeeID = &empUUID
+		}
+	}
+
+	if st := req.StartTime.Time(); st != nil && !st.IsZero() {
+		session.StartTime = *st
+	}
+	if et := req.EndTime.Time(); et != nil && !et.IsZero() {
+		session.EndTime = et
+		if session.Status == "ACTIVE" {
+			session.Status = "COMPLETED"
+		}
+	}
+
+	if session.EndTime != nil && !session.EndTime.IsZero() && session.EndTime.Before(session.StartTime) {
+		return nil, errors.New("وقت النهاية يجب أن يكون بعد وقت البداية")
+	}
+
 	if req.StartKM > 0 {
 		session.StartKM = req.StartKM
 	}
@@ -356,7 +376,7 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 	if session.EndKM >= session.StartKM {
 		session.Distance = session.EndKM - session.StartKM
 	}
-	if req.OrdersCount > 0 {
+	if req.OrdersCount >= 0 {
 		session.OrdersCount = req.OrdersCount
 	}
 	if req.FuelCost >= 0 {
