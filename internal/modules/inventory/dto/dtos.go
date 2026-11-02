@@ -41,6 +41,7 @@ type RemoveStockRequest struct {
 
 type DispenseOilRequest struct {
 	EmployeeID  *uuid.UUID `json:"employee_id"`
+	VehicleID   *uuid.UUID `json:"vehicle_id"`
 	PlateNumber string     `json:"plate_number"`
 	CurrentKM   float64    `json:"current_km"`
 	Quantity    int        `json:"quantity" binding:"required,gt=0"`

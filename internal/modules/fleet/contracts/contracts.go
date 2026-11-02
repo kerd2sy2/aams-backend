@@ -35,3 +35,8 @@ type IStorageContract interface {
 type IAuditContract interface {
 	LogAction(ctx context.Context, userName, action, details, ip string, branchID *uuid.UUID) error
 }
+
+// IInventoryContract for stock deduction on oil change
+type IInventoryContract interface {
+	DispenseOilForVehicle(ctx context.Context, plateNumber string, currentKM float64, branchID *uuid.UUID, adminName string) error
+}

@@ -22,7 +22,7 @@ type VehicleService interface {
 	GetByPlateNumber(ctx context.Context, plateNumber string) (*domain.Vehicle, error)
 	GetAll(ctx context.Context, filter dto.VehicleFilter) ([]dto.VehicleResponse, int64, error)
 	GetLatestKM(ctx context.Context, plateNumber string) (float64, error)
-	RecordOilChange(ctx context.Context, id uuid.UUID) error
+	RecordOilChange(ctx context.Context, id uuid.UUID, adminName string) error
 
 	// Contract implementations
 	GetVehicleByPlate(ctx context.Context, plateNumber string) (*contracts.VehicleSummaryDTO, error)
@@ -32,12 +32,17 @@ type VehicleService interface {
 }
 
 type vehicleService struct {
-	vehicleRepo    repository.VehicleRepository
-	storageService contracts.IStorageContract
+	vehicleRepo       repository.VehicleRepository
+	storageService    contracts.IStorageContract
+	inventoryContract contracts.IInventoryContract
 }
 
-func NewVehicleService(vehicleRepo repository.VehicleRepository, storageService contracts.IStorageContract) VehicleService {
-	return &vehicleService{vehicleRepo: vehicleRepo, storageService: storageService}
+func NewVehicleService(vehicleRepo repository.VehicleRepository, storageService contracts.IStorageContract, inventoryContract contracts.IInventoryContract) VehicleService {
+	return &vehicleService{
+		vehicleRepo:       vehicleRepo,
+		storageService:    storageService,
+		inventoryContract: inventoryContract,
+	}
 }
 
 func oilChangeInterval(vehicleType string) float64 {
@@ -262,11 +267,18 @@ func (s *vehicleService) GetLatestKM(ctx context.Context, plateNumber string) (f
 	return s.vehicleRepo.FindLatestVehicleKM(ctx, plateNumber)
 }
 
-func (s *vehicleService) RecordOilChange(ctx context.Context, id uuid.UUID) error {
+func (s *vehicleService) RecordOilChange(ctx context.Context, id uuid.UUID, adminName string) error {
 	vehicle, err := s.vehicleRepo.FindByID(ctx, id)
 	if err != nil {
 		return errors.New("المركبة غير موجودة")
 	}
+
+	if s.inventoryContract != nil {
+		if err := s.inventoryContract.DispenseOilForVehicle(ctx, vehicle.PlateNumber, vehicle.CurrentKM, vehicle.BranchID, adminName); err != nil {
+			return err
+		}
+	}
+
 	return s.vehicleRepo.RecordOilChange(ctx, id, vehicle.CurrentKM)
 }
 

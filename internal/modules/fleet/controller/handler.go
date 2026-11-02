@@ -262,11 +262,23 @@ func (h *VehicleHandler) RecordOilChange(c *gin.Context) {
 		return
 	}
 
-	if err := h.vehicleService.RecordOilChange(c.Request.Context(), id); err != nil {
+	adminName := c.GetString("admin_name")
+	if adminName == "" {
+		adminName = c.GetString("user_name")
+	}
+	if adminName == "" {
+		adminName = "المشرف"
+	}
+
+	if err := h.vehicleService.RecordOilChange(c.Request.Context(), id, adminName); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "تم تسجيل تغيير الزيت بنجاح"})
+	if h.auditService != nil {
+		_ = h.auditService.LogAction(c.Request.Context(), adminName, "تغيير زيت للمركبة", fmt.Sprintf("تم تسجيل تغيير زيت للمركبة %s وخصمه من المخزن", existingVehicle.Vehicle.PlateNumber), c.ClientIP(), existingVehicle.Vehicle.BranchID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "تم تسجيل تغيير الزيت وخصمه من المخزن بنجاح"})
 }
 

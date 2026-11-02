@@ -47,7 +47,7 @@ func (m *mockVehicleService) GetAll(ctx context.Context, filter dto.VehicleFilte
 func (m *mockVehicleService) GetLatestKM(ctx context.Context, plate string) (float64, error) {
 	return 0, nil
 }
-func (m *mockVehicleService) RecordOilChange(ctx context.Context, id uuid.UUID) error {
+func (m *mockVehicleService) RecordOilChange(ctx context.Context, id uuid.UUID, adminName string) error {
 	return nil
 }
 func (m *mockVehicleService) GetVehicleByPlate(ctx context.Context, plate string) (*contracts.VehicleSummaryDTO, error) {

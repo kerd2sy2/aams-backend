@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -29,6 +31,14 @@ type InventoryRepository interface {
 	FindPurchaseInvoiceByID(ctx context.Context, id uuid.UUID) (*domain.PurchaseInvoice, error)
 	DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error
 	UpdateVehicleOilKM(ctx context.Context, plateNumber string, currentKM float64) error
+	FindVehicleByPlateOrID(ctx context.Context, id *uuid.UUID, plateNumber string) (*VehicleInfo, error)
+}
+
+type VehicleInfo struct {
+	ID          uuid.UUID  `gorm:"column:id"`
+	PlateNumber string     `gorm:"column:plate_number"`
+	CurrentKM   float64    `gorm:"column:current_km"`
+	BranchID    *uuid.UUID `gorm:"column:branch_id"`
 }
 
 type gormInventoryRepository struct {
@@ -126,7 +136,7 @@ func (r *gormInventoryRepository) GetItemStock(ctx context.Context, itemID uuid.
 
 func (r *gormInventoryRepository) FindOilItemsWithStock(ctx context.Context, branchID *uuid.UUID) ([]domain.InventoryItem, error) {
 	var oilItems []domain.InventoryItem
-	if err := r.db.WithContext(ctx).Where("type = ?", "oil").Find(&oilItems).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("type = ? OR LOWER(type) = 'oil' OR name ILIKE ?", "oil", "%زيت%").Find(&oilItems).Error; err != nil {
 		return nil, err
 	}
 
@@ -222,13 +232,35 @@ func (r *gormInventoryRepository) DeletePurchaseInvoice(ctx context.Context, id 
 }
 
 func (r *gormInventoryRepository) UpdateVehicleOilKM(ctx context.Context, plateNumber string, currentKM float64) error {
-	if plateNumber == "" || currentKM <= 0 {
+	if plateNumber == "" {
 		return nil
 	}
+	now := time.Now()
 	updates := map[string]interface{}{
-		"current_km":         currentKM,
-		"last_oil_change_km": currentKM,
+		"last_oil_change_km":   currentKM,
+		"last_oil_change_date": &now,
+		"updated_at":           now,
+	}
+	if currentKM > 0 {
+		updates["current_km"] = currentKM
 	}
 	return r.db.WithContext(ctx).Table("vehicles").Where("plate_number = ? AND deleted_at IS NULL", plateNumber).Updates(updates).Error
+}
+
+func (r *gormInventoryRepository) FindVehicleByPlateOrID(ctx context.Context, id *uuid.UUID, plateNumber string) (*VehicleInfo, error) {
+	query := r.db.WithContext(ctx).Table("vehicles").Where("deleted_at IS NULL")
+	if id != nil && *id != uuid.Nil {
+		query = query.Where("id = ?", *id)
+	} else if plateNumber != "" {
+		query = query.Where("plate_number = ?", plateNumber)
+	} else {
+		return nil, errors.New("لا توجد بيانات للبحث عن الدباب")
+	}
+
+	var v VehicleInfo
+	if err := query.First(&v).Error; err != nil {
+		return nil, err
+	}
+	return &v, nil
 }
 

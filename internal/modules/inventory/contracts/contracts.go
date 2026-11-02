@@ -20,4 +20,5 @@ type IInventoryStockContract interface {
 	CheckStockAvailability(ctx context.Context, itemID uuid.UUID, requiredQty int) (bool, error)
 	DeductStock(ctx context.Context, itemID uuid.UUID, qty int, employeeID *uuid.UUID, branchID *uuid.UUID, notes string) error
 	GetItemByBarcode(ctx context.Context, barcode string) (*StockItemSummaryDTO, error)
+	DispenseOilForVehicle(ctx context.Context, plateNumber string, currentKM float64, branchID *uuid.UUID, adminName string) error
 }

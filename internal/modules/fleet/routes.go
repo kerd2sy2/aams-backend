@@ -20,9 +20,9 @@ type Module struct {
 }
 
 // NewModule initializes the Fleet module with clean dependency injection
-func NewModule(db *gorm.DB, storage contracts.IStorageContract, audit contracts.IAuditContract) *Module {
+func NewModule(db *gorm.DB, storage contracts.IStorageContract, audit contracts.IAuditContract, inv contracts.IInventoryContract) *Module {
 	repo := repository.NewVehicleRepository(db)
-	svc := service.NewVehicleService(repo, storage)
+	svc := service.NewVehicleService(repo, storage, inv)
 	h := controller.NewVehicleHandler(svc, audit)
 	return &Module{
 		Handler:  h,

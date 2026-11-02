@@ -8,6 +8,7 @@ import (
 
 	"delivery-backend/internal/modules/inventory/domain"
 	"delivery-backend/internal/modules/inventory/dto"
+	"delivery-backend/internal/modules/inventory/repository"
 	"delivery-backend/internal/modules/inventory/service"
 )
 
@@ -116,6 +117,9 @@ func (m *mockInventoryRepo) DeletePurchaseInvoice(ctx context.Context, id uuid.U
 }
 func (m *mockInventoryRepo) UpdateVehicleOilKM(ctx context.Context, plateNumber string, currentKM float64) error {
 	return nil
+}
+func (m *mockInventoryRepo) FindVehicleByPlateOrID(ctx context.Context, id *uuid.UUID, plateNumber string) (*repository.VehicleInfo, error) {
+	return nil, nil
 }
 
 

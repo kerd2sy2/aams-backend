@@ -106,7 +106,7 @@ func (m *mockVehicleRepo) FindLatestVehicleKM(ctx context.Context, plate string)
 
 func TestVehicleService_CreateAndGet(t *testing.T) {
 	repo := newMockVehicleRepo()
-	svc := service.NewVehicleService(repo, nil)
+	svc := service.NewVehicleService(repo, nil, nil)
 
 	req := dto.CreateVehicleRequest{
 		PlateNumber:     "7572-ABC",
@@ -142,7 +142,7 @@ func TestVehicleService_CreateAndGet(t *testing.T) {
 
 func TestVehicleService_OilChangeEligibility(t *testing.T) {
 	repo := newMockVehicleRepo()
-	svc := service.NewVehicleService(repo, nil)
+	svc := service.NewVehicleService(repo, nil, nil)
 
 	req := dto.CreateVehicleRequest{
 		PlateNumber:     "9999-XYZ",

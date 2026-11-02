@@ -59,7 +59,7 @@ func (m *branchIsolationMockVehicleService) Create(ctx context.Context, req dto.
 	}, nil
 }
 
-func (m *branchIsolationMockVehicleService) RecordOilChange(ctx context.Context, id uuid.UUID) error {
+func (m *branchIsolationMockVehicleService) RecordOilChange(ctx context.Context, id uuid.UUID, adminName string) error {
 	m.oilChangeDone = true
 	return nil
 }

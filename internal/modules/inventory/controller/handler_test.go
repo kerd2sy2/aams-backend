@@ -93,6 +93,10 @@ func (m *mockInventoryService) DispenseOil(ctx context.Context, req dto.Dispense
 	return nil, nil
 }
 
+func (m *mockInventoryService) DispenseOilForVehicle(ctx context.Context, plateNumber string, currentKM float64, branchID *uuid.UUID, adminName string) error {
+	return nil
+}
+
 func (m *mockInventoryService) CheckStockAvailability(ctx context.Context, itemID uuid.UUID, requiredQty int) (bool, error) {
 	return true, nil
 }
