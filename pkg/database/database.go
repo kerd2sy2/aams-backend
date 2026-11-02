@@ -1,9 +1,12 @@
 package database
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"delivery-backend/internal/domain"
@@ -36,8 +39,8 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	}
 	sqlDB.SetMaxOpenConns(80)
 	sqlDB.SetMaxIdleConns(30)
-	sqlDB.SetConnMaxLifetime(30 * time.Minute)
-	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+	sqlDB.SetConnMaxLifetime(60 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(30 * time.Minute)
 
 	log.Printf("[PostgreSQL] Connected to database %q on %s:%s", cfg.DBName, cfg.DBHost, cfg.DBPort)
 
@@ -242,6 +245,9 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	seedAppSettings(db)
 	// seedTargetAccounts(db) - disabled to keep only requested primary admin
 	seedTargetSettings(db)
+
+	// Clean any legacy Base64 stored in work_sessions to disk files in background
+	go sanitizeWorkSessionLegacyImages(db)
 
 	return db, nil
 }
@@ -516,5 +522,87 @@ func seedTargetSettings(db *gorm.DB) {
 				log.Printf("[SEED SUCCESS] Target Setting created: %s = %s", s.SettingKey, s.SettingValue)
 			}
 		}
+	}
+}
+
+// sanitizeWorkSessionLegacyImages converts any large base64 image strings stored in work_sessions
+// into local static files on disk (/uploads/...) to keep the database lightweight and fast.
+func sanitizeWorkSessionLegacyImages(db *gorm.DB) {
+	_ = os.MkdirAll("uploads/plates", 0755)
+	_ = os.MkdirAll("uploads/odometer", 0755)
+
+	type legacySession struct {
+		ID              uuid.UUID `gorm:"column:id"`
+		StartKMImage    string    `gorm:"column:start_km_image"`
+		StartPlateImage string    `gorm:"column:start_plate_image"`
+		EndKMImage      string    `gorm:"column:end_km_image"`
+	}
+
+	var rows []legacySession
+	err := db.Table("work_sessions").
+		Where("start_plate_image LIKE 'data:image%' OR start_km_image LIKE 'data:image%' OR end_km_image LIKE 'data:image%'").
+		Limit(250).
+		Find(&rows).Error
+	if err != nil || len(rows) == 0 {
+		return
+	}
+
+	saveB64ToFile := func(b64, category string) string {
+		if !strings.HasPrefix(b64, "data:image") {
+			return b64
+		}
+		idx := strings.Index(b64, ",")
+		if idx == -1 {
+			return b64
+		}
+		prefix := b64[:idx]
+		ext := ".jpg"
+		if strings.Contains(prefix, "png") {
+			ext = ".png"
+		} else if strings.Contains(prefix, "webp") {
+			ext = ".webp"
+		}
+		raw := b64[idx+1:]
+		data, decErr := base64.StdEncoding.DecodeString(raw)
+		if decErr != nil {
+			return b64
+		}
+		filename := fmt.Sprintf("%s_%d%s", category, time.Now().UnixNano(), ext)
+		dstPath := filepath.Join("uploads", category, filename)
+		if writeErr := os.WriteFile(dstPath, data, 0644); writeErr == nil {
+			return fmt.Sprintf("/uploads/%s/%s", category, filename)
+		}
+		return b64
+	}
+
+	cleanedCount := 0
+	for _, r := range rows {
+		updates := make(map[string]interface{})
+		if strings.HasPrefix(r.StartPlateImage, "data:image") {
+			newPath := saveB64ToFile(r.StartPlateImage, "plates")
+			if newPath != r.StartPlateImage {
+				updates["start_plate_image"] = newPath
+			}
+		}
+		if strings.HasPrefix(r.StartKMImage, "data:image") {
+			newPath := saveB64ToFile(r.StartKMImage, "odometer")
+			if newPath != r.StartKMImage {
+				updates["start_km_image"] = newPath
+			}
+		}
+		if strings.HasPrefix(r.EndKMImage, "data:image") {
+			newPath := saveB64ToFile(r.EndKMImage, "odometer")
+			if newPath != r.EndKMImage {
+				updates["end_km_image"] = newPath
+			}
+		}
+		if len(updates) > 0 {
+			if updateErr := db.Table("work_sessions").Where("id = ?", r.ID).Updates(updates).Error; updateErr == nil {
+				cleanedCount++
+			}
+		}
+	}
+	if cleanedCount > 0 {
+		log.Printf("[Sanitize] Cleaned %d work_sessions with legacy base64 images into disk files", cleanedCount)
 	}
 }

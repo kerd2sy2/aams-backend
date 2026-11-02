@@ -39,6 +39,7 @@ var allowedCategories = map[string]bool{
 	"logo":          true,
 	"investigation": true,
 	"odometer":      true,
+	"plates":         true,
 	"registration":  true,
 	"broadcast":     true,
 	"notification":  true,
@@ -61,6 +62,7 @@ func NewStorageService(cfg *config.Config) StorageService {
 	_ = os.MkdirAll("uploads/logo", 0755)
 	_ = os.MkdirAll("uploads/investigation", 0755)
 	_ = os.MkdirAll("uploads/odometer", 0755)
+	_ = os.MkdirAll("uploads/plates", 0755)
 	_ = os.MkdirAll("uploads/registration", 0755)
 	_ = os.MkdirAll("uploads/broadcast", 0755)
 	_ = os.MkdirAll("uploads/notification", 0755)
