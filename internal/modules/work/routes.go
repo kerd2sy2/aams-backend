@@ -544,10 +544,28 @@ func (a *gormEmployeeAdapter) SendShiftEndedNotificationToSupervisor(ctx context
 			bikeNum = strings.TrimSpace(emp.MotorcycleNumber)
 		}
 
+		// Look up key number: first from employee, then from assigned vehicle
+		keyNum := strings.TrimSpace(emp.KeyNumber)
+		if keyNum == "" && bikeNum != "" {
+			var v struct {
+				KeyNumber string `gorm:"column:key_number"`
+			}
+			cleanBike := strings.ReplaceAll(bikeNum, " ", "")
+			if err := a.db.WithContext(bgCtx).Table("vehicles").
+				Where("(plate_number = ? OR REPLACE(plate_number, ' ', '') = ?) AND deleted_at IS NULL", bikeNum, cleanBike).
+				First(&v).Error; err == nil {
+				keyNum = strings.TrimSpace(v.KeyNumber)
+			}
+		}
+
 		title := "إنهاء وردية مندوب"
-		body := fmt.Sprintf("أنهى المندوب %s الشفت (الطلبات: %d، المسافة: %.1f كم) وبانتظار الاعتماد", empName, sessionCopy.OrdersCount, sessionCopy.Distance)
-		if bikeNum != "" {
-			body = fmt.Sprintf("أنهى المندوب %s شفت الدباب (%s) - الطلبات: %d، المسافة: %.1f كم", empName, bikeNum, sessionCopy.OrdersCount, sessionCopy.Distance)
+		var body string
+		if keyNum != "" {
+			body = fmt.Sprintf("أنهى المندوب %s - مفتاح رقم %s", empName, keyNum)
+		} else if bikeNum != "" {
+			body = fmt.Sprintf("أنهى المندوب %s - دباب رقم %s", empName, bikeNum)
+		} else {
+			body = fmt.Sprintf("أنهى المندوب %s الشفت وبانتظار الاعتماد", empName)
 		}
 
 		var tokens []string
@@ -631,6 +649,9 @@ func (a *gormEmployeeAdapter) SendShiftEndedNotificationToSupervisor(ctx context
 				"type":         "SHIFT_COMPLETED_PENDING_REVIEW",
 				"employee_id":  empID.String(),
 				"employeeName": empName,
+				"keyNumber":    keyNum,
+				"key_number":   keyNum,
+				"bikeNumber":   bikeNum,
 				"sessionId":    sid,
 				"session_id":   sid,
 				"ordersCount":  fmt.Sprintf("%d", sessionCopy.OrdersCount),

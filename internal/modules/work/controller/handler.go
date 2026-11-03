@@ -29,14 +29,9 @@ func NewWorkHandler(svc service.WorkService, audit ...contracts.IAuditContract) 
 }
 
 func getAdminInfo(c *gin.Context) (*uuid.UUID, string) {
-	// If the authenticated user is an employee / courier, they are NOT an admin or supervisor
-	if isEmp, exists := c.Get("is_employee"); exists {
-		if b, ok := isEmp.(bool); ok && b {
-			return nil, ""
-		}
-	}
 	role := strings.ToUpper(c.GetString("admin_role"))
-	if role == "DRIVER" || role == "EMPLOYEE" {
+	// Drivers and regular couriers without supervisor/admin roles cannot act as supervisor
+	if role == "DRIVER" || role == "EMPLOYEE" || role == "" {
 		return nil, ""
 	}
 
@@ -44,6 +39,13 @@ func getAdminInfo(c *gin.Context) (*uuid.UUID, string) {
 	if idVal, exists := c.Get("admin_id"); exists && idVal != nil {
 		if id, ok := idVal.(uuid.UUID); ok && id != uuid.Nil {
 			adminID = &id
+		}
+	}
+	if adminID == nil {
+		if idVal, exists := c.Get("employee_id"); exists && idVal != nil {
+			if id, ok := idVal.(uuid.UUID); ok && id != uuid.Nil {
+				adminID = &id
+			}
 		}
 	}
 	adminName := c.GetString("admin_name")
@@ -169,13 +171,17 @@ func (h *WorkHandler) GetSessionByID(c *gin.Context) {
 		return
 	}
 
-	// Strict IDOR Check: If caller is an employee/courier, verify ownership
-	if isEmp, _ := c.Get("is_employee"); isEmp == true {
-		if authEmpID, exists := c.Get("employee_id"); exists {
-			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
-				if session.EmployeeID == nil || *session.EmployeeID != aUUID {
-					c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: لا يمكنك عرض تفاصيل شفت موظف آخر"})
-					return
+	// Strict IDOR Check: If caller is a regular employee/courier (and NOT a supervisor/admin), verify ownership
+	role := strings.ToUpper(c.GetString("admin_role"))
+	isSupervisorOrAdmin := role == "SUPERVISOR" || role == "ADMIN" || role == "SUPER_ADMIN" || role == "OWNER" || role == "GENERAL_MANAGER" || role == "OPERATIONS_MANAGER"
+	if !isSupervisorOrAdmin {
+		if isEmp, _ := c.Get("is_employee"); isEmp == true {
+			if authEmpID, exists := c.Get("employee_id"); exists {
+				if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
+					if session.EmployeeID == nil || *session.EmployeeID != aUUID {
+						c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: لا يمكنك عرض تفاصيل شفت موظف آخر"})
+						return
+					}
 				}
 			}
 		}
