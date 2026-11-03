@@ -111,7 +111,12 @@ func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context,
 	cleanSupervisor := strings.TrimSpace(supervisorName)
 	supervisorLabel := "المشرف"
 	if cleanSupervisor != "" {
-		supervisorLabel = cleanSupervisor
+		parts := strings.Fields(cleanSupervisor)
+		if len(parts) >= 2 {
+			supervisorLabel = parts[0] + " " + parts[1]
+		} else {
+			supervisorLabel = parts[0]
+		}
 	}
 
 	fuelFormatted := fmt.Sprintf("%.2f ريال", fuelCost)
@@ -209,13 +214,13 @@ func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context,
 	} else {
 		switch {
 		case lang == "en":
-			oilInfo = fmt.Sprintf("Remaining for oil change: %d km (drive %d km before next oil change)", remainingInt, remainingInt)
+			oilInfo = fmt.Sprintf("Remaining for oil change: %d km", remainingInt)
 		case lang == "bn" || lang == "bengali" || lang == "bd":
-			oilInfo = fmt.Sprintf("তেল পরিবর্তনের বাকি: %d কিমি (আর %d কিমি চালিয়ে তেল পরিবর্তন করুন)", remainingInt, remainingInt)
+			oilInfo = fmt.Sprintf("তেল পরিবর্তনের বাকি: %d কিমি", remainingInt)
 		case lang == "ur" || lang == "urdu" || lang == "pk":
-			oilInfo = fmt.Sprintf("آئل تبدیلی میں باقی: %d کلومیٹر (مزید %d کلومیٹر چلا کر آئل تبدیل کریں)", remainingInt, remainingInt)
+			oilInfo = fmt.Sprintf("آئل تبدیلی میں باقی: %d کلومیٹر", remainingInt)
 		default:
-			oilInfo = fmt.Sprintf("باقي على غيار الزيت: %d كم (المفروض تمشي %d كم وتغير زيت)", remainingInt, remainingInt)
+			oilInfo = fmt.Sprintf("باقي على غيار الزيت: %d كم", remainingInt)
 		}
 	}
 
