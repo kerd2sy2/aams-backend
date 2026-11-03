@@ -40,10 +40,30 @@ func (r *gormEmployeeRepository) Create(ctx context.Context, emp *domain.Employe
 	if emp.ID == uuid.Nil {
 		emp.ID = uuid.New()
 	}
+	if emp.MotorcycleNumber != "" {
+		cleanPlate := strings.TrimSpace(emp.MotorcycleNumber)
+		var vehKey string
+		if err := r.db.WithContext(ctx).Table("vehicles").
+			Select("key_number").
+			Where("TRIM(plate_number) = ? AND deleted_at IS NULL", cleanPlate).
+			Scan(&vehKey).Error; err == nil && vehKey != "" {
+			emp.KeyNumber = vehKey
+		}
+	}
 	return r.db.WithContext(ctx).Create(emp).Error
 }
 
 func (r *gormEmployeeRepository) Update(ctx context.Context, emp *domain.Employee) error {
+	if emp.MotorcycleNumber != "" {
+		cleanPlate := strings.TrimSpace(emp.MotorcycleNumber)
+		var vehKey string
+		if err := r.db.WithContext(ctx).Table("vehicles").
+			Select("key_number").
+			Where("TRIM(plate_number) = ? AND deleted_at IS NULL", cleanPlate).
+			Scan(&vehKey).Error; err == nil && vehKey != "" {
+			emp.KeyNumber = vehKey
+		}
+	}
 	return r.db.WithContext(ctx).Save(emp).Error
 }
 

@@ -38,11 +38,33 @@ func NewVehicleRepository(db *gorm.DB) VehicleRepository {
 }
 
 func (r *gormVehicleRepository) Create(ctx context.Context, vehicle *domain.Vehicle) error {
-	return r.db.WithContext(ctx).Create(vehicle).Error
+	if vehicle.BranchID == nil {
+		defaultBranch := uuid.MustParse("0b52c83c-4a37-4950-8040-fcb00fa718b3")
+		vehicle.BranchID = &defaultBranch
+	}
+	if err := r.db.WithContext(ctx).Create(vehicle).Error; err != nil {
+		return err
+	}
+	cleanPlate := strings.TrimSpace(vehicle.PlateNumber)
+	if cleanPlate != "" && strings.TrimSpace(vehicle.KeyNumber) != "" {
+		_ = r.db.WithContext(ctx).Table("employees").
+			Where("TRIM(motorcycle_number) = ? AND deleted_at IS NULL", cleanPlate).
+			Update("key_number", strings.TrimSpace(vehicle.KeyNumber)).Error
+	}
+	return nil
 }
 
 func (r *gormVehicleRepository) Update(ctx context.Context, vehicle *domain.Vehicle) error {
-	return r.db.WithContext(ctx).Save(vehicle).Error
+	if err := r.db.WithContext(ctx).Save(vehicle).Error; err != nil {
+		return err
+	}
+	cleanPlate := strings.TrimSpace(vehicle.PlateNumber)
+	if cleanPlate != "" && strings.TrimSpace(vehicle.KeyNumber) != "" {
+		_ = r.db.WithContext(ctx).Table("employees").
+			Where("TRIM(motorcycle_number) = ? AND deleted_at IS NULL", cleanPlate).
+			Update("key_number", strings.TrimSpace(vehicle.KeyNumber)).Error
+	}
+	return nil
 }
 
 func (r *gormVehicleRepository) Delete(ctx context.Context, id uuid.UUID) error {
@@ -145,7 +167,7 @@ func (r *gormVehicleRepository) FindAll(ctx context.Context, filter dto.VehicleF
 	}
 	offset := (page - 1) * limit
 
-	err := query.Order("plate_number ASC").Offset(offset).Limit(limit).Find(&vehicles).Error
+	err := query.Order("NULLIF(regexp_replace(key_number, '\\D', '', 'g'), '')::numeric ASC NULLS LAST, key_number ASC, plate_number ASC").Offset(offset).Limit(limit).Find(&vehicles).Error
 	if err != nil {
 		return nil, 0, err
 	}
