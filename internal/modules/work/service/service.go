@@ -406,6 +406,15 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 	session.ReviewNotes = req.ReviewNotes
 	session.ReviewedBy = reviewerID
 
+	// If session is approved/reviewed by supervisor, ensure it is marked COMPLETED if it was ACTIVE
+	if req.IsReviewed && (session.Status == "ACTIVE" || session.EndTime == nil) {
+		session.Status = "COMPLETED"
+		if session.EndTime == nil {
+			now := time.Now()
+			session.EndTime = &now
+		}
+	}
+
 	if req.OrdersCount != nil {
 		if session.OriginalOrdersCount == 0 && session.OrdersCount > 0 {
 			session.OriginalOrdersCount = session.OrdersCount
@@ -452,7 +461,7 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 		if s.empProvider != nil {
 			_ = s.empProvider.UpdateEmployeeOnEndWork(ctx, *session.EmployeeID, session.Distance, session.OrdersCount)
 		}
-		if s.vehicleProvider != nil && session.MotorcycleNumber != "" && session.EndKM > 0 {
+		if s.vehicleProvider != nil && session.MotorcycleNumber != "" {
 			_ = s.vehicleProvider.UpdateVehicleKM(ctx, session.MotorcycleNumber, session.EndKM)
 		}
 		if s.empProvider != nil {
