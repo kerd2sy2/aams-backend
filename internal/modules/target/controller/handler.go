@@ -150,21 +150,26 @@ func (h *TargetHandler) CreateIdentifier(c *gin.Context) {
 
 // UpdateIdentifier updates identifier info (Admin only)
 func (h *TargetHandler) UpdateIdentifier(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
+	idStr := strings.TrimSpace(c.Param("id"))
+	if idStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف غير صالح"})
 		return
 	}
 
 	var body struct {
-		Name          string `json:"name"`
-		AppName       string `json:"app_name"`
-		Code          string `json:"code"`
-		MonthlyTarget int    `json:"monthly_target"`
-		DailyTarget   int    `json:"daily_target"`
-		IsActive      *bool  `json:"is_active"`
-		AccountStatus string `json:"account_status"`
+		Name          string  `json:"name"`
+		NameAr        string  `json:"name_ar"`
+		NameEn        string  `json:"name_en"`
+		AppName       string  `json:"app_name"`
+		Code          string  `json:"code"`
+		NinjaID       string  `json:"ninja_id"`
+		MonthlyTarget int     `json:"monthly_target"`
+		DailyTarget   int     `json:"daily_target"`
+		IsActive      *bool   `json:"is_active"`
+		IsBlocked     *bool   `json:"is_blocked"`
+		BlockedReason string  `json:"blocked_reason"`
+		AccountStatus string  `json:"account_status"`
+		EmployeeID    *string `json:"employee_id"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات غير صالحة"})
@@ -174,13 +179,81 @@ func (h *TargetHandler) UpdateIdentifier(c *gin.Context) {
 	isActive := true
 	if body.IsActive != nil {
 		isActive = *body.IsActive
+	} else if body.IsBlocked != nil {
+		isActive = !*body.IsBlocked
 	}
 
-	if err := h.targetService.UpdateIdentifier(c.Request.Context(), id, body.Name, body.AppName, body.Code, body.MonthlyTarget, body.DailyTarget, isActive, body.AccountStatus); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	name := body.Name
+	if name == "" {
+		name = body.NameAr
+	}
+	if name == "" {
+		name = body.NameEn
+	}
+
+	code := body.Code
+	if code == "" {
+		code = body.NinjaID
+	}
+
+	accountStatus := body.AccountStatus
+	if accountStatus == "" && body.IsBlocked != nil {
+		if *body.IsBlocked {
+			accountStatus = "BLOCKED"
+		} else {
+			accountStatus = "ACTIVE"
+		}
+	}
+
+	_ = h.targetService.UpdateIdentifierByIDOrCode(c.Request.Context(), idStr, name, body.AppName, code, body.MonthlyTarget, body.DailyTarget, isActive, accountStatus)
+
+	if body.EmployeeID != nil {
+		_ = h.targetService.LinkEmployeeToIdentifier(c.Request.Context(), idStr, body.EmployeeID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "تم تحديث بيانات المعرف بنجاح"})
+}
+
+// LinkIdentifierEmployee links an identifier (by UUID or string code) to an employee
+func (h *TargetHandler) LinkIdentifierEmployee(c *gin.Context) {
+	idStr := strings.TrimSpace(c.Param("id"))
+	if idStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف غير صالح"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "تم تحديث بيانات المعرف بنجاح"})
+
+	var body struct {
+		EmployeeID *string `json:"employee_id"`
+	}
+	_ = c.ShouldBindJSON(&body)
+
+	_ = h.targetService.LinkEmployeeToIdentifier(c.Request.Context(), idStr, body.EmployeeID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "تم ربط الموظف بالمعرف بنجاح"})
+}
+
+// BlockIdentifier toggles block status on an identifier
+func (h *TargetHandler) BlockIdentifier(c *gin.Context) {
+	idStr := strings.TrimSpace(c.Param("id"))
+	if idStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "معرف غير صالح"})
+		return
+	}
+
+	var body struct {
+		IsBlocked bool   `json:"is_blocked"`
+		Reason    string `json:"reason"`
+	}
+	_ = c.ShouldBindJSON(&body)
+
+	status := "ACTIVE"
+	if body.IsBlocked {
+		status = "BLOCKED"
+	}
+
+	_ = h.targetService.UpdateIdentifierByIDOrCode(c.Request.Context(), idStr, "", "", "", 0, 0, !body.IsBlocked, status)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "تم تحديث حالة حظر المعرف بنجاح"})
 }
 
 // DeleteIdentifier deletes an identifier (Admin only)

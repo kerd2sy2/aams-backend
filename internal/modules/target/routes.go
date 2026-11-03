@@ -43,6 +43,9 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 		targetRoutes.PATCH("/alerts/:id/resolve", m.Handler.ResolveAlert)
 		targetRoutes.GET("/settings", m.Handler.GetTargetSettings)
 		targetRoutes.GET("/batches", m.Handler.ListImportBatches)
+		targetRoutes.PATCH("/identifiers/:id/link-employee", m.Handler.LinkIdentifierEmployee)
+		targetRoutes.PUT("/identifiers/:id", m.Handler.UpdateIdentifier)
+		targetRoutes.PATCH("/identifiers/:id/block", m.Handler.BlockIdentifier)
 
 		// Admin-only management routes
 		adminTarget := targetRoutes.Group("")
@@ -54,6 +57,8 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 			adminTarget.DELETE("/batches/date/:orderDate", m.Handler.DeleteSheetByDate)
 			adminTarget.POST("/identifiers", m.Handler.CreateIdentifier)
 			adminTarget.PUT("/identifiers/:id", m.Handler.UpdateIdentifier)
+			adminTarget.PATCH("/identifiers/:id/link-employee", m.Handler.LinkIdentifierEmployee)
+			adminTarget.PATCH("/identifiers/:id/block", m.Handler.BlockIdentifier)
 			adminTarget.DELETE("/identifiers", m.Handler.DeleteAllIdentifiers)
 			adminTarget.DELETE("/identifiers/wipe-all", m.Handler.DeleteAllIdentifiers)
 			adminTarget.DELETE("/identifiers/:id", m.Handler.DeleteIdentifier)

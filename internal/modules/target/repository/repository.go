@@ -20,6 +20,8 @@ type TargetRepository interface {
 	ListIdentifiers(ctx context.Context, search string, isActive *bool) ([]domain.Identifier, error)
 	CreateIdentifier(ctx context.Context, ident *domain.Identifier) error
 	UpdateIdentifier(ctx context.Context, ident *domain.Identifier) error
+	FindIdentifierByIDOrCode(ctx context.Context, idOrCode string) (*domain.Identifier, error)
+	LinkEmployeeToIdentifierCode(ctx context.Context, idOrCode string, employeeID *string) error
 	DeleteIdentifier(ctx context.Context, id uuid.UUID) error
 	DeleteAllIdentifiers(ctx context.Context) error
 
@@ -121,6 +123,87 @@ func (r *gormTargetRepository) FindOrCreateIdentifier(ctx context.Context, name,
 		return r.FindIdentifierByNameAndApp(ctx, name, appName)
 	}
 	return &newIdent, nil
+}
+
+func (r *gormTargetRepository) FindIdentifierByIDOrCode(ctx context.Context, idOrCode string) (*domain.Identifier, error) {
+	clean := strings.TrimSpace(idOrCode)
+	if clean == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var ident domain.Identifier
+	if parsed, err := uuid.Parse(clean); err == nil {
+		if err := r.db.WithContext(ctx).Preload("Drivers").First(&ident, "id = ?", parsed).Error; err == nil {
+			return &ident, nil
+		}
+	}
+
+	stripped := strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(clean), "ninja_"), "keeta_")
+	err := r.db.WithContext(ctx).Preload("Drivers").
+		Where("LOWER(TRIM(code)) = ? OR LOWER(TRIM(code)) = ? OR LOWER(TRIM(name)) = ? OR LOWER(TRIM(name)) = ?", strings.ToLower(clean), stripped, strings.ToLower(clean), stripped).
+		First(&ident).Error
+	if err == nil {
+		return &ident, nil
+	}
+
+	appName := "NINJA"
+	if strings.Contains(strings.ToLower(clean), "keeta") {
+		appName = "KEETA"
+	}
+	newIdent := domain.Identifier{
+		ID:            uuid.New(),
+		Name:          clean,
+		AppName:       appName,
+		Code:          stripped,
+		MonthlyTarget: 460,
+		DailyTarget:   18,
+		IsActive:      true,
+		AccountStatus: "ACTIVE",
+	}
+	if err := r.db.WithContext(ctx).Create(&newIdent).Error; err != nil {
+		return nil, err
+	}
+	return &newIdent, nil
+}
+
+func (r *gormTargetRepository) LinkEmployeeToIdentifierCode(ctx context.Context, idOrCode string, employeeID *string) error {
+	ident, err := r.FindIdentifierByIDOrCode(ctx, idOrCode)
+	if err != nil || ident == nil {
+		return err
+	}
+
+	if employeeID == nil || strings.TrimSpace(*employeeID) == "" {
+		return nil
+	}
+
+	empUUID, err := uuid.Parse(strings.TrimSpace(*employeeID))
+	if err != nil {
+		return nil
+	}
+
+	codeToSet := ident.Code
+	if codeToSet == "" {
+		codeToSet = ident.Name
+	}
+	_ = r.db.WithContext(ctx).Table("employees").
+		Where("id = ? AND deleted_at IS NULL", empUUID).
+		Updates(map[string]interface{}{
+			"application_id":   codeToSet,
+			"application_type": ident.AppName,
+		}).Error
+
+	var emp struct {
+		Name string `gorm:"column:name"`
+	}
+	if err := r.db.WithContext(ctx).Table("employees").Select("name").Where("id = ?", empUUID).Scan(&emp).Error; err == nil && emp.Name != "" {
+		driver, _ := r.FindOrCreateDriver(ctx, emp.Name)
+		if driver != nil {
+			driver.EmployeeID = &empUUID
+			_ = r.db.WithContext(ctx).Save(driver).Error
+			_ = r.LinkDriverToIdentifier(ctx, ident.ID, driver.ID, time.Now().Format("2006-01-02"))
+		}
+	}
+
+	return nil
 }
 
 func (r *gormTargetRepository) ListIdentifiers(ctx context.Context, search string, isActive *bool) ([]domain.Identifier, error) {

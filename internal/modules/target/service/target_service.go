@@ -24,6 +24,8 @@ type TargetService interface {
 	GetIdentifierDetails(ctx context.Context, id uuid.UUID, month string) (*dto.IdentifierDetailsDTO, error)
 	CreateIdentifier(ctx context.Context, name, appName, code string, monthlyTarget, dailyTarget int) (*domain.Identifier, error)
 	UpdateIdentifier(ctx context.Context, id uuid.UUID, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool, accountStatus string) error
+	UpdateIdentifierByIDOrCode(ctx context.Context, idOrCode, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool, accountStatus string) error
+	LinkEmployeeToIdentifier(ctx context.Context, idOrCode string, employeeID *string) error
 	DeleteIdentifier(ctx context.Context, id uuid.UUID) error
 	DeleteAllIdentifiers(ctx context.Context) error
 
@@ -630,6 +632,42 @@ func (s *targetService) UpdateIdentifier(ctx context.Context, id uuid.UUID, name
 	}
 
 	return s.targetRepo.UpdateIdentifier(ctx, ident)
+}
+
+func (s *targetService) UpdateIdentifierByIDOrCode(ctx context.Context, idOrCode, name, appName, code string, monthlyTarget, dailyTarget int, isActive bool, accountStatus string) error {
+	ident, err := s.targetRepo.FindIdentifierByIDOrCode(ctx, idOrCode)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(name) != "" {
+		ident.Name = strings.TrimSpace(name)
+	}
+	if strings.TrimSpace(appName) != "" {
+		ident.AppName = strings.TrimSpace(appName)
+	}
+	if strings.TrimSpace(code) != "" {
+		ident.Code = strings.TrimSpace(code)
+	}
+	if monthlyTarget > 0 {
+		ident.MonthlyTarget = monthlyTarget
+	}
+	if dailyTarget > 0 {
+		ident.DailyTarget = dailyTarget
+	}
+
+	accountStatus = strings.TrimSpace(accountStatus)
+	if accountStatus != "" {
+		ident.AccountStatus = accountStatus
+		ident.IsActive = (accountStatus == "ACTIVE")
+	} else {
+		ident.IsActive = isActive
+	}
+
+	return s.targetRepo.UpdateIdentifier(ctx, ident)
+}
+
+func (s *targetService) LinkEmployeeToIdentifier(ctx context.Context, idOrCode string, employeeID *string) error {
+	return s.targetRepo.LinkEmployeeToIdentifierCode(ctx, idOrCode, employeeID)
 }
 
 func (s *targetService) DeleteIdentifier(ctx context.Context, id uuid.UUID) error {

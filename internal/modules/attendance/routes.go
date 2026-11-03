@@ -39,7 +39,7 @@ func (f *gormEmployeeFinder) FindAllEmployees(ctx context.Context, branchID *uui
 	q := f.db.WithContext(ctx).Table("employees").
 		Select("employees.id, employees.name, employees.national_id, employees.branch_id, employees.vehicle_type, branches.name as branch_name").
 		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
-		Where("employees.deleted_at IS NULL AND employees.status = ?", "active")
+		Where("employees.deleted_at IS NULL")
 
 	if branchID != nil && *branchID != uuid.Nil {
 		q = q.Where("employees.branch_id = ?", *branchID)
