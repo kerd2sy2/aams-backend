@@ -1183,7 +1183,7 @@ func (s *adminService) PromoteEmployee(ctx context.Context, req dto.PromoteEmplo
 		return nil, err
 	}
 
-	email := fmt.Sprintf("emp_%s@aams.local", req.EmployeeID.String()[:8])
+	email := fmt.Sprintf("emp_%s@aams-logistic.com", req.EmployeeID.String()[:8])
 	username := targetPhone
 	if username == "" {
 		username = empNumber
