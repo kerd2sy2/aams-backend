@@ -358,6 +358,8 @@ func (v *gormVehicleAdapter) EnsureVehicleExists(ctx context.Context, plateNumbe
 		if startKM > 0 && existing.CurrentKM == 0 {
 			_ = v.UpdateVehicleKM(ctx, clean, startKM)
 		}
+		_ = v.db.WithContext(ctx).Table("vehicles").Where("id = ?", existing.ID).Update("status", "IN_USE").Error
+		existing.Status = "IN_USE"
 		return existing, nil
 	}
 

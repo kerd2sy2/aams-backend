@@ -319,7 +319,7 @@ func (s *workService) EndWork(ctx context.Context, req dto.EndWorkRequest, revie
 				return err
 			}
 		}
-		if session.IsReviewed && s.vehicleProvider != nil && session.MotorcycleNumber != "" && req.EndKM > 0 {
+		if s.vehicleProvider != nil && session.MotorcycleNumber != "" {
 			_ = s.vehicleProvider.UpdateVehicleKM(ctx, session.MotorcycleNumber, req.EndKM)
 		}
 		return nil

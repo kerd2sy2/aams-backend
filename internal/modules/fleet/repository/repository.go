@@ -172,6 +172,23 @@ func (r *gormVehicleRepository) FindAll(ctx context.Context, filter dto.VehicleF
 		return nil, 0, err
 	}
 
+	// Dynamic check: any vehicle with an active work session should reflect IN_USE
+	var activePlates []string
+	if errPlates := r.db.WithContext(ctx).Table("work_sessions").
+		Where("status = 'ACTIVE' AND motorcycle_number IS NOT NULL AND TRIM(motorcycle_number) != ''").
+		Pluck("TRIM(motorcycle_number)", &activePlates).Error; errPlates == nil && len(activePlates) > 0 {
+		activeMap := make(map[string]bool)
+		for _, p := range activePlates {
+			activeMap[strings.ToLower(strings.TrimSpace(p))] = true
+		}
+		for i := range vehicles {
+			cleanP := strings.ToLower(strings.TrimSpace(vehicles[i].PlateNumber))
+			if activeMap[cleanP] && vehicles[i].Status != domain.VehicleStatusMaintenance {
+				vehicles[i].Status = domain.VehicleStatusInUse
+			}
+		}
+	}
+
 	return vehicles, total, nil
 }
 
