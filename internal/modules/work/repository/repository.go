@@ -51,7 +51,7 @@ func (r *gormWorkRepository) Update(ctx context.Context, session *domain.WorkSes
 
 func (r *gormWorkRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.WorkSession, error) {
 	var session domain.WorkSession
-	err := r.db.WithContext(ctx).Preload("Employee").Where("id = ?", id).First(&session).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&session).Error
 	if err != nil {
 		return nil, err
 	}
