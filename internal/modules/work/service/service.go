@@ -603,48 +603,19 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 		}, nil
 	}
 
-	// Fallback to employee profile if no vehicle is found
+	// Oil change is strictly tracked on the vehicle, never on the employee
 	interval := oilChangeInterval(emp.VehicleType)
-	var distanceSinceOil float64
-	if emp.LastOilChangeDistance > 0 {
-		distanceSinceOil = emp.TotalDistance - emp.LastOilChangeDistance
-		if distanceSinceOil < 0 {
-			distanceSinceOil = 0
-		}
-	} else {
-		distanceSinceOil = 0
-	}
-	needsOil := distanceSinceOil >= interval
-	remaining := interval - distanceSinceOil
-	if remaining < 0 {
-		remaining = 0
-	}
-	pct := (distanceSinceOil / interval) * 100
-	if pct > 100 {
-		pct = 100
-	}
-
-	hasMaintenance := false
-	if bike != "" && s.vehicleProvider != nil {
-		hasMaintenance, _ = s.vehicleProvider.HasActiveMaintenance(ctx, bike)
-	}
-
-	lastDate := ""
-	if emp.LastOilChangeDate != nil {
-		lastDate = emp.LastOilChangeDate.Format("2006-01-02")
-	}
-
 	return &dto.OilChangeCheckResponse{
-		NeedsOilChange:          needsOil,
-		CurrentDistance:         emp.TotalDistance,
-		LastOilChangeDistance:   emp.LastOilChangeDistance,
-		DistanceSinceOil:        distanceSinceOil,
-		RemainingDistance:       remaining,
-		Percentage:              pct,
+		NeedsOilChange:          false,
+		CurrentDistance:         0,
+		LastOilChangeDistance:   0,
+		DistanceSinceOil:        0,
+		RemainingDistance:       interval,
+		Percentage:              0,
 		Interval:                interval,
 		VehicleType:             emp.VehicleType,
-		HasActiveMaintenanceReq: hasMaintenance,
-		LastOilChangeDate:       lastDate,
+		HasActiveMaintenanceReq: false,
+		LastOilChangeDate:       "",
 	}, nil
 }
 

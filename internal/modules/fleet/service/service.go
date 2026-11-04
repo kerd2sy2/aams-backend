@@ -215,8 +215,15 @@ func (s *vehicleService) GetByID(ctx context.Context, id uuid.UUID) (*dto.Vehicl
 	}
 
 	interval := oilChangeInterval(vehicle.VehicleType)
-	drivenSinceOil := vehicle.CurrentKM - vehicle.LastOilChangeKM
-	if drivenSinceOil < 0 {
+	var drivenSinceOil float64
+	if vehicle.LastOilChangeKM > 0 {
+		drivenSinceOil = vehicle.CurrentKM - vehicle.LastOilChangeKM
+		if drivenSinceOil < 0 {
+			drivenSinceOil = 0
+		}
+	} else if vehicle.TotalDistance > 0 {
+		drivenSinceOil = vehicle.TotalDistance
+	} else {
 		drivenSinceOil = 0
 	}
 	remaining := interval - drivenSinceOil
@@ -244,8 +251,15 @@ func (s *vehicleService) GetAll(ctx context.Context, filter dto.VehicleFilter) (
 	responses := make([]dto.VehicleResponse, len(vehicles))
 	for i, v := range vehicles {
 		interval := oilChangeInterval(v.VehicleType)
-		drivenSinceOil := v.CurrentKM - v.LastOilChangeKM
-		if drivenSinceOil < 0 {
+		var drivenSinceOil float64
+		if v.LastOilChangeKM > 0 {
+			drivenSinceOil = v.CurrentKM - v.LastOilChangeKM
+			if drivenSinceOil < 0 {
+				drivenSinceOil = 0
+			}
+		} else if v.TotalDistance > 0 {
+			drivenSinceOil = v.TotalDistance
+		} else {
 			drivenSinceOil = 0
 		}
 		remaining := interval - drivenSinceOil

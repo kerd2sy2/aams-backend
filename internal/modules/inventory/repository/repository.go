@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -232,7 +233,8 @@ func (r *gormInventoryRepository) DeletePurchaseInvoice(ctx context.Context, id 
 }
 
 func (r *gormInventoryRepository) UpdateVehicleOilKM(ctx context.Context, plateNumber string, currentKM float64) error {
-	if plateNumber == "" {
+	clean := strings.TrimSpace(plateNumber)
+	if clean == "" {
 		return nil
 	}
 	now := time.Now()
@@ -244,15 +246,18 @@ func (r *gormInventoryRepository) UpdateVehicleOilKM(ctx context.Context, plateN
 	if currentKM > 0 {
 		updates["current_km"] = currentKM
 	}
-	return r.db.WithContext(ctx).Table("vehicles").Where("plate_number = ? AND deleted_at IS NULL", plateNumber).Updates(updates).Error
+	return r.db.WithContext(ctx).Table("vehicles").
+		Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?)", clean, clean+"%", "%"+clean+"%").
+		Updates(updates).Error
 }
 
 func (r *gormInventoryRepository) FindVehicleByPlateOrID(ctx context.Context, id *uuid.UUID, plateNumber string) (*VehicleInfo, error) {
 	query := r.db.WithContext(ctx).Table("vehicles").Where("deleted_at IS NULL")
+	clean := strings.TrimSpace(plateNumber)
 	if id != nil && *id != uuid.Nil {
 		query = query.Where("id = ?", *id)
-	} else if plateNumber != "" {
-		query = query.Where("plate_number = ?", plateNumber)
+	} else if clean != "" {
+		query = query.Where("TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?", clean, clean+"%", "%"+clean+"%")
 	} else {
 		return nil, errors.New("لا توجد بيانات للبحث عن الدباب")
 	}
