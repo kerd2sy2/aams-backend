@@ -76,7 +76,17 @@ func (h *EmployeeHandler) GetAll(c *gin.Context) {
 		return
 	}
 
+	if filter.BranchID == nil {
+		if headerBid := c.GetHeader("X-Branch-ID"); headerBid != "" {
+			if parsedBid, err := uuid.Parse(headerBid); err == nil && parsedBid != uuid.Nil {
+				filter.BranchID = &parsedBid
+			}
+		}
+	}
+
 	if !scope.IsGlobal {
+		filter.BranchID = scope.BranchID
+	} else if filter.BranchID == nil && scope.BranchID != nil {
 		filter.BranchID = scope.BranchID
 	}
 
