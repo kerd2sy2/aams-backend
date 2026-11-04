@@ -131,7 +131,8 @@ type EmployeeFilter struct {
 	Search          string     `form:"search"`
 	ApplicationID   string     `form:"application_id"`
 	ApplicationType string     `form:"application_type"`
-	BranchID        *uuid.UUID `form:"branch_id"`
+	BranchIDStr     string     `form:"branch_id"`
+	BranchID        *uuid.UUID `form:"-"`
 	JobRole         string     `form:"job_role"`
 	CrossBranch     bool       `form:"cross_branch"`
 	Page            int        `form:"page,default=1"`

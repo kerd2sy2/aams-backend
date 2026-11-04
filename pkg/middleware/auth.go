@@ -11,6 +11,7 @@ import (
 	"delivery-backend/pkg/jwt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo repository.EmployeeRepository) gin.HandlerFunc {
@@ -75,7 +76,11 @@ func AuthMiddleware(secret string, adminRepo repository.AdminRepository, empRepo
 			c.Set("admin_name", admin.Name)
 			c.Set("admin_role", roleName)
 			c.Set("admin_role_id", admin.RoleID)
-			c.Set("branch_id", admin.BranchID)
+			effectiveBranchID := admin.BranchID
+			if effectiveBranchID == nil && claims.BranchID != nil && *claims.BranchID != uuid.Nil {
+				effectiveBranchID = claims.BranchID
+			}
+			c.Set("branch_id", effectiveBranchID)
 			c.Set("must_change_password", admin.MustChangePassword)
 			c.Set("permissions_configured", admin.PermissionsConfigured)
 			c.Set("admin", admin)

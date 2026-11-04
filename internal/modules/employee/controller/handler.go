@@ -70,6 +70,12 @@ func (h *EmployeeHandler) GetAll(c *gin.Context) {
 		return
 	}
 
+	if filter.BranchIDStr != "" {
+		if parsed, err := uuid.Parse(strings.TrimSpace(filter.BranchIDStr)); err == nil && parsed != uuid.Nil {
+			filter.BranchID = &parsed
+		}
+	}
+
 	scope, err := middleware.ResolveBranchScope(c)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
