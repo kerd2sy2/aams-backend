@@ -36,7 +36,8 @@ type UpdateVehicleRequest struct {
 }
 
 type VehicleFilter struct {
-	BranchID         *uuid.UUID `form:"branch_id"`
+	BranchID         *uuid.UUID `form:"-"`
+	BranchIDStr      string     `form:"branch_id"`
 	VehicleType      string     `form:"vehicle_type"`
 	Status           string     `form:"status"`
 	IsOdometerBroken *bool      `form:"is_odometer_broken"`

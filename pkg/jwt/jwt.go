@@ -62,7 +62,7 @@ func GenerateTokens(adminID uuid.UUID, email, name, role string, branchID *uuid.
 }
 
 func GenerateToken(adminID uuid.UUID, email, role, secret string) (string, time.Time, error) {
-	expTime := time.Now().Add(7 * 24 * time.Hour)
+	expTime := time.Now().Add(365 * 24 * time.Hour)
 	claims := &Claims{
 		AdminID:  adminID,
 		Email:    email,
@@ -96,4 +96,33 @@ func ValidateToken(tokenStr, secret string) (*Claims, error) {
 	}
 
 	return claims, nil
+}
+
+// ValidateTokenForRefresh verifies the cryptographic signature of a token (using secret or refreshSecret)
+// while allowing expired tokens to be refreshed as long as their signature and AdminID claim are valid.
+func ValidateTokenForRefresh(tokenStr, secret, refreshSecret string) (*Claims, error) {
+	secrets := []string{secret}
+	if refreshSecret != "" && refreshSecret != secret {
+		secrets = append(secrets, refreshSecret)
+	}
+
+	for _, s := range secrets {
+		if s == "" {
+			continue
+		}
+		parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+		token, err := parser.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("unexpected signing method")
+			}
+			return []byte(s), nil
+		})
+		if err == nil && token != nil && token.Valid {
+			if claims, ok := token.Claims.(*Claims); ok && claims.AdminID != uuid.Nil {
+				return claims, nil
+			}
+		}
+	}
+
+	return nil, errors.New("invalid refresh token")
 }

@@ -185,6 +185,12 @@ func (h *VehicleHandler) GetAll(c *gin.Context) {
 		return
 	}
 
+	if filter.BranchIDStr != "" {
+		if parsedID, err := uuid.Parse(strings.TrimSpace(filter.BranchIDStr)); err == nil {
+			filter.BranchID = &parsedID
+		}
+	}
+
 	if !scope.IsGlobal {
 		filter.BranchID = scope.BranchID
 	}

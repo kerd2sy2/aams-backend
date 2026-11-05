@@ -460,13 +460,55 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 }
 
 func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*dto.LoginResponse, error) {
-	claims, err := jwt.ValidateToken(refreshToken, s.cfg.JWTSecret)
+	claims, err := jwt.ValidateTokenForRefresh(refreshToken, s.cfg.JWTSecret, s.cfg.JWTRefreshSecret)
 	if err != nil {
 		return nil, errors.New("رمز التحديث غير صالح أو منتهي الصلاحية")
 	}
 
 	admin, err := s.adminRepo.FindByID(ctx, claims.AdminID)
-	if err != nil {
+	if err != nil || admin == nil {
+		// Fallback to Employee (Delegate) refresh if user is in employees table
+		if empMap, empErr := s.adminRepo.FindEmployeeByLogin(ctx, claims.AdminID.String()); empErr == nil && empMap != nil {
+			delete(empMap, "password_hash")
+
+			empID, _ := uuid.Parse(empMap["id"].(string))
+			userKey, _ := empMap["phone"].(string)
+			if userKey == "" {
+				userKey = claims.Email
+			}
+
+			token, exp, genErr := jwt.GenerateToken(empID, userKey, "EMPLOYEE", s.cfg.JWTSecret)
+			if genErr != nil {
+				return nil, genErr
+			}
+
+			var empPerms []string
+			if rawP, ok := empMap["permissions"].(string); ok && rawP != "" {
+				_ = json.Unmarshal([]byte(rawP), &empPerms)
+			}
+			empRole, _ := empMap["job_role"].(string)
+			if empRole == "" {
+				empRole = "DRIVER"
+			}
+
+			appPerms := ComputeAppPermissions(empRole, empPerms)
+			empMap["app_permissions"] = appPerms
+			mustChange, _ := empMap["must_change_password"].(bool)
+
+			return &dto.LoginResponse{
+				Token:                 token,
+				AccessToken:           token,
+				RefreshToken:          token,
+				ExpiresAt:             exp,
+				Type:                  "employee",
+				IsEmployee:            true,
+				Employee:              empMap,
+				MustChangePassword:    mustChange,
+				PermissionsConfigured: false,
+				AppPermissions:        appPerms,
+			}, nil
+		}
+
 		return nil, errors.New("المستخدم غير موجود")
 	}
 
@@ -512,7 +554,7 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*d
 	return &dto.LoginResponse{
 		Token:                 token,
 		AccessToken:           token,
-		RefreshToken:          refreshToken,
+		RefreshToken:          token,
 		ExpiresAt:             exp,
 		Type:                  "admin",
 		Admin:                 adminInfo,
