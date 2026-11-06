@@ -101,6 +101,9 @@ type OilChangeCheckResponse struct {
 	VehicleType             string  `json:"vehicle_type"`
 	HasActiveMaintenanceReq bool    `json:"has_active_maintenance_request"`
 	LastOilChangeDate       string  `json:"last_oil_change_date"`
+	IsOdometerBroken        bool    `json:"is_odometer_broken"`
+	RemainingDays           int     `json:"remaining_days"`
+	OilStatusMessage        string  `json:"oil_status_message"`
 }
 
 type LastKMResponse struct {
@@ -117,6 +120,8 @@ type LastKMResponse struct {
 	NeedsOilChange    bool    `json:"needs_oil_change"`
 	RemainingOilKM    float64 `json:"remaining_oil_km"`
 	DistanceSinceOil  float64 `json:"distance_since_oil"`
+	RemainingDays     int     `json:"remaining_days"`
+	OilStatusMessage  string  `json:"oil_status_message"`
 }
 
 type SupervisorStartShiftRequest struct {

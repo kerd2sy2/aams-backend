@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -497,29 +498,74 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 			resp.LastKM = vInfo.CurrentKM
 			resp.LastEndKM = vInfo.CurrentKM
 			resp.RegistrationImage = vInfo.RegistrationImage
-			resp.IsOdometerBroken = vInfo.IsOdometerBroken
+			isBroken := vInfo.IsOdometerBroken || strings.Contains(targetBike, "7569") || strings.Contains(targetBike, "8043")
+			resp.IsOdometerBroken = isBroken
 
 			interval := oilChangeInterval(vInfo.VehicleType)
 			var distanceSinceOil float64
-			if vInfo.LastOilChangeKM > 0 {
-				distanceSinceOil = vInfo.CurrentKM - vInfo.LastOilChangeKM
-				if distanceSinceOil < 0 {
-					distanceSinceOil = 0
+			var remaining float64
+			var needsOil bool
+			var remainingDays int
+			var oilStatusMessage string
+
+			if isBroken {
+				if vInfo.LastOilChangeDate != nil {
+					days := time.Since(*vInfo.LastOilChangeDate).Hours() / 24.0
+					if days >= 5.0 {
+						needsOil = true
+						remaining = 0
+						remainingDays = 0
+						distanceSinceOil = interval
+						oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
+					} else {
+						needsOil = false
+						remDays := 5.0 - days
+						remainingDays = int(math.Ceil(remDays))
+						if remainingDays <= 1 {
+							oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
+						} else {
+							oilStatusMessage = fmt.Sprintf("فاضل %d أيام لتغيير الزيت", remainingDays)
+						}
+						remaining = remDays * 200.0
+						distanceSinceOil = days * 200.0
+					}
+				} else {
+					needsOil = true
+					remaining = 0
+					remainingDays = 0
+					distanceSinceOil = interval
+					oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
 				}
 			} else {
-				if vInfo.TotalDistance > 0 {
-					distanceSinceOil = vInfo.TotalDistance
+				if vInfo.LastOilChangeKM > 0 {
+					distanceSinceOil = vInfo.CurrentKM - vInfo.LastOilChangeKM
+					if distanceSinceOil < 0 {
+						distanceSinceOil = 0
+					}
 				} else {
-					distanceSinceOil = 0
+					if vInfo.TotalDistance > 0 {
+						distanceSinceOil = vInfo.TotalDistance
+					} else {
+						distanceSinceOil = 0
+					}
+				}
+				remaining = interval - distanceSinceOil
+				if remaining < 0 {
+					remaining = 0
+				}
+				needsOil = distanceSinceOil >= interval
+				if needsOil {
+					oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
+				} else {
+					oilStatusMessage = fmt.Sprintf("فاضل %.0f كم لتغيير الزيت", remaining)
 				}
 			}
-			remaining := interval - distanceSinceOil
-			if remaining < 0 {
-				remaining = 0
-			}
+
 			resp.DistanceSinceOil = distanceSinceOil
 			resp.RemainingOilKM = remaining
-			resp.NeedsOilChange = distanceSinceOil >= interval
+			resp.NeedsOilChange = needsOil
+			resp.RemainingDays = remainingDays
+			resp.OilStatusMessage = oilStatusMessage
 
 			if lastSession != nil && lastSession.MotorcycleNumber != targetBike {
 				resp.IsDifferentBike = true
@@ -573,27 +619,40 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 			lastOilDateStr = vehicleInfo.LastOilChangeDate.Format("2006-01-02 15:04:05")
 		}
 
+		var remainingDays int
+		var oilStatusMessage string
+
 		isBroken := vehicleInfo.IsOdometerBroken || strings.Contains(vehicleInfo.PlateNumber, "7569") || strings.Contains(vehicleInfo.PlateNumber, "8043")
 		if isBroken {
 			if vehicleInfo.LastOilChangeDate != nil {
 				days := time.Since(*vehicleInfo.LastOilChangeDate).Hours() / 24.0
-				if days >= 4.0 {
+				if days >= 5.0 {
 					needsOil = true
 					remaining = 0
+					remainingDays = 0
 					pct = 100
 					distanceSinceOil = interval
+					oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
 				} else {
 					needsOil = false
-					remDays := 4.0 - days
+					remDays := 5.0 - days
+					remainingDays = int(math.Ceil(remDays))
+					if remainingDays <= 1 {
+						oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
+					} else {
+						oilStatusMessage = fmt.Sprintf("فاضل %d أيام لتغيير الزيت", remainingDays)
+					}
 					remaining = remDays * 200.0
-					pct = (days / 4.0) * 100
+					pct = (days / 5.0) * 100
 					distanceSinceOil = days * 200.0
 				}
 			} else {
 				needsOil = true
 				remaining = 0
+				remainingDays = 0
 				pct = 100
 				distanceSinceOil = interval
+				oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
 			}
 		} else {
 			if vehicleInfo.LastOilChangeKM > 0 {
@@ -617,6 +676,11 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 			if pct > 100 {
 				pct = 100
 			}
+			if needsOil {
+				oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
+			} else {
+				oilStatusMessage = fmt.Sprintf("فاضل %.0f كم لتغيير الزيت", remaining)
+			}
 		}
 
 		hasMaintenance := false
@@ -635,6 +699,9 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 			VehicleType:             vType,
 			HasActiveMaintenanceReq: hasMaintenance,
 			LastOilChangeDate:       lastOilDateStr,
+			IsOdometerBroken:        isBroken,
+			RemainingDays:           remainingDays,
+			OilStatusMessage:        oilStatusMessage,
 		}, nil
 	}
 

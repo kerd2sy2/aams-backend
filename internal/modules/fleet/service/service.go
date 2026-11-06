@@ -225,10 +225,10 @@ func calculateVehicleOilStatus(v *domain.Vehicle) (needsOil bool, remainingKM fl
 	if isBroken {
 		if v.LastOilChangeDate != nil {
 			days := time.Since(*v.LastOilChangeDate).Hours() / 24.0
-			if days >= 4.0 {
+			if days >= 5.0 {
 				return true, 0
 			}
-			remDays := 4.0 - days
+			remDays := 5.0 - days
 			return false, remDays * 200.0
 		}
 		return true, 0
