@@ -177,6 +177,9 @@ func (s *vehicleService) Update(ctx context.Context, id uuid.UUID, req dto.Updat
 	if req.LastOilChangeKM != nil {
 		vehicle.LastOilChangeKM = *req.LastOilChangeKM
 	}
+	if req.LastOilChangeDate != nil {
+		vehicle.LastOilChangeDate = req.LastOilChangeDate
+	}
 	if req.IsOdometerBroken != nil {
 		vehicle.IsOdometerBroken = *req.IsOdometerBroken
 	}

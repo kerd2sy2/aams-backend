@@ -1,6 +1,8 @@
 package dto
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"delivery-backend/internal/modules/fleet/domain"
@@ -28,6 +30,7 @@ type UpdateVehicleRequest struct {
 	KeyNumber         *string    `json:"key_number"`
 	CurrentKM         *float64   `json:"current_km"`
 	LastOilChangeKM   *float64   `json:"last_oil_change_km"`
+	LastOilChangeDate *time.Time `json:"last_oil_change_date"`
 	IsOdometerBroken  *bool      `json:"is_odometer_broken"`
 	RegistrationImage *string    `json:"registration_image"`
 	Status            *string    `json:"status"`
