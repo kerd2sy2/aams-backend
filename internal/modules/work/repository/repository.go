@@ -18,6 +18,7 @@ type WorkRepository interface {
 	FindActiveSessionByEmployeeID(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	FindActiveSessionByEmployeeIDForUpdate(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
 	FindLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error)
+	FindCompletedSessionByEmployeeAndDate(ctx context.Context, empID uuid.UUID, dateStr string) (*domain.WorkSession, error)
 	FindLastSessionByMotorcycle(ctx context.Context, motorcycleNumber string) (*domain.WorkSession, error)
 	CountTodaySessions(ctx context.Context, empID uuid.UUID) (int64, error)
 	GetActiveSessions(ctx context.Context, branchID *uuid.UUID) ([]domain.WorkSession, error)
@@ -79,6 +80,18 @@ func (r *gormWorkRepository) FindActiveSessionByEmployeeIDForUpdate(ctx context.
 func (r *gormWorkRepository) FindLastCompletedSession(ctx context.Context, empID uuid.UUID) (*domain.WorkSession, error) {
 	var session domain.WorkSession
 	err := r.db.WithContext(ctx).Where("employee_id = ? AND status = ?", empID, "COMPLETED").Order("end_time DESC").First(&session).Error
+	if err != nil {
+		return nil, err
+	}
+	return &session, nil
+}
+
+func (r *gormWorkRepository) FindCompletedSessionByEmployeeAndDate(ctx context.Context, empID uuid.UUID, dateStr string) (*domain.WorkSession, error) {
+	var session domain.WorkSession
+	err := r.db.WithContext(ctx).
+		Where("employee_id = ? AND DATE(start_time) = ? AND status = ?", empID, dateStr, "COMPLETED").
+		Order("start_time DESC").
+		First(&session).Error
 	if err != nil {
 		return nil, err
 	}

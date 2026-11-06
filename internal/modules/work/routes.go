@@ -835,6 +835,7 @@ func NewModule(db *gorm.DB, storage service.StorageProvider, audit ...contracts.
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/work/start", m.Handler.StartWork)
 	rg.POST("/work/end", m.Handler.EndWork)
+	rg.POST("/work/manual-entry", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.Handler.SaveManualEntries)
 	rg.PUT("/work/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.UpdateWorkSession)
 	rg.PUT("/work/:id/review", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.ReviewWorkSession)
 	rg.PUT("/work/sessions/:id/review", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.ReviewWorkSession)

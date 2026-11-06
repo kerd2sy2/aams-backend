@@ -418,4 +418,39 @@ func (h *WorkHandler) SupervisorEndShift(c *gin.Context) {
 	})
 }
 
+func (h *WorkHandler) SaveManualEntries(c *gin.Context) {
+	var req dto.ManualWorkEntryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("بيانات غير صالحة: %v", err)})
+		return
+	}
+
+	adminID, adminName := getAdminInfo(c)
+	if adminName == "" {
+		adminName = "المدير"
+	}
+
+	saved, err := h.svc.SaveManualEntries(c.Request.Context(), req, adminID, adminName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.audit != nil {
+		var branchID *uuid.UUID
+		if scope, err := middleware.ResolveBranchScope(c); err == nil && scope != nil {
+			branchID = scope.BranchID
+		}
+		details := fmt.Sprintf("إدخال يدوي لعدد (%d) أيام عمل للموظف %s", len(saved), req.EmployeeID)
+		_ = h.audit.LogAction(c.Request.Context(), adminName, "إدخال طلبات وشفتات يدوي", details, c.ClientIP(), branchID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "تم حفظ بيانات الطلبات والشفتات بنجاح",
+		"data":    saved,
+		"count":   len(saved),
+	})
+}
+
+
 

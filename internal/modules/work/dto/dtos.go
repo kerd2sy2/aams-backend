@@ -145,3 +145,21 @@ type SupervisorEndShiftRequest struct {
 	Notes           string  `json:"notes"`
 }
 
+type ManualDailyEntryItem struct {
+	Date            string  `json:"date" binding:"required"` // YYYY-MM-DD
+	OrdersCount     int     `json:"orders_count" binding:"gte=0"`
+	Distance        float64 `json:"distance" binding:"gte=0"`
+	FuelCost        float64 `json:"fuel_cost" binding:"gte=0"`
+	StartKM         float64 `json:"start_km" binding:"gte=0"`
+	EndKM           float64 `json:"end_km" binding:"gte=0"`
+	ApplicationType string  `json:"application_type"`
+	Notes           string  `json:"notes"`
+}
+
+type ManualWorkEntryRequest struct {
+	EmployeeID string                 `json:"employee_id" binding:"required,uuid"`
+	Entries    []ManualDailyEntryItem `json:"entries" binding:"required,min=1,dive"`
+}
+
+
+
