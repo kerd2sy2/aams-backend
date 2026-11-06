@@ -468,7 +468,11 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*d
 	admin, err := s.adminRepo.FindByID(ctx, claims.AdminID)
 	if err != nil || admin == nil {
 		// Fallback to Employee (Delegate) refresh if user is in employees table
-		if empMap, empErr := s.adminRepo.FindEmployeeByLogin(ctx, claims.AdminID.String()); empErr == nil && empMap != nil {
+		empMap, empErr := s.adminRepo.FindEmployeeByLogin(ctx, claims.AdminID.String())
+		if (empErr != nil || empMap == nil) && claims.Email != "" {
+			empMap, empErr = s.adminRepo.FindEmployeeByLogin(ctx, claims.Email)
+		}
+		if empErr == nil && empMap != nil {
 			delete(empMap, "password_hash")
 
 			empID, _ := uuid.Parse(empMap["id"].(string))

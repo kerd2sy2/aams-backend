@@ -256,11 +256,17 @@ func (r *gormAdminRepository) FindEmployeeByLogin(ctx context.Context, login str
 
 	variations := NormalizeSaudiPhoneVariations(login)
 
-	err := r.db.WithContext(ctx).Table("employees").
+	query := r.db.WithContext(ctx).Table("employees").
 		Select("employees.id, employees.name, employees.national_id, employees.employee_number, employees.job_role, employees.phone, employees.personal_image, employees.motorcycle_number, employees.key_number, employees.vehicle_type, employees.shift, employees.password_hash, employees.must_change_password, employees.branch_id, branches.name as branch_name, employees.permissions").
-		Joins("LEFT JOIN branches ON branches.id = employees.branch_id").
-		Where("(employees.national_id = ? OR employees.phone IN (?) OR employees.employee_number = ?) AND employees.deleted_at IS NULL", login, variations, login).
-		First(&emp).Error
+		Joins("LEFT JOIN branches ON branches.id = employees.branch_id")
+
+	if parsedID, err := uuid.Parse(strings.TrimSpace(login)); err == nil && parsedID != uuid.Nil {
+		query = query.Where("(employees.id = ? OR employees.national_id = ? OR employees.phone IN (?) OR employees.employee_number = ?) AND employees.deleted_at IS NULL", parsedID, login, variations, login)
+	} else {
+		query = query.Where("(employees.national_id = ? OR employees.phone IN (?) OR employees.employee_number = ?) AND employees.deleted_at IS NULL", login, variations, login)
+	}
+
+	err := query.First(&emp).Error
 	if err != nil {
 		return nil, err
 	}
