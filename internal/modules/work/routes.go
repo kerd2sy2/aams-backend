@@ -86,11 +86,20 @@ func (a *gormEmployeeAdapter) UpdateEmployeeOnStartWork(ctx context.Context, id 
 }
 
 func (a *gormEmployeeAdapter) UpdateEmployeeOnEndWork(ctx context.Context, id uuid.UUID, addedDistance float64, totalOrders int) error {
-	return a.db.WithContext(ctx).Table("employees").Where("id = ?", id).Updates(map[string]interface{}{
-		"is_working":      false,
-		"total_distance":  gorm.Expr("total_distance + ?", addedDistance),
-		"total_orders":    gorm.Expr("total_orders + ?", totalOrders),
-	}).Error
+	var activeCount int64
+	_ = a.db.WithContext(ctx).Table("work_sessions").
+		Where("employee_id = ? AND status = 'ACTIVE' AND deleted_at IS NULL", id).
+		Count(&activeCount).Error
+
+	updates := map[string]interface{}{
+		"total_distance": gorm.Expr("total_distance + ?", addedDistance),
+		"total_orders":   gorm.Expr("total_orders + ?", totalOrders),
+	}
+	if activeCount == 0 {
+		updates["is_working"] = false
+	}
+
+	return a.db.WithContext(ctx).Table("employees").Where("id = ?", id).Updates(updates).Error
 }
 
 type supervisorNameTranslations struct {
@@ -682,15 +691,16 @@ func (v *gormVehicleAdapter) GetVehicleInfo(ctx context.Context, plateNumber str
 	}
 
 	var row struct {
-		ID                uuid.UUID `gorm:"column:id"`
-		PlateNumber       string    `gorm:"column:plate_number"`
-		VehicleType       string    `gorm:"column:vehicle_type"`
-		CurrentKM         float64   `gorm:"column:current_km"`
-		LastOilChangeKM   float64   `gorm:"column:last_oil_change_km"`
-		TotalDistance     float64   `gorm:"column:total_distance"`
-		IsOdometerBroken  bool      `gorm:"column:is_odometer_broken"`
-		RegistrationImage string    `gorm:"column:registration_image"`
-		Status            string    `gorm:"column:status"`
+		ID                uuid.UUID  `gorm:"column:id"`
+		PlateNumber       string     `gorm:"column:plate_number"`
+		VehicleType       string     `gorm:"column:vehicle_type"`
+		CurrentKM         float64    `gorm:"column:current_km"`
+		LastOilChangeKM   float64    `gorm:"column:last_oil_change_km"`
+		LastOilChangeDate *time.Time `gorm:"column:last_oil_change_date"`
+		TotalDistance     float64    `gorm:"column:total_distance"`
+		IsOdometerBroken  bool       `gorm:"column:is_odometer_broken"`
+		RegistrationImage string     `gorm:"column:registration_image"`
+		Status            string     `gorm:"column:status"`
 	}
 
 	err := v.db.WithContext(ctx).Table("vehicles").
@@ -707,6 +717,7 @@ func (v *gormVehicleAdapter) GetVehicleInfo(ctx context.Context, plateNumber str
 		VehicleType:       row.VehicleType,
 		CurrentKM:         row.CurrentKM,
 		LastOilChangeKM:   row.LastOilChangeKM,
+		LastOilChangeDate: row.LastOilChangeDate,
 		TotalDistance:     row.TotalDistance,
 		IsOdometerBroken:  row.IsOdometerBroken,
 		RegistrationImage: row.RegistrationImage,

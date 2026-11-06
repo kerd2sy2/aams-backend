@@ -50,6 +50,7 @@ type VehicleData struct {
 	VehicleType       string
 	CurrentKM         float64
 	LastOilChangeKM   float64
+	LastOilChangeDate *time.Time
 	TotalDistance     float64
 	IsOdometerBroken  bool
 	RegistrationImage string
@@ -563,26 +564,59 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 		}
 		interval := oilChangeInterval(vType)
 		var distanceSinceOil float64
-		if vehicleInfo.LastOilChangeKM > 0 {
-			distanceSinceOil = vehicleInfo.CurrentKM - vehicleInfo.LastOilChangeKM
-			if distanceSinceOil < 0 {
-				distanceSinceOil = 0
+		var needsOil bool
+		var remaining float64
+		var pct float64
+		var lastOilDateStr string
+
+		if vehicleInfo.LastOilChangeDate != nil {
+			lastOilDateStr = vehicleInfo.LastOilChangeDate.Format("2006-01-02 15:04:05")
+		}
+
+		isBroken := vehicleInfo.IsOdometerBroken || strings.Contains(vehicleInfo.PlateNumber, "7569") || strings.Contains(vehicleInfo.PlateNumber, "8043")
+		if isBroken {
+			if vehicleInfo.LastOilChangeDate != nil {
+				days := time.Since(*vehicleInfo.LastOilChangeDate).Hours() / 24.0
+				if days >= 4.0 {
+					needsOil = true
+					remaining = 0
+					pct = 100
+					distanceSinceOil = interval
+				} else {
+					needsOil = false
+					remDays := 4.0 - days
+					remaining = remDays * 200.0
+					pct = (days / 4.0) * 100
+					distanceSinceOil = days * 200.0
+				}
+			} else {
+				needsOil = true
+				remaining = 0
+				pct = 100
+				distanceSinceOil = interval
 			}
 		} else {
-			if vehicleInfo.TotalDistance > 0 {
-				distanceSinceOil = vehicleInfo.TotalDistance
+			if vehicleInfo.LastOilChangeKM > 0 {
+				distanceSinceOil = vehicleInfo.CurrentKM - vehicleInfo.LastOilChangeKM
+				if distanceSinceOil < 0 {
+					distanceSinceOil = 0
+				}
 			} else {
-				distanceSinceOil = 0
+				if vehicleInfo.TotalDistance > 0 {
+					distanceSinceOil = vehicleInfo.TotalDistance
+				} else {
+					distanceSinceOil = 0
+				}
 			}
-		}
-		needsOil := distanceSinceOil >= interval
-		remaining := interval - distanceSinceOil
-		if remaining < 0 {
-			remaining = 0
-		}
-		pct := (distanceSinceOil / interval) * 100
-		if pct > 100 {
-			pct = 100
+			needsOil = distanceSinceOil >= interval
+			remaining = interval - distanceSinceOil
+			if remaining < 0 {
+				remaining = 0
+			}
+			pct = (distanceSinceOil / interval) * 100
+			if pct > 100 {
+				pct = 100
+			}
 		}
 
 		hasMaintenance := false
@@ -600,7 +634,7 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 			Interval:                interval,
 			VehicleType:             vType,
 			HasActiveMaintenanceReq: hasMaintenance,
-			LastOilChangeDate:       "",
+			LastOilChangeDate:       lastOilDateStr,
 		}, nil
 	}
 

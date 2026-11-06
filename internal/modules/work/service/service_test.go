@@ -92,6 +92,17 @@ func (m *mockWorkRepo) GetActiveSessions(ctx context.Context, branchID *uuid.UUI
 	return list, nil
 }
 
+func (m *mockWorkRepo) FindCompletedSessionByEmployeeAndDate(ctx context.Context, empID uuid.UUID, dateStr string) (*domain.WorkSession, error) {
+	for _, s := range m.sessions {
+		if s.EmployeeID != nil && *s.EmployeeID == empID && s.Status == "COMPLETED" {
+			if s.StartTime.Format("2006-01-02") == dateStr {
+				return s, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
 type mockEmployeeProvider struct {
 	emp *service.EmployeeData
 }

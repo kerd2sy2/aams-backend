@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -208,21 +209,37 @@ func (s *vehicleService) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.vehicleRepo.Delete(ctx, id)
 }
 
-func (s *vehicleService) GetByID(ctx context.Context, id uuid.UUID) (*dto.VehicleResponse, error) {
-	vehicle, err := s.vehicleRepo.FindByID(ctx, id)
-	if err != nil {
-		return nil, errors.New("المركبة غير موجودة")
+func isVehicleBrokenOdometer(plate string, broken bool) bool {
+	if broken {
+		return true
+	}
+	clean := strings.TrimSpace(plate)
+	return strings.Contains(clean, "7569") || strings.Contains(clean, "8043")
+}
+
+func calculateVehicleOilStatus(v *domain.Vehicle) (needsOil bool, remainingKM float64) {
+	isBroken := isVehicleBrokenOdometer(v.PlateNumber, v.IsOdometerBroken)
+	if isBroken {
+		if v.LastOilChangeDate != nil {
+			days := time.Since(*v.LastOilChangeDate).Hours() / 24.0
+			if days >= 4.0 {
+				return true, 0
+			}
+			remDays := 4.0 - days
+			return false, remDays * 200.0
+		}
+		return true, 0
 	}
 
-	interval := oilChangeInterval(vehicle.VehicleType)
+	interval := oilChangeInterval(v.VehicleType)
 	var drivenSinceOil float64
-	if vehicle.LastOilChangeKM > 0 {
-		drivenSinceOil = vehicle.CurrentKM - vehicle.LastOilChangeKM
+	if v.LastOilChangeKM > 0 {
+		drivenSinceOil = v.CurrentKM - v.LastOilChangeKM
 		if drivenSinceOil < 0 {
 			drivenSinceOil = 0
 		}
-	} else if vehicle.TotalDistance > 0 {
-		drivenSinceOil = vehicle.TotalDistance
+	} else if v.TotalDistance > 0 {
+		drivenSinceOil = v.TotalDistance
 	} else {
 		drivenSinceOil = 0
 	}
@@ -230,10 +247,20 @@ func (s *vehicleService) GetByID(ctx context.Context, id uuid.UUID) (*dto.Vehicl
 	if remaining < 0 {
 		remaining = 0
 	}
+	return drivenSinceOil >= interval, remaining
+}
+
+func (s *vehicleService) GetByID(ctx context.Context, id uuid.UUID) (*dto.VehicleResponse, error) {
+	vehicle, err := s.vehicleRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, errors.New("المركبة غير موجودة")
+	}
+
+	needsOil, remaining := calculateVehicleOilStatus(vehicle)
 
 	return &dto.VehicleResponse{
 		Vehicle:        *vehicle,
-		NeedsOilChange: drivenSinceOil >= interval,
+		NeedsOilChange: needsOil,
 		RemainingOilKM: remaining,
 	}, nil
 }
@@ -250,26 +277,11 @@ func (s *vehicleService) GetAll(ctx context.Context, filter dto.VehicleFilter) (
 
 	responses := make([]dto.VehicleResponse, len(vehicles))
 	for i, v := range vehicles {
-		interval := oilChangeInterval(v.VehicleType)
-		var drivenSinceOil float64
-		if v.LastOilChangeKM > 0 {
-			drivenSinceOil = v.CurrentKM - v.LastOilChangeKM
-			if drivenSinceOil < 0 {
-				drivenSinceOil = 0
-			}
-		} else if v.TotalDistance > 0 {
-			drivenSinceOil = v.TotalDistance
-		} else {
-			drivenSinceOil = 0
-		}
-		remaining := interval - drivenSinceOil
-		if remaining < 0 {
-			remaining = 0
-		}
+		needsOil, remaining := calculateVehicleOilStatus(&v)
 
 		responses[i] = dto.VehicleResponse{
 			Vehicle:        v,
-			NeedsOilChange: drivenSinceOil >= interval,
+			NeedsOilChange: needsOil,
 			RemainingOilKM: remaining,
 		}
 	}

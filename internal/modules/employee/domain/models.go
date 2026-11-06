@@ -49,6 +49,10 @@ type Employee struct {
 	RoleObj                  *rootDomain.Role    `gorm:"foreignKey:RoleID" json:"role_obj,omitempty"`
 	RoleName                 string              `gorm:"type:varchar(50)" json:"role_name"`
 	Permissions              string              `gorm:"type:text" json:"permissions"`
+	ShiftStartTime           *time.Time          `gorm:"-" json:"shift_start_time,omitempty"`
+	StartKM                  float64             `gorm:"-" json:"start_km,omitempty"`
+	ActiveMotorcycle         string              `gorm:"-" json:"active_motorcycle,omitempty"`
+	ActiveSessionID          *uuid.UUID          `gorm:"-" json:"active_session_id,omitempty"`
 	CreatedAt                time.Time      `json:"created_at"`
 	UpdatedAt                time.Time      `json:"updated_at"`
 	DeletedAt                gorm.DeletedAt `gorm:"index" json:"-"`

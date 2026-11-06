@@ -161,7 +161,52 @@ func (r *gormEmployeeRepository) GetWorkingEmployees(ctx context.Context, branch
 		q = q.Where("branch_id = ?", *branchID)
 	}
 	err := q.Find(&emps).Error
-	return emps, err
+	if err != nil || len(emps) == 0 {
+		return emps, err
+	}
+
+	empIDs := make([]uuid.UUID, len(emps))
+	for i, emp := range emps {
+		empIDs[i] = emp.ID
+	}
+
+	type activeSessionInfo struct {
+		ID               uuid.UUID `gorm:"column:id"`
+		EmployeeID       uuid.UUID `gorm:"column:employee_id"`
+		StartTime        time.Time `gorm:"column:start_time"`
+		StartKM          float64   `gorm:"column:start_km"`
+		MotorcycleNumber string    `gorm:"column:motorcycle_number"`
+	}
+	var sessions []activeSessionInfo
+	_ = r.db.WithContext(ctx).Table("work_sessions").
+		Select("id, employee_id, start_time, start_km, motorcycle_number").
+		Where("employee_id IN ? AND status = 'ACTIVE' AND deleted_at IS NULL", empIDs).
+		Order("start_time DESC").
+		Scan(&sessions)
+
+	sessMap := make(map[uuid.UUID]activeSessionInfo)
+	for _, s := range sessions {
+		if _, exists := sessMap[s.EmployeeID]; !exists {
+			sessMap[s.EmployeeID] = s
+		}
+	}
+
+	for i := range emps {
+		if s, ok := sessMap[emps[i].ID]; ok {
+			startTimeCopy := s.StartTime
+			emps[i].ShiftStartTime = &startTimeCopy
+			emps[i].StartKM = s.StartKM
+			sessIDCopy := s.ID
+			emps[i].ActiveSessionID = &sessIDCopy
+			if strings.TrimSpace(s.MotorcycleNumber) != "" {
+				emps[i].ActiveMotorcycle = strings.TrimSpace(s.MotorcycleNumber)
+			} else {
+				emps[i].ActiveMotorcycle = emps[i].MotorcycleNumber
+			}
+		}
+	}
+
+	return emps, nil
 }
 
 func (r *gormEmployeeRepository) GetLocations(ctx context.Context, branchID *uuid.UUID) ([]dto.EmployeeLocationDTO, error) {
