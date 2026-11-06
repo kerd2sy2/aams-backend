@@ -631,21 +631,21 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 	// Today's Orders Sum (only reviewed sessions approved by supervisor)
 	var ordersSum struct{ Total int64 }
 	baseQuery().Select("COALESCE(SUM(work_sessions.orders_count), 0) as total").
-		Where("work_sessions.start_time >= ? AND work_sessions.is_reviewed = ?", startOfDay, true).
+		Where("(work_sessions.start_time >= ? OR (work_sessions.end_time IS NOT NULL AND work_sessions.end_time >= ?)) AND work_sessions.is_reviewed = ?", startOfDay, startOfDay, true).
 		Scan(&ordersSum)
 	resp.TodayOrders = ordersSum.Total
 
 	// Today's Distance Sum (only reviewed sessions approved by supervisor)
 	var distSum struct{ Total float64 }
-	baseQuery().Select("COALESCE(SUM(work_sessions.distance), 0) as total").
-		Where("work_sessions.start_time >= ? AND work_sessions.is_reviewed = ?", startOfDay, true).
+	baseQuery().Select("COALESCE(SUM(CASE WHEN work_sessions.distance > 0 THEN work_sessions.distance WHEN work_sessions.end_km > work_sessions.start_km THEN work_sessions.end_km - work_sessions.start_km ELSE 0 END), 0) as total").
+		Where("(work_sessions.start_time >= ? OR (work_sessions.end_time IS NOT NULL AND work_sessions.end_time >= ?)) AND work_sessions.is_reviewed = ?", startOfDay, startOfDay, true).
 		Scan(&distSum)
 	resp.TodayDistance = distSum.Total
 
 	// Today's Fuel Cost Sum (only reviewed sessions approved by supervisor)
 	var fuelSum struct{ Total float64 }
 	baseQuery().Select("COALESCE(SUM(work_sessions.fuel_cost), 0) as total").
-		Where("work_sessions.start_time >= ? AND work_sessions.is_reviewed = ?", startOfDay, true).
+		Where("(work_sessions.start_time >= ? OR (work_sessions.end_time IS NOT NULL AND work_sessions.end_time >= ?)) AND work_sessions.is_reviewed = ?", startOfDay, startOfDay, true).
 		Scan(&fuelSum)
 	resp.TodayFuelCost = fuelSum.Total
 
