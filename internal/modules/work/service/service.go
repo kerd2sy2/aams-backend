@@ -465,6 +465,21 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 	if req.FuelCost != nil {
 		session.FuelCost = *req.FuelCost
 	}
+	if req.StartTime != nil && req.StartTime.Time() != nil {
+		session.StartTime = *req.StartTime.Time()
+		session.IsEditedBySupervisor = true
+	}
+	if req.EndTime != nil && req.EndTime.Time() != nil {
+		session.EndTime = req.EndTime.Time()
+		session.IsEditedBySupervisor = true
+	}
+	if req.ApplicationID != nil && *req.ApplicationID != "" {
+		session.ApplicationID = *req.ApplicationID
+		session.IsEditedBySupervisor = true
+		if session.EmployeeID != nil {
+			_ = s.empProvider.UpdateEmployeeOnStartWork(ctx, *session.EmployeeID, *req.ApplicationID, "", "")
+		}
+	}
 	if req.ReviewVideoURL != nil && *req.ReviewVideoURL != "" {
 		session.ReviewVideoURL = *req.ReviewVideoURL
 	}
