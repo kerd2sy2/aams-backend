@@ -208,7 +208,7 @@ func (r *gormTargetRepository) LinkEmployeeToIdentifierCode(ctx context.Context,
 
 func (r *gormTargetRepository) ListIdentifiers(ctx context.Context, search string, isActive *bool) ([]domain.Identifier, error) {
 	var list []domain.Identifier
-	q := r.db.WithContext(ctx).Model(&domain.Identifier{})
+	q := r.db.WithContext(ctx).Model(&domain.Identifier{}).Preload("Drivers")
 	if search != "" {
 		like := "%" + search + "%"
 		q = q.Where("name ILIKE ? OR code ILIKE ? OR app_name ILIKE ?", like, like, like)

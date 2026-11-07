@@ -61,6 +61,7 @@ type IdentifierPerformanceDTO struct {
 	AppName                  string    `json:"app_name"`
 	Branch                   string    `json:"branch,omitempty"` // "1", "2", إلخ
 	Code                     string    `json:"code,omitempty"`
+	DriverName               string    `json:"driver_name,omitempty"`
 	TodayOrders              int       `json:"today_orders"`
 	WeekOrders               int       `json:"week_orders"`
 	MonthOrders              int       `json:"month_orders"`

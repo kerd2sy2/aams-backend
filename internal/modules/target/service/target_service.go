@@ -414,12 +414,33 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 			appName = orders[0].AppName
 		}
 
+		driverName := ""
+		for _, d := range ident.Drivers {
+			dName := strings.TrimSpace(d.Name)
+			if dName != "" && !isAllDigits(dName) && !strings.HasPrefix(dName, "كابتن") {
+				driverName = dName
+				break
+			}
+		}
+		if driverName == "" && len(ident.Drivers) > 0 {
+			driverName = strings.TrimSpace(ident.Drivers[0].Name)
+		}
+		if driverName == "" && !isAllDigits(ident.Name) {
+			driverName = ident.Name
+		}
+
+		identCode := ident.Code
+		if identCode == "" && isAllDigits(ident.Name) {
+			identCode = ident.Name
+		}
+
 		dtoItem := dto.IdentifierPerformanceDTO{
 			ID:                       ident.ID,
 			Name:                     ident.Name,
 			AppName:                  appName,
 			Branch:                   ident.Branch,
-			Code:                     ident.Code,
+			Code:                     identCode,
+			DriverName:               driverName,
 			TodayOrders:              todayOrders,
 			WeekOrders:               weekOrders,
 			MonthOrders:              monthOrders,
@@ -445,6 +466,37 @@ func (s *targetService) ListIdentifiers(ctx context.Context, search, statusFilte
 
 		result = append(result, dtoItem)
 	}
+
+	// Deduplicate: If an item has a Code and DriverName, omit text-only items of the same app that match that DriverName
+	codedMap := make(map[string]bool)
+	for _, it := range result {
+		if it.Code != "" && it.DriverName != "" {
+			key := strings.ToLower(it.AppName) + "_" + strings.TrimSpace(it.DriverName)
+			codedMap[key] = true
+		}
+	}
+
+	deduped := make([]dto.IdentifierPerformanceDTO, 0, len(result))
+	seenCodes := make(map[string]bool)
+	for _, it := range result {
+		appNorm := strings.ToLower(it.AppName)
+		if it.Code != "" {
+			codeKey := appNorm + "_" + it.Code
+			if seenCodes[codeKey] {
+				continue
+			}
+			seenCodes[codeKey] = true
+			deduped = append(deduped, it)
+		} else {
+			// Uncoded text item: only keep if not already represented in a coded item
+			nameKey := appNorm + "_" + strings.TrimSpace(it.Name)
+			if codedMap[nameKey] {
+				continue
+			}
+			deduped = append(deduped, it)
+		}
+	}
+	result = deduped
 
 	return result, nil
 }
@@ -1124,4 +1176,17 @@ func (s *targetService) GetIdentifierOrders(ctx context.Context, identifierID uu
 
 func daysIn(m time.Month, year int) int {
 	return time.Date(year, m+1, 0, 0, 0, 0, 0, time.UTC).Day()
+}
+
+func isAllDigits(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
