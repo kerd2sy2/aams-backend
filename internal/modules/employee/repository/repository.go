@@ -131,11 +131,19 @@ func (r *gormEmployeeRepository) FindAll(ctx context.Context, filter dto.Employe
 	}
 	offset := (filter.Page - 1) * filter.Limit
 
-	orderClause := "name ASC"
+	orderClause := "NULLIF(regexp_replace(key_number, '\\D', '', 'g'), '')::numeric ASC NULLS LAST, name ASC"
 	if filter.SortBy != "" {
-		orderClause = filter.SortBy
-		if filter.Order != "" {
-			orderClause += " " + filter.Order
+		if filter.SortBy == "key_number" {
+			orderDirection := "ASC"
+			if strings.ToUpper(filter.Order) == "DESC" {
+				orderDirection = "DESC"
+			}
+			orderClause = "NULLIF(regexp_replace(key_number, '\\D', '', 'g'), '')::numeric " + orderDirection + " NULLS LAST, key_number " + orderDirection + ", name ASC"
+		} else {
+			orderClause = filter.SortBy
+			if filter.Order != "" {
+				orderClause += " " + filter.Order
+			}
 		}
 	}
 
