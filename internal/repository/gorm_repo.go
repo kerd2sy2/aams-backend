@@ -464,9 +464,33 @@ func (r *gormWorkRepository) GetReports(ctx context.Context, filter dto.ReportFi
 	return sessions, total, err
 }
 
+func getOperationalWindow(t time.Time) (time.Time, time.Time) {
+	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
+	now := t.In(riyadh)
+	cutoffHour := 10
+
+	var start time.Time
+	var end time.Time
+
+	if now.Hour() < cutoffHour {
+		yesterday := now.AddDate(0, 0, -1)
+		if yesterday.Year() == 2026 && yesterday.Month() == 11 && yesterday.Day() == 6 {
+			start = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, riyadh)
+		} else {
+			start = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), cutoffHour, 0, 0, 0, riyadh)
+		}
+		end = time.Date(now.Year(), now.Month(), now.Day(), cutoffHour, 0, 0, 0, riyadh)
+	} else {
+		start = time.Date(now.Year(), now.Month(), now.Day(), cutoffHour, 0, 0, 0, riyadh)
+		tomorrow := now.AddDate(0, 0, 1)
+		end = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), cutoffHour, 0, 0, 0, riyadh)
+	}
+	return start, end
+}
+
 func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uuid.UUID) (*dto.DashboardResponse, error) {
 	now := time.Now()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	startOfDay, endOfDay := getOperationalWindow(now)
 
 	resp := &dto.DashboardResponse{}
 
@@ -481,14 +505,14 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 	}
 
 	// Total employees worked today (unique employees - either started today or currently active)
-	baseQuery().Where("start_time >= ? OR status = ?", startOfDay, domain.StatusActive).Distinct("employee_id").Count(&resp.TodayEmployees)
+	baseQuery().Where("(start_time >= ? AND start_time < ?) OR status = ?", startOfDay, endOfDay, domain.StatusActive).Distinct("employee_id").Count(&resp.TodayEmployees)
 
 	// Currently active working employees (unique employees)
 	baseQuery().Where("status = ?", domain.StatusActive).Distinct("employee_id").Count(&resp.WorkingEmployees)
 
 	// Finished employees today (unique employees who completed a session today and have NO active session right now)
 	baseQuery().
-		Where("start_time >= ? AND status = ?", startOfDay, domain.StatusCompleted).
+		Where("start_time >= ? AND start_time < ? AND status = ?", startOfDay, endOfDay, domain.StatusCompleted).
 		Where("employee_id NOT IN (SELECT ws2.employee_id FROM work_sessions ws2 WHERE ws2.status = ? AND ws2.employee_id IS NOT NULL)", domain.StatusActive).
 		Distinct("employee_id").
 		Count(&resp.FinishedEmployees)
@@ -501,27 +525,27 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 	// Today's Orders Sum - only count reviewed / approved shifts
 	var ordersSum struct{ Total int64 }
 	baseQuery().Select("COALESCE(SUM(orders_count), 0) as total").
-		Where("start_time >= ? AND is_reviewed = true", startOfDay).
+		Where("start_time >= ? AND start_time < ? AND is_reviewed = true", startOfDay, endOfDay).
 		Scan(&ordersSum)
 	resp.TodayOrders = ordersSum.Total
 
 	// Today's Distance Sum - only count reviewed / approved shifts
 	var distSum struct{ Total float64 }
 	baseQuery().Select("COALESCE(SUM(distance), 0) as total").
-		Where("start_time >= ? AND is_reviewed = true", startOfDay).
+		Where("start_time >= ? AND start_time < ? AND is_reviewed = true", startOfDay, endOfDay).
 		Scan(&distSum)
 	resp.TodayDistance = distSum.Total
 
 	// Today's Fuel Cost Sum - only count reviewed / approved shifts
 	var fuelSum struct{ Total float64 }
 	baseQuery().Select("COALESCE(SUM(fuel_cost), 0) as total").
-		Where("start_time >= ? AND is_reviewed = true", startOfDay).
+		Where("start_time >= ? AND start_time < ? AND is_reviewed = true", startOfDay, endOfDay).
 		Scan(&fuelSum)
 	resp.TodayFuelCost = fuelSum.Total
 
 	// Average Working Hours today
 	var completedSessions []domain.WorkSession
-	baseQuery().Where("start_time >= ? AND status = ?", startOfDay, domain.StatusCompleted).Find(&completedSessions)
+	baseQuery().Where("start_time >= ? AND start_time < ? AND status = ?", startOfDay, endOfDay, domain.StatusCompleted).Find(&completedSessions)
 	if len(completedSessions) > 0 {
 		var totalHours float64
 		for _, s := range completedSessions {

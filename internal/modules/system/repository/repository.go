@@ -573,9 +573,39 @@ func (r *gormSystemRepository) getTableName(itemType string) string {
 
 // ---------------- Dashboard & Stats ----------------
 
+// getOperationalWindow returns the start and end of the current operational business day.
+// In delivery operations, shifts run through midnight and early morning.
+// The operational day cut-off is 10:00 AM (Asia/Riyadh timezone).
+// Before 10:00 AM: belongs to yesterday's operational day (until 10:00 AM today).
+// From 10:00 AM onwards: a new operational day begins (resets counters) and runs until 10:00 AM next day.
+func getOperationalWindow(t time.Time) (time.Time, time.Time) {
+	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
+	now := t.In(riyadh)
+	cutoffHour := 10
+
+	var start time.Time
+	var end time.Time
+
+	if now.Hour() < cutoffHour {
+		yesterday := now.AddDate(0, 0, -1)
+		if yesterday.Year() == 2026 && yesterday.Month() == 11 && yesterday.Day() == 6 {
+			// For day 6 transition, start from 00:00:00 so all day 6 shifts are fully included
+			start = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, riyadh)
+		} else {
+			start = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), cutoffHour, 0, 0, 0, riyadh)
+		}
+		end = time.Date(now.Year(), now.Month(), now.Day(), cutoffHour, 0, 0, 0, riyadh)
+	} else {
+		start = time.Date(now.Year(), now.Month(), now.Day(), cutoffHour, 0, 0, 0, riyadh)
+		tomorrow := now.AddDate(0, 0, 1)
+		end = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), cutoffHour, 0, 0, 0, riyadh)
+	}
+	return start, end
+}
+
 func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *uuid.UUID) (*dto.DashboardStatsResponse, error) {
 	now := time.Now()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	startOfDay, endOfDay := getOperationalWindow(now)
 
 	resp := &dto.DashboardStatsResponse{
 		DistanceChart:    make([]dto.ChartDataPoint, 0),
@@ -611,14 +641,14 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 	}
 
 	// Today unique employees worked (either started today or currently active)
-	baseQuery().Where("work_sessions.start_time >= ? OR work_sessions.status = ?", startOfDay, "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.TodayEmployees)
+	baseQuery().Where("(work_sessions.start_time >= ? AND work_sessions.start_time < ?) OR work_sessions.status = ?", startOfDay, endOfDay, "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.TodayEmployees)
 
 	// Currently active working sessions (unique employees)
 	baseQuery().Where("work_sessions.status = ?", "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.WorkingEmployees)
 
 	// Finished shifts today (unique employees who completed a session today and have NO active session right now)
 	baseQuery().
-		Where("work_sessions.start_time >= ? AND work_sessions.status = ?", startOfDay, "COMPLETED").
+		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.status = ?", startOfDay, endOfDay, "COMPLETED").
 		Where("work_sessions.employee_id NOT IN (SELECT ws2.employee_id FROM work_sessions ws2 WHERE ws2.status = 'ACTIVE' AND ws2.employee_id IS NOT NULL)").
 		Distinct("work_sessions.employee_id").
 		Count(&resp.FinishedEmployees)
@@ -631,21 +661,21 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 	// Today's Orders Sum (only reviewed sessions approved by supervisor)
 	var ordersSum struct{ Total int64 }
 	baseQuery().Select("COALESCE(SUM(work_sessions.orders_count), 0) as total").
-		Where("work_sessions.start_time >= ? AND work_sessions.is_reviewed = ?", startOfDay, true).
+		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.is_reviewed = ?", startOfDay, endOfDay, true).
 		Scan(&ordersSum)
 	resp.TodayOrders = ordersSum.Total
 
 	// Today's Distance Sum (only reviewed sessions approved by supervisor)
 	var distSum struct{ Total float64 }
 	baseQuery().Select("COALESCE(SUM(work_sessions.distance), 0) as total").
-		Where("work_sessions.start_time >= ? AND work_sessions.is_reviewed = ?", startOfDay, true).
+		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.is_reviewed = ?", startOfDay, endOfDay, true).
 		Scan(&distSum)
 	resp.TodayDistance = distSum.Total
 
 	// Today's Fuel Cost Sum (only reviewed sessions approved by supervisor)
 	var fuelSum struct{ Total float64 }
 	baseQuery().Select("COALESCE(SUM(work_sessions.fuel_cost), 0) as total").
-		Where("work_sessions.start_time >= ? AND work_sessions.is_reviewed = ?", startOfDay, true).
+		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.is_reviewed = ?", startOfDay, endOfDay, true).
 		Scan(&fuelSum)
 	resp.TodayFuelCost = fuelSum.Total
 
@@ -655,7 +685,7 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 		EndTime   *time.Time `gorm:"column:end_time"`
 	}
 	baseQuery().Select("work_sessions.start_time, work_sessions.end_time").
-		Where("work_sessions.start_time >= ? AND work_sessions.status = ?", startOfDay, "COMPLETED").
+		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.status = ?", startOfDay, endOfDay, "COMPLETED").
 		Scan(&completedRows)
 	if len(completedRows) > 0 {
 		var totalHours float64
