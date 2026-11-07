@@ -576,32 +576,31 @@ func (r *gormSystemRepository) getTableName(itemType string) string {
 // getOperationalWindow returns the start and end of the current operational business day.
 // In delivery operations, shifts run through midnight and early morning.
 // The operational day cut-off is 10:00 AM (Asia/Riyadh timezone).
-// Before 10:00 AM: displays yesterday's full operational day (00:00:00 to 24:00:00 of yesterday).
-// From 10:00 AM onwards: displays today's full operational day (00:00:00 to 24:00:00 of today),
-// including morning shifts that started before 10:00 AM today.
+// Before 10:00 AM: belongs to yesterday's operational day (from yesterday 00:00:00 until 10:00 AM today).
+// From 10:00 AM onwards: today's operational day (from today 00:00:00 until 10:00 AM tomorrow).
 func getOperationalWindow(t time.Time) (time.Time, time.Time) {
 	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
 	now := t.In(riyadh)
 	cutoffHour := 10
 
-	targetDay := now
-	if now.Hour() < cutoffHour {
-		targetDay = now.AddDate(0, 0, -1)
-	}
+	var start time.Time
+	var end time.Time
 
-	start := time.Date(targetDay.Year(), targetDay.Month(), targetDay.Day(), 0, 0, 0, 0, riyadh)
-	end := start.AddDate(0, 0, 1)
+	if now.Hour() < cutoffHour {
+		yesterday := now.AddDate(0, 0, -1)
+		start = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, riyadh)
+		end = time.Date(now.Year(), now.Month(), now.Day(), cutoffHour, 0, 0, 0, riyadh)
+	} else {
+		tomorrow := now.AddDate(0, 0, 1)
+		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, riyadh)
+		end = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), cutoffHour, 0, 0, 0, riyadh)
+	}
 	return start, end
 }
 
 func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *uuid.UUID) (*dto.DashboardStatsResponse, error) {
 	now := time.Now()
 	startOfDay, endOfDay := getOperationalWindow(now)
-
-	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
-	nowInRiyadh := now.In(riyadh)
-	calendarDayStart := time.Date(nowInRiyadh.Year(), nowInRiyadh.Month(), nowInRiyadh.Day(), 0, 0, 0, 0, riyadh)
-	calendarDayEnd := calendarDayStart.AddDate(0, 0, 1)
 
 	resp := &dto.DashboardStatsResponse{
 		DistanceChart:    make([]dto.ChartDataPoint, 0),
@@ -636,22 +635,22 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 		return q
 	}
 
-	// Today unique employees worked (calendar day start of shift: matches /dashboard/employees/today)
-	baseQuery().Where("work_sessions.start_time >= ? AND work_sessions.start_time < ?", calendarDayStart, calendarDayEnd).Distinct("work_sessions.employee_id").Count(&resp.TodayEmployees)
+	// Currently active working sessions right now (Working Now / يعملون الآن)
+	baseQuery().Where("work_sessions.status = ?", "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.WorkingEmployees)
 
-	// Currently active working sessions for today
-	baseQuery().Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.status = ?", calendarDayStart, calendarDayEnd, "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.WorkingEmployees)
+	// Today unique employees worked in the operational cycle (or currently active)
+	baseQuery().Where("(work_sessions.start_time >= ? AND work_sessions.start_time < ?) OR work_sessions.status = ?", startOfDay, endOfDay, "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.TodayEmployees)
 
-	// Finished shifts today (unique employees who completed a session in today's calendar day: matches /dashboard/employees/finished)
+	// Finished shifts in operational day (unique employees who completed a session in operational day and have NO active session right now)
 	baseQuery().
-		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.status = ?", calendarDayStart, calendarDayEnd, "COMPLETED").
+		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.status = ?", startOfDay, endOfDay, "COMPLETED").
 		Where("work_sessions.employee_id NOT IN (SELECT ws2.employee_id FROM work_sessions ws2 WHERE ws2.status = 'ACTIVE' AND ws2.employee_id IS NOT NULL)").
 		Distinct("work_sessions.employee_id").
 		Count(&resp.FinishedEmployees)
 
 	// Guarantee mathematical consistency: TodayEmployees = WorkingEmployees + FinishedEmployees
-	if resp.TodayEmployees >= resp.WorkingEmployees && resp.FinishedEmployees > (resp.TodayEmployees-resp.WorkingEmployees) {
-		resp.FinishedEmployees = resp.TodayEmployees - resp.WorkingEmployees
+	if resp.TodayEmployees < resp.WorkingEmployees+resp.FinishedEmployees {
+		resp.TodayEmployees = resp.WorkingEmployees + resp.FinishedEmployees
 	}
 
 	// Today's Orders Sum (only reviewed sessions approved by supervisor)
