@@ -576,30 +576,21 @@ func (r *gormSystemRepository) getTableName(itemType string) string {
 // getOperationalWindow returns the start and end of the current operational business day.
 // In delivery operations, shifts run through midnight and early morning.
 // The operational day cut-off is 10:00 AM (Asia/Riyadh timezone).
-// Before 10:00 AM: belongs to yesterday's operational day (until 10:00 AM today).
-// From 10:00 AM onwards: a new operational day begins (resets counters) and runs until 10:00 AM next day.
+// Before 10:00 AM: displays yesterday's full operational day (00:00:00 to 24:00:00 of yesterday).
+// From 10:00 AM onwards: displays today's full operational day (00:00:00 to 24:00:00 of today),
+// including morning shifts that started before 10:00 AM today.
 func getOperationalWindow(t time.Time) (time.Time, time.Time) {
 	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
 	now := t.In(riyadh)
 	cutoffHour := 10
 
-	var start time.Time
-	var end time.Time
-
+	targetDay := now
 	if now.Hour() < cutoffHour {
-		yesterday := now.AddDate(0, 0, -1)
-		if yesterday.Year() == 2026 && yesterday.Month() == 11 && yesterday.Day() == 6 {
-			// For day 6 transition, start from 00:00:00 so all day 6 shifts are fully included
-			start = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, riyadh)
-		} else {
-			start = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), cutoffHour, 0, 0, 0, riyadh)
-		}
-		end = time.Date(now.Year(), now.Month(), now.Day(), cutoffHour, 0, 0, 0, riyadh)
-	} else {
-		start = time.Date(now.Year(), now.Month(), now.Day(), cutoffHour, 0, 0, 0, riyadh)
-		tomorrow := now.AddDate(0, 0, 1)
-		end = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), cutoffHour, 0, 0, 0, riyadh)
+		targetDay = now.AddDate(0, 0, -1)
 	}
+
+	start := time.Date(targetDay.Year(), targetDay.Month(), targetDay.Day(), 0, 0, 0, 0, riyadh)
+	end := start.AddDate(0, 0, 1)
 	return start, end
 }
 

@@ -469,22 +469,13 @@ func getOperationalWindow(t time.Time) (time.Time, time.Time) {
 	now := t.In(riyadh)
 	cutoffHour := 10
 
-	var start time.Time
-	var end time.Time
-
+	targetDay := now
 	if now.Hour() < cutoffHour {
-		yesterday := now.AddDate(0, 0, -1)
-		if yesterday.Year() == 2026 && yesterday.Month() == 11 && yesterday.Day() == 6 {
-			start = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, riyadh)
-		} else {
-			start = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), cutoffHour, 0, 0, 0, riyadh)
-		}
-		end = time.Date(now.Year(), now.Month(), now.Day(), cutoffHour, 0, 0, 0, riyadh)
-	} else {
-		start = time.Date(now.Year(), now.Month(), now.Day(), cutoffHour, 0, 0, 0, riyadh)
-		tomorrow := now.AddDate(0, 0, 1)
-		end = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), cutoffHour, 0, 0, 0, riyadh)
+		targetDay = now.AddDate(0, 0, -1)
 	}
+
+	start := time.Date(targetDay.Year(), targetDay.Month(), targetDay.Day(), 0, 0, 0, 0, riyadh)
+	end := start.AddDate(0, 0, 1)
 	return start, end
 }
 
