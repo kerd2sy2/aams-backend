@@ -607,7 +607,6 @@ func getOperationalWindow(t time.Time) (time.Time, time.Time) {
 func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *uuid.UUID) (*dto.DashboardStatsResponse, error) {
 	now := time.Now()
 	startOfDay, endOfDay := getOperationalWindow(now)
-	log.Printf("[DEBUG-REPO] now=%v startOfDay=%v endOfDay=%v branchID=%v", now, startOfDay, endOfDay, branchID)
 
 	resp := &dto.DashboardStatsResponse{
 		DistanceChart:    make([]dto.ChartDataPoint, 0),
