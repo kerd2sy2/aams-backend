@@ -2479,7 +2479,7 @@ func (r *gormArchiveRepository) GetArchivedItems(ctx context.Context, filter dto
 			q = q.Where("branch_id = ?", *filter.BranchID)
 		}
 		if hasSearch {
-			q = q.Where("name LIKE ? OR national_id LIKE ? OR employee_number LIKE ? OR motorcycle_number LIKE ?", search, search, search, search)
+			q = q.Where("name LIKE ? OR national_id LIKE ? OR employee_number LIKE ? OR motorcycle_number LIKE ? OR application_id LIKE ?", search, search, search, search, search)
 		}
 		if err := q.Find(&emps).Error; err == nil {
 			for _, e := range emps {

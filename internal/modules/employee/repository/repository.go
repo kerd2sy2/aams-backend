@@ -104,7 +104,7 @@ func (r *gormEmployeeRepository) FindAll(ctx context.Context, filter dto.Employe
 	q := r.db.WithContext(ctx).Model(&domain.Employee{})
 	if filter.Search != "" {
 		s := "%" + strings.ToLower(filter.Search) + "%"
-		q = q.Where("LOWER(name) LIKE ? OR national_id LIKE ? OR phone LIKE ? OR employee_number LIKE ?", s, s, s, s)
+		q = q.Where("LOWER(name) LIKE ? OR national_id LIKE ? OR phone LIKE ? OR employee_number LIKE ? OR application_id LIKE ?", s, s, s, s, s)
 	}
 	if filter.ApplicationID != "" {
 		q = q.Where("application_id = ?", filter.ApplicationID)
@@ -146,7 +146,7 @@ func (r *gormEmployeeRepository) FindAll(ctx context.Context, filter dto.Employe
 func (r *gormEmployeeRepository) Search(ctx context.Context, query string, branchID *uuid.UUID) ([]domain.Employee, error) {
 	var emps []domain.Employee
 	s := "%" + strings.ToLower(query) + "%"
-	q := r.db.WithContext(ctx).Where("LOWER(name) LIKE ? OR national_id LIKE ? OR phone LIKE ? OR motorcycle_number LIKE ? OR employee_number LIKE ?", s, s, s, s, s)
+	q := r.db.WithContext(ctx).Where("LOWER(name) LIKE ? OR national_id LIKE ? OR phone LIKE ? OR motorcycle_number LIKE ? OR employee_number LIKE ? OR application_id LIKE ?", s, s, s, s, s, s)
 	if branchID != nil && *branchID != uuid.Nil {
 		q = q.Where("branch_id = ?", *branchID)
 	}
