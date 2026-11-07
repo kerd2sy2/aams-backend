@@ -58,11 +58,14 @@ func NewDashboardHandler(svc service.DashboardService) *DashboardHandler {
 
 func (h *DashboardHandler) GetStats(c *gin.Context) {
 	branchID := getBranchID(c)
+	log.Printf("[DEBUG-DASHBOARD] user_id=%v role=%v branch_id=%v", c.GetString("user_id"), c.GetString("role"), branchID)
 	stats, err := h.svc.GetStats(c.Request.Context(), branchID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل تحميل إحصائيات لوحة التحكم"})
 		return
 	}
+	log.Printf("[DEBUG-DASHBOARD] result TodayOrders=%v TodayDistance=%v TodayFuel=%v TodayEmp=%v WorkingEmp=%v FinishedEmp=%v",
+		stats.TodayOrders, stats.TodayDistance, stats.TodayFuelCost, stats.TodayEmployees, stats.WorkingEmployees, stats.FinishedEmployees)
 	c.JSON(http.StatusOK, stats)
 }
 
