@@ -492,6 +492,11 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 	now := time.Now()
 	startOfDay, endOfDay := getOperationalWindow(now)
 
+	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
+	nowInRiyadh := now.In(riyadh)
+	calendarDayStart := time.Date(nowInRiyadh.Year(), nowInRiyadh.Month(), nowInRiyadh.Day(), 0, 0, 0, 0, riyadh)
+	calendarDayEnd := calendarDayStart.AddDate(0, 0, 1)
+
 	resp := &dto.DashboardResponse{}
 
 	// Helper: returns a fresh base query with optional branch join
@@ -504,15 +509,15 @@ func (r *gormWorkRepository) GetDashboardStats(ctx context.Context, branchID *uu
 		return q
 	}
 
-	// Total employees worked today (unique employees - either started today or currently active)
-	baseQuery().Where("(start_time >= ? AND start_time < ?) OR status = ?", startOfDay, endOfDay, domain.StatusActive).Distinct("employee_id").Count(&resp.TodayEmployees)
+	// Total employees worked today (calendar day start of shift: matches /dashboard/employees/today)
+	baseQuery().Where("start_time >= ? AND start_time < ?", calendarDayStart, calendarDayEnd).Distinct("employee_id").Count(&resp.TodayEmployees)
 
-	// Currently active working employees (unique employees)
-	baseQuery().Where("status = ?", domain.StatusActive).Distinct("employee_id").Count(&resp.WorkingEmployees)
+	// Currently active working employees for today
+	baseQuery().Where("start_time >= ? AND start_time < ? AND status = ?", calendarDayStart, calendarDayEnd, domain.StatusActive).Distinct("employee_id").Count(&resp.WorkingEmployees)
 
-	// Finished employees today (unique employees who completed a session today and have NO active session right now)
+	// Finished employees today (unique employees who completed a session in today's calendar day: matches /dashboard/employees/finished)
 	baseQuery().
-		Where("start_time >= ? AND start_time < ? AND status = ?", startOfDay, endOfDay, domain.StatusCompleted).
+		Where("start_time >= ? AND start_time < ? AND status = ?", calendarDayStart, calendarDayEnd, domain.StatusCompleted).
 		Where("employee_id NOT IN (SELECT ws2.employee_id FROM work_sessions ws2 WHERE ws2.status = ? AND ws2.employee_id IS NOT NULL)", domain.StatusActive).
 		Distinct("employee_id").
 		Count(&resp.FinishedEmployees)

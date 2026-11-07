@@ -607,6 +607,11 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 	now := time.Now()
 	startOfDay, endOfDay := getOperationalWindow(now)
 
+	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
+	nowInRiyadh := now.In(riyadh)
+	calendarDayStart := time.Date(nowInRiyadh.Year(), nowInRiyadh.Month(), nowInRiyadh.Day(), 0, 0, 0, 0, riyadh)
+	calendarDayEnd := calendarDayStart.AddDate(0, 0, 1)
+
 	resp := &dto.DashboardStatsResponse{
 		DistanceChart:    make([]dto.ChartDataPoint, 0),
 		OrdersChart:      make([]dto.ChartDataPoint, 0),
@@ -640,15 +645,15 @@ func (r *gormSystemRepository) GetDashboardStats(ctx context.Context, branchID *
 		return q
 	}
 
-	// Today unique employees worked (either started today or currently active)
-	baseQuery().Where("(work_sessions.start_time >= ? AND work_sessions.start_time < ?) OR work_sessions.status = ?", startOfDay, endOfDay, "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.TodayEmployees)
+	// Today unique employees worked (calendar day start of shift: matches /dashboard/employees/today)
+	baseQuery().Where("work_sessions.start_time >= ? AND work_sessions.start_time < ?", calendarDayStart, calendarDayEnd).Distinct("work_sessions.employee_id").Count(&resp.TodayEmployees)
 
-	// Currently active working sessions (unique employees)
-	baseQuery().Where("work_sessions.status = ?", "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.WorkingEmployees)
+	// Currently active working sessions for today
+	baseQuery().Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.status = ?", calendarDayStart, calendarDayEnd, "ACTIVE").Distinct("work_sessions.employee_id").Count(&resp.WorkingEmployees)
 
-	// Finished shifts today (unique employees who completed a session today and have NO active session right now)
+	// Finished shifts today (unique employees who completed a session in today's calendar day: matches /dashboard/employees/finished)
 	baseQuery().
-		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.status = ?", startOfDay, endOfDay, "COMPLETED").
+		Where("work_sessions.start_time >= ? AND work_sessions.start_time < ? AND work_sessions.status = ?", calendarDayStart, calendarDayEnd, "COMPLETED").
 		Where("work_sessions.employee_id NOT IN (SELECT ws2.employee_id FROM work_sessions ws2 WHERE ws2.status = 'ACTIVE' AND ws2.employee_id IS NOT NULL)").
 		Distinct("work_sessions.employee_id").
 		Count(&resp.FinishedEmployees)
