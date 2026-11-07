@@ -236,7 +236,7 @@ func calculateVehicleOilStatus(v *domain.Vehicle) (needsOil bool, remainingKM fl
 
 	interval := oilChangeInterval(v.VehicleType)
 	var drivenSinceOil float64
-	if v.LastOilChangeKM > 0 {
+	if v.LastOilChangeKM > 0 || v.LastOilChangeDate != nil {
 		drivenSinceOil = v.CurrentKM - v.LastOilChangeKM
 		if drivenSinceOil < 0 {
 			drivenSinceOil = 0

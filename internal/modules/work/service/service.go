@@ -152,33 +152,50 @@ func (s *workService) StartWork(ctx context.Context, req dto.StartWorkRequest) (
 		}
 		interval := oilChangeInterval(vehicleType)
 
-		currKM := vehicleInfo.CurrentKM
-		if req.StartKM > currKM {
-			currKM = req.StartKM
-		}
+		isBroken := vehicleInfo.IsOdometerBroken ||
+			strings.Contains(motorcycleNumber, "7569") ||
+			strings.Contains(motorcycleNumber, "8043") ||
+			strings.Contains(vehicleInfo.PlateNumber, "7569") ||
+			strings.Contains(vehicleInfo.PlateNumber, "8043")
 
-		var distanceSinceOil float64
-		if vehicleInfo.LastOilChangeKM > 0 {
-			distanceSinceOil = currKM - vehicleInfo.LastOilChangeKM
-			if distanceSinceOil < 0 {
-				distanceSinceOil = 0
+		if isBroken {
+			if vehicleInfo.LastOilChangeDate != nil {
+				days := time.Since(*vehicleInfo.LastOilChangeDate).Hours() / 24.0
+				if days >= 5.0 {
+					return nil, fmt.Errorf("يجب تغيير زيت الدباب (%s) أولاً! مر %.0f أيام منذ آخر تغيير زيت (الحد الأقصى 5 أيام)", motorcycleNumber, math.Floor(days))
+				}
+			} else {
+				return nil, fmt.Errorf("يجب تغيير زيت الدباب (%s) أولاً! لم يتم تسجيل تاريخ آخر تغيير زيت", motorcycleNumber)
 			}
 		} else {
-			// Vehicle has no prior oil change recorded in system.
-			// If it has tracked distance in AAMS, use that; otherwise this initial shift establishes the baseline.
-			if vehicleInfo.TotalDistance > 0 {
-				distanceSinceOil = vehicleInfo.TotalDistance
+			currKM := vehicleInfo.CurrentKM
+			if req.StartKM > currKM {
+				currKM = req.StartKM
+			}
+
+			var distanceSinceOil float64
+			if vehicleInfo.LastOilChangeKM > 0 || vehicleInfo.LastOilChangeDate != nil {
+				distanceSinceOil = currKM - vehicleInfo.LastOilChangeKM
+				if distanceSinceOil < 0 {
+					distanceSinceOil = 0
+				}
 			} else {
-				distanceSinceOil = 0
-				vehicleInfo.LastOilChangeKM = req.StartKM
-				if s.vehicleProvider != nil && motorcycleNumber != "" {
-					_ = s.vehicleProvider.UpdateVehicleKM(ctx, motorcycleNumber, req.StartKM)
+				// Vehicle has no prior oil change recorded in system.
+				// If it has tracked distance in AAMS, use that; otherwise this initial shift establishes the baseline.
+				if vehicleInfo.TotalDistance > 0 {
+					distanceSinceOil = vehicleInfo.TotalDistance
+				} else {
+					distanceSinceOil = 0
+					vehicleInfo.LastOilChangeKM = req.StartKM
+					if s.vehicleProvider != nil && motorcycleNumber != "" {
+						_ = s.vehicleProvider.UpdateVehicleKM(ctx, motorcycleNumber, req.StartKM)
+					}
 				}
 			}
-		}
 
-		if distanceSinceOil >= interval {
-			return nil, fmt.Errorf("يجب تغيير زيت الدباب (%s) أولاً! المسافة المقطوعة منذ آخر تغيير زيت: %.0f كم (الحد الأقصى %.0f كم)", motorcycleNumber, distanceSinceOil, interval)
+			if distanceSinceOil >= interval {
+				return nil, fmt.Errorf("يجب تغيير زيت الدباب (%s) أولاً! المسافة المقطوعة منذ آخر تغيير زيت: %.0f كم (الحد الأقصى %.0f كم)", motorcycleNumber, distanceSinceOil, interval)
+			}
 		}
 	} else if motorcycleNumber == "" {
 		// Fallback for employee with no bike assigned
@@ -494,11 +511,14 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 	if targetBike != "" && s.vehicleProvider != nil {
 		vInfo, err := s.vehicleProvider.EnsureVehicleExists(ctx, targetBike, "", nil, 0)
 		if err == nil && vInfo != nil {
+			if vInfo.PlateNumber != "" {
+				resp.MotorcycleNumber = vInfo.PlateNumber
+			}
 			resp.VehicleLastKM = vInfo.CurrentKM
 			resp.LastKM = vInfo.CurrentKM
 			resp.LastEndKM = vInfo.CurrentKM
 			resp.RegistrationImage = vInfo.RegistrationImage
-			isBroken := vInfo.IsOdometerBroken || strings.Contains(targetBike, "7569") || strings.Contains(targetBike, "8043")
+			isBroken := vInfo.IsOdometerBroken || strings.Contains(targetBike, "7569") || strings.Contains(targetBike, "8043") || strings.Contains(vInfo.PlateNumber, "7569") || strings.Contains(vInfo.PlateNumber, "8043")
 			resp.IsOdometerBroken = isBroken
 
 			interval := oilChangeInterval(vInfo.VehicleType)
@@ -527,7 +547,7 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 							oilStatusMessage = fmt.Sprintf("فاضل %d أيام لتغيير الزيت", remainingDays)
 						}
 						remaining = remDays * 200.0
-						distanceSinceOil = days * 200.0
+						distanceSinceOil = 0
 					}
 				} else {
 					needsOil = true
@@ -537,7 +557,7 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 					oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
 				}
 			} else {
-				if vInfo.LastOilChangeKM > 0 {
+				if vInfo.LastOilChangeKM > 0 || vInfo.LastOilChangeDate != nil {
 					distanceSinceOil = vInfo.CurrentKM - vInfo.LastOilChangeKM
 					if distanceSinceOil < 0 {
 						distanceSinceOil = 0
@@ -622,7 +642,7 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 		var remainingDays int
 		var oilStatusMessage string
 
-		isBroken := vehicleInfo.IsOdometerBroken || strings.Contains(vehicleInfo.PlateNumber, "7569") || strings.Contains(vehicleInfo.PlateNumber, "8043")
+		isBroken := vehicleInfo.IsOdometerBroken || strings.Contains(bike, "7569") || strings.Contains(bike, "8043") || strings.Contains(vehicleInfo.PlateNumber, "7569") || strings.Contains(vehicleInfo.PlateNumber, "8043")
 		if isBroken {
 			if vehicleInfo.LastOilChangeDate != nil {
 				days := time.Since(*vehicleInfo.LastOilChangeDate).Hours() / 24.0
@@ -644,7 +664,7 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 					}
 					remaining = remDays * 200.0
 					pct = (days / 5.0) * 100
-					distanceSinceOil = days * 200.0
+					distanceSinceOil = 0
 				}
 			} else {
 				needsOil = true
@@ -655,7 +675,7 @@ func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motor
 				oilStatusMessage = "اليوم موعد تغيير الزيت للدباب"
 			}
 		} else {
-			if vehicleInfo.LastOilChangeKM > 0 {
+			if vehicleInfo.LastOilChangeKM > 0 || vehicleInfo.LastOilChangeDate != nil {
 				distanceSinceOil = vehicleInfo.CurrentKM - vehicleInfo.LastOilChangeKM
 				if distanceSinceOil < 0 {
 					distanceSinceOil = 0

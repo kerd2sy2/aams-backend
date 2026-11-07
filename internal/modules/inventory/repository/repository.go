@@ -232,6 +232,18 @@ func (r *gormInventoryRepository) DeletePurchaseInvoice(ctx context.Context, id 
 	return r.db.WithContext(ctx).Delete(&domain.PurchaseInvoice{}, "id = ?", id).Error
 }
 
+func extractDigitsFromPlate(plate string) string {
+	var b strings.Builder
+	for _, r := range plate {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		} else if r >= '٠' && r <= '٩' {
+			b.WriteRune('0' + (r - '٠'))
+		}
+	}
+	return b.String()
+}
+
 func (r *gormInventoryRepository) UpdateVehicleOilKM(ctx context.Context, plateNumber string, currentKM float64) error {
 	clean := strings.TrimSpace(plateNumber)
 	if clean == "" {
@@ -246,9 +258,18 @@ func (r *gormInventoryRepository) UpdateVehicleOilKM(ctx context.Context, plateN
 	if currentKM > 0 {
 		updates["current_km"] = currentKM
 	}
-	return r.db.WithContext(ctx).Table("vehicles").
+	tx := r.db.WithContext(ctx).Table("vehicles").
 		Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?)", clean, clean+"%", "%"+clean+"%").
-		Updates(updates).Error
+		Updates(updates)
+	if tx.Error == nil && tx.RowsAffected == 0 {
+		digits := extractDigitsFromPlate(clean)
+		if len(digits) >= 3 {
+			return r.db.WithContext(ctx).Table("vehicles").
+				Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?)", digits, digits+" %", digits+"%").
+				Updates(updates).Error
+		}
+	}
+	return tx.Error
 }
 
 func (r *gormInventoryRepository) FindVehicleByPlateOrID(ctx context.Context, id *uuid.UUID, plateNumber string) (*VehicleInfo, error) {
@@ -264,6 +285,16 @@ func (r *gormInventoryRepository) FindVehicleByPlateOrID(ctx context.Context, id
 
 	var v VehicleInfo
 	if err := query.First(&v).Error; err != nil {
+		if id == nil || *id == uuid.Nil {
+			digits := extractDigitsFromPlate(clean)
+			if len(digits) >= 3 {
+				if err2 := r.db.WithContext(ctx).Table("vehicles").
+					Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?)", digits, digits+" %", digits+"%").
+					First(&v).Error; err2 == nil {
+					return &v, nil
+				}
+			}
+		}
 		return nil, err
 	}
 	return &v, nil

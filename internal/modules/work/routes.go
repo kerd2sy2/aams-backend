@@ -684,6 +684,18 @@ func (v *gormVehicleAdapter) GetVehicleLastKM(ctx context.Context, plateNumber s
 	return info.CurrentKM, nil
 }
 
+func extractPlateDigits(plate string) string {
+	var b strings.Builder
+	for _, r := range plate {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		} else if r >= '٠' && r <= '٩' {
+			b.WriteRune('0' + (r - '٠'))
+		}
+	}
+	return b.String()
+}
+
 func (v *gormVehicleAdapter) GetVehicleInfo(ctx context.Context, plateNumber string) (*service.VehicleData, error) {
 	clean := strings.TrimSpace(plateNumber)
 	if clean == "" {
@@ -708,7 +720,15 @@ func (v *gormVehicleAdapter) GetVehicleInfo(ctx context.Context, plateNumber str
 		Order("CASE WHEN TRIM(plate_number) = '" + clean + "' THEN 0 ELSE 1 END").
 		First(&row).Error
 	if err != nil {
-		return nil, err
+		digits := extractPlateDigits(clean)
+		if len(digits) >= 3 {
+			err = v.db.WithContext(ctx).Table("vehicles").
+				Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR plate_number ILIKE ? OR plate_number ILIKE ?)", digits, digits+" %", digits+"%").
+				First(&row).Error
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &service.VehicleData{
