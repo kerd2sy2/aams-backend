@@ -92,6 +92,8 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	// Performance indexes and schema upgrades
 	if rawDB, err := db.DB(); err == nil {
 		rawDB.Exec("ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS review_video_url text")
+		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_work_sessions_start_time ON work_sessions (start_time)")
+		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_work_sessions_start_status ON work_sessions (start_time, status)")
 		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_operation_videos_expires_at ON operation_videos (expires_at) WHERE is_deleted = false")
 		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_operation_videos_employee_name ON operation_videos (employee_name)")
 		rawDB.Exec("CREATE INDEX IF NOT EXISTS idx_operation_videos_order_number ON operation_videos (order_number)")
