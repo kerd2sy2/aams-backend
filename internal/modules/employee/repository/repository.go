@@ -199,6 +199,9 @@ func (r *gormEmployeeRepository) GetWorkingEmployees(ctx context.Context, branch
 		}
 	}
 
+	var activeEmps []domain.Employee
+	var staleEmpIDs []uuid.UUID
+
 	for i := range emps {
 		if s, ok := sessMap[emps[i].ID]; ok {
 			startTimeCopy := s.StartTime
@@ -211,10 +214,18 @@ func (r *gormEmployeeRepository) GetWorkingEmployees(ctx context.Context, branch
 			} else {
 				emps[i].ActiveMotorcycle = emps[i].MotorcycleNumber
 			}
+			activeEmps = append(activeEmps, emps[i])
+		} else {
+			staleEmpIDs = append(staleEmpIDs, emps[i].ID)
 		}
 	}
 
-	return emps, nil
+	// Auto-heal database: clear stuck is_working flags for employees with no active session
+	if len(staleEmpIDs) > 0 {
+		_ = r.db.WithContext(ctx).Table("employees").Where("id IN ?", staleEmpIDs).Update("is_working", false).Error
+	}
+
+	return activeEmps, nil
 }
 
 func (r *gormEmployeeRepository) GetLocations(ctx context.Context, branchID *uuid.UUID) ([]dto.EmployeeLocationDTO, error) {

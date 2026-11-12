@@ -94,9 +94,7 @@ func (a *gormEmployeeAdapter) UpdateEmployeeOnEndWork(ctx context.Context, id uu
 	updates := map[string]interface{}{
 		"total_distance": gorm.Expr("total_distance + ?", addedDistance),
 		"total_orders":   gorm.Expr("total_orders + ?", totalOrders),
-	}
-	if activeCount == 0 {
-		updates["is_working"] = false
+		"is_working":     false,
 	}
 
 	return a.db.WithContext(ctx).Table("employees").Where("id = ?", id).Updates(updates).Error
