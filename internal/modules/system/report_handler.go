@@ -26,10 +26,12 @@ func (h *ReportHandler) GetReports(c *gin.Context) {
 	}
 
 	// Strict IDOR Prevention & Field Ownership Enforcement:
-	// If caller is a field employee/driver/delegate, strictly bind filter to their verified identity
+	// If caller is a field employee/driver/delegate (and NOT a supervisor/admin), bind filter to their verified identity
 	isEmp, _ := c.Get("is_employee")
-	role := strings.ToUpper(c.GetString("admin_role"))
-	if isEmp == true || role == "DRIVER" || role == "EMPLOYEE" || role == "DELEGATE" {
+	role := strings.ToUpper(strings.TrimSpace(c.GetString("admin_role")))
+	isSupervisorOrAdmin := role == "SUPERVISOR" || role == "ADMIN" || role == "SUPER_ADMIN" ||
+		role == "OWNER" || role == "GENERAL_MANAGER" || role == "OPERATIONS_MANAGER" || role == "ACCOUNTANT"
+	if !isSupervisorOrAdmin && (isEmp == true || role == "DRIVER" || role == "EMPLOYEE" || role == "DELEGATE") {
 		if authEmpID, exists := c.Get("employee_id"); exists {
 			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
 				filter.EmployeeID = aUUID.String()

@@ -290,6 +290,15 @@ func (h *WorkHandler) CheckOilChange(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+func isSupervisorOrAdminRole(role string) bool {
+	switch strings.ToUpper(strings.TrimSpace(role)) {
+	case "SUPERVISOR", "ADMIN", "SUPER_ADMIN", "OWNER", "GENERAL_MANAGER", "OPERATIONS_MANAGER":
+		return true
+	default:
+		return false
+	}
+}
+
 func (h *WorkHandler) SupervisorStartShift(c *gin.Context) {
 	scope, err := middleware.ResolveBranchScope(c)
 	if err != nil {
@@ -298,7 +307,7 @@ func (h *WorkHandler) SupervisorStartShift(c *gin.Context) {
 	}
 
 	if isEmpVal, ok := c.Get("is_employee"); ok {
-		if b, okBool := isEmpVal.(bool); okBool && b {
+		if b, okBool := isEmpVal.(bool); okBool && b && !isSupervisorOrAdminRole(scope.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: بدء دوام المشرف مخصص لحسابات الإشراف والإدارة فقط"})
 			return
 		}
@@ -362,7 +371,7 @@ func (h *WorkHandler) SupervisorEndShift(c *gin.Context) {
 	}
 
 	if isEmpVal, ok := c.Get("is_employee"); ok {
-		if b, okBool := isEmpVal.(bool); okBool && b {
+		if b, okBool := isEmpVal.(bool); okBool && b && !isSupervisorOrAdminRole(scope.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح: إنهاء دوام المشرف مخصص لحسابات الإشراف والإدارة فقط"})
 			return
 		}
