@@ -9,17 +9,42 @@ import (
 )
 
 type visitor struct {
-	count    int
-	lastSeen time.Time
+	count       int
+	windowStart time.Time
+	lastSeen    time.Time
 }
 
 func isLoopback(ip string) bool {
 	return ip == "127.0.0.1" || ip == "::1" || ip == "localhost" || ip == "0.0.0.0" || ip == ""
 }
 
+func allowVisitor(mu *sync.Mutex, store map[string]*visitor, ip string, maxReq int, window time.Duration) bool {
+	now := time.Now()
+	mu.Lock()
+	defer mu.Unlock()
+
+	v, exists := store[ip]
+	if !exists {
+		store[ip] = &visitor{count: 1, windowStart: now, lastSeen: now}
+		return true
+	}
+
+	// Reset counter strictly when the fixed window starting at windowStart expires.
+	if now.Sub(v.windowStart) > window {
+		v.count = 1
+		v.windowStart = now
+		v.lastSeen = now
+		return true
+	}
+
+	v.count++
+	v.lastSeen = now
+	return v.count <= maxReq
+}
+
 // RateLimiter returns a Gin middleware that limits requests per IP address.
 // maxRequests: maximum number of requests allowed within the window duration.
-// window: the sliding time window for the rate limit.
+// window: the fixed time window before counters reset.
 func RateLimiter(maxRequests int, window time.Duration) gin.HandlerFunc {
 	var (
 		mu       sync.Mutex
@@ -47,29 +72,7 @@ func RateLimiter(maxRequests int, window time.Duration) gin.HandlerFunc {
 			return
 		}
 
-		mu.Lock()
-		v, exists := visitors[ip]
-		if !exists {
-			visitors[ip] = &visitor{count: 1, lastSeen: time.Now()}
-			mu.Unlock()
-			c.Next()
-			return
-		}
-
-		// Reset count if window has passed
-		if time.Since(v.lastSeen) > window {
-			v.count = 1
-			v.lastSeen = time.Now()
-			mu.Unlock()
-			c.Next()
-			return
-		}
-
-		v.count++
-		v.lastSeen = time.Now()
-		mu.Unlock()
-
-		if v.count > maxRequests {
+		if !allowVisitor(&mu, visitors, ip, maxRequests, window) {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": "تم تجاوز الحد المسموح من الطلبات. حاول مرة أخرى لاحقاً",
 			})
@@ -80,19 +83,22 @@ func RateLimiter(maxRequests int, window time.Duration) gin.HandlerFunc {
 	}
 }
 
-// StrictLoginLimiter is a rate limiter for the login endpoint
+// StrictLoginLimiter is a rate limiter for the login endpoint.
+// Tuned for shared carrier CGNAT / branch Wi-Fi across high-concurrency rollouts.
 func StrictLoginLimiter() gin.HandlerFunc {
 	var (
 		mu       sync.Mutex
 		attempts = make(map[string]*visitor)
 	)
+	const window = 5 * time.Minute
+	const maxAttempts = 120
 
 	go func() {
 		for {
 			time.Sleep(5 * time.Minute)
 			mu.Lock()
 			for ip, v := range attempts {
-				if time.Since(v.lastSeen) > 10*time.Minute {
+				if time.Since(v.lastSeen) > window {
 					delete(attempts, ip)
 				}
 			}
@@ -107,32 +113,9 @@ func StrictLoginLimiter() gin.HandlerFunc {
 			return
 		}
 
-		mu.Lock()
-		v, exists := attempts[ip]
-
-		if !exists {
-			attempts[ip] = &visitor{count: 1, lastSeen: time.Now()}
-			mu.Unlock()
-			c.Next()
-			return
-		}
-
-		if time.Since(v.lastSeen) > 10*time.Minute {
-			v.count = 1
-			v.lastSeen = time.Now()
-			mu.Unlock()
-			c.Next()
-			return
-		}
-
-		v.count++
-		v.lastSeen = time.Now()
-		mu.Unlock()
-
-		// Block after 10 attempts in 10 minutes
-		if v.count > 10 {
+		if !allowVisitor(&mu, attempts, ip, maxAttempts, window) {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "تم تجاوز عدد محاولات تسجيل الدخول المسموحة. يرجى الانتظار 10 دقائق والمحاولة لاحقاً.",
+				"error": "تم تجاوز عدد محاولات تسجيل الدخول المسموحة. يرجى الانتظار قليلاً والمحاولة لاحقاً.",
 			})
 			return
 		}

@@ -163,6 +163,20 @@ func (s *storageService) SaveBase64Image(base64Data string, category string) (st
 		return "", fmt.Errorf("حجم الصورة كبير جداً بعد فك التشفير. الحد الأقصى 10 ميجابايت")
 	}
 
+	// Validate content type via magic bytes (prevents arbitrary payloads disguised as images)
+	mimeType := http.DetectContentType(decoded)
+	if !allowedMimeTypes[mimeType] {
+		return "", fmt.Errorf("نوع الصورة غير مسموح به. الأنواع المسموحة: JPEG, PNG, WebP")
+	}
+	switch mimeType {
+	case "image/jpeg":
+		ext = ".jpg"
+	case "image/png":
+		ext = ".png"
+	case "image/webp":
+		ext = ".webp"
+	}
+
 	if !allowedCategories[category] {
 		return "", fmt.Errorf("تصنيف ملف غير صالح")
 	}

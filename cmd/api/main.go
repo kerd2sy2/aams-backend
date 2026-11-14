@@ -4,17 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"regexp"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
-	"delivery-backend/internal/domain"
 	"delivery-backend/internal/modules/attendance"
 	"delivery-backend/internal/modules/auth"
 	"delivery-backend/internal/modules/custody"
@@ -37,13 +35,20 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
+// isolatedModuleGroup wraps a module's route group in a Bulkhead panic-recovery shield
+// and a strict context timeout so no single module failure can ever affect sibling modules.
+func isolatedModuleGroup(parent *gin.RouterGroup, moduleName string, timeout time.Duration) *gin.RouterGroup {
+	g := parent.Group("")
+	g.Use(
+		middleware.ModuleIsolationMiddleware(moduleName),
+		middleware.ModuleTimeoutMiddleware(timeout),
+	)
+	return g
+}
+
 func main() {
-	// Set server timezone to Saudi Arabia (Asia/Riyadh, UTC+3)
 	riyadhLoc, err := time.LoadLocation("Asia/Riyadh")
 	if err != nil {
 		log.Fatalf("Failed to load Asia/Riyadh timezone: %v", err)
@@ -53,13 +58,11 @@ func main() {
 
 	cfg := config.LoadConfig()
 
-	// Initialize Database with GORM Postgres / SQLite Fallback
 	db, err := database.InitDB(cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Start automatic database backup service (checks every 600s)
 	backupDir := os.Getenv("BACKUP_DIR")
 	if backupDir == "" {
 		backupDir = "./backups"
@@ -67,71 +70,150 @@ func main() {
 	backupSvc := backup.NewService(cfg.PGDumpPath, cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, backupDir, 600*time.Second, 50)
 	go backupSvc.Start()
 
-	// Seed Demo Reviewer Account for Google Play App Review (1234596 / 1234)
 	seedDemoReviewer(db)
-
-	// Start background cron jobs
 	startIqamaExpirationChecker(db)
 
-	// Repositories needed for core Auth Middleware
 	adminRepo := repository.NewAdminRepository(db)
 	empRepo := repository.NewEmployeeRepository(db)
 
-	// Shared services
 	storageService := service.NewStorageService(cfg)
 	auditRepo := repository.NewAuditRepository(db)
 	auditService := service.NewAuditService(auditRepo)
 
-	// Initialize Firebase Cloud Messaging (FCM V1) for background push notifications
 	service.InitFCM("")
 
-	// ---------------------------------------------------------
 	// Initialize Bounded Context Modules (Modular Monolith Architecture)
-	// ---------------------------------------------------------
 	authModule := auth.NewModule(db, cfg)
 	systemModule := system.NewModule(db)
 	ticketModule := ticket.NewModule(db, nil, nil)
 	inventoryModule := inventory.NewModule(db)
 	fleetModule := fleet.NewModule(db, storageService, auditService, inventoryModule.Contract)
 	maintenanceModule := maintenance.NewModule(db)
-	custodyModule := custody.NewModule(db)
+	custodyModule := custody.NewModule(db, storageService)
 	hrLegalModule := hr_legal.NewModule(db)
 	attendanceModule := attendance.NewModule(db)
 	workModule := work.NewModule(db, storageService, auditService)
 	targetModule := target.NewModule(db)
-	employeeModule := employee.NewModule(db, nil)
+	employeeModule := employee.NewModule(db, storageService)
 	operationVideoModule := operation_video.NewModule(db, "./uploads")
 
-	// Start 60-day auto-purge worker for operation videos
 	startOperationVideoCleanupWorker(operationVideoModule.Service, "./uploads")
 
-	// Set Gin to release mode in production
-	ginMode := os.Getenv("GIN_MODE")
-	if ginMode != "debug" {
+	if os.Getenv("GIN_MODE") != "debug" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Setup Gin Router
 	r := gin.New()
-
-	// Trust Cloudflare connecting IP header
 	r.TrustedPlatform = gin.PlatformCloudflare
 
-	// CORS — restrict to allowed origins (configurable)
+	r.Use(middleware.SecurityHeaders())
+	tokenQueryRegex := regexp.MustCompile(`(?i)(token=)[^&]+`)
+	r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		path := param.Path
+		if strings.Contains(strings.ToLower(path), "token=") {
+			path = tokenQueryRegex.ReplaceAllString(path, "${1}[REDACTED]")
+		}
+		return fmt.Sprintf("[GIN] %v | %3d | %13v | %15s | %-7s %#v\n%s",
+			param.TimeStamp.Format("2006/01/02 - 15:04:05"),
+			param.StatusCode, param.Latency, param.ClientIP, param.Method, path, param.ErrorMessage,
+		)
+	}))
+	r.Use(gin.Recovery())
+	r.Use(cors.New(buildCORSConfig(cfg.AllowedOrigins)))
+	r.Use(middleware.RateLimiter(25000, time.Minute))
+
+	configureStaticUploads(r)
+
+	registerPrivacyRoutes(r)
+	registerCoreHealthRoutes(r, db, time.Now())
+
+	// 1. Unauthenticated Public Routes (Bulkhead Protected)
+	authModule.RegisterPublicRoutes(r)
+	systemModule.RegisterPublicRoutes(r)
+	hrLegalModule.RegisterPublicRoutes(r)
+
+	// 2. Protected Authenticated Routes (JWT + Per-Module Bulkhead & Context Timeout)
+	protected := r.Group("/api/v1")
+	protected.Use(middleware.AuthMiddleware(cfg.JWTSecret, adminRepo, empRepo))
+	{
+		authModule.RegisterRoutes(isolatedModuleGroup(protected, "auth", 10*time.Second))
+		employeeModule.RegisterRoutes(isolatedModuleGroup(protected, "employee", 12*time.Second))
+		workModule.RegisterRoutes(isolatedModuleGroup(protected, "work", 20*time.Second))
+		fleetModule.RegisterRoutes(isolatedModuleGroup(protected, "fleet", 12*time.Second))
+		inventoryModule.RegisterRoutes(isolatedModuleGroup(protected, "inventory", 12*time.Second))
+		maintenanceModule.RegisterRoutes(isolatedModuleGroup(protected, "maintenance", 12*time.Second))
+		attendanceModule.RegisterRoutes(isolatedModuleGroup(protected, "attendance", 12*time.Second))
+		custodyModule.RegisterRoutes(isolatedModuleGroup(protected, "custody", 15*time.Second))
+		hrLegalModule.RegisterRoutes(isolatedModuleGroup(protected, "hr_legal", 15*time.Second))
+		ticketModule.RegisterRoutes(isolatedModuleGroup(protected, "ticket", 12*time.Second))
+		targetModule.RegisterRoutes(isolatedModuleGroup(protected, "target", 30*time.Second))
+		systemModule.RegisterRoutes(isolatedModuleGroup(protected, "system", 15*time.Second))
+		operationVideoModule.RegisterRoutes(isolatedModuleGroup(protected, "operation_video", 45*time.Second))
+	}
+
+	srv := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      r,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	go func() {
+		log.Printf("Server starting on port %s...", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	backupSvc.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	if sqlDB, err := db.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+	log.Println("Server exited gracefully")
+}
+
+// configureStaticUploads serves public uploaded assets while blocking direct static
+// access to protected operation videos (which must flow through RBAC stream routes).
+func configureStaticUploads(r *gin.Engine) {
+	r.Use(func(c *gin.Context) {
+		cleanPath := strings.ToLower(path.Clean(c.Request.URL.Path))
+		if strings.HasPrefix(cleanPath, "/uploads/operation_videos") ||
+			strings.HasPrefix(cleanPath, "/api/v1/uploads/operation_videos") ||
+			strings.Contains(cleanPath, "/operation_videos/") {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "غير مصرح بالوصول المباشر للفيديوهات"})
+			return
+		}
+		c.Next()
+	})
+	r.Static("/uploads", "./uploads")
+	r.Static("/api/v1/uploads", "./uploads")
+}
+
+func buildCORSConfig(rawAllowedOrigins string) cors.Config {
 	corsConfig := cors.DefaultConfig()
-	rawOrigins := strings.Split(cfg.AllowedOrigins, ",")
+	rawOrigins := strings.Split(rawAllowedOrigins, ",")
 	allowedOrigins := make([]string, 0, len(rawOrigins))
+	hasWildcard := false
 	for _, origin := range rawOrigins {
 		trimmed := strings.TrimSpace(origin)
 		if trimmed != "" {
 			allowedOrigins = append(allowedOrigins, trimmed)
-		}
-	}
-	hasWildcard := false
-	for _, origin := range allowedOrigins {
-		if origin == "*" {
-			hasWildcard = true
-			break
+			if trimmed == "*" {
+				hasWildcard = true
+			}
 		}
 	}
 	if hasWildcard {
@@ -146,335 +228,10 @@ func main() {
 					return true
 				}
 			}
-			if strings.HasSuffix(origin, "kerd2sy.com") {
-				return true
-			}
-			return false
+			return origin == "https://kerd2sy.com" || (strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".kerd2sy.com"))
 		}
 	}
-	corsConfig.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Accept", "X-Requested-With"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Accept", "X-Requested-With", "X-Branch-ID", "X-App-ID", "X-App-Name", "Cache-Control", "Pragma"}
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
-
-	// Global security middleware
-	r.Use(middleware.SecurityHeaders())
-	tokenQueryRegex := regexp.MustCompile(`(?i)(token=)[^&]+`)
-	r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-		path := param.Path
-		if strings.Contains(strings.ToLower(path), "token=") {
-			path = tokenQueryRegex.ReplaceAllString(path, "${1}[REDACTED]")
-		}
-		var statusColor, methodColor, resetColor string
-		if param.IsOutputColor() {
-			statusColor = param.StatusCodeColor()
-			methodColor = param.MethodColor()
-			resetColor = param.ResetColor()
-		}
-		return fmt.Sprintf("[GIN] %v |%s %3d %s| %13v | %15s |%s %-7s %s %#v\n%s",
-			param.TimeStamp.Format("2006/01/02 - 15:04:05"),
-			statusColor, param.StatusCode, resetColor,
-			param.Latency,
-			param.ClientIP,
-			methodColor, param.Method, resetColor,
-			path,
-			param.ErrorMessage,
-		)
-	}))
-	r.Use(gin.Recovery())
-	r.Use(cors.New(corsConfig))
-	r.Use(middleware.RateLimiter(5000, time.Minute)) // 5000 req/min per IP
-
-	// Serve uploaded images statically
-	r.Static("/uploads", "./uploads")
-	r.Static("/api/v1/uploads", "./uploads")
-
-	// Privacy policy routes (for Google Play Console & public access)
-	registerPrivacyRoutes(r)
-
-	// Health check & root route
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "online",
-			"app":     "Delivery Employee Management System API",
-			"version": "1.0.0",
-		})
-	})
-	r.GET("/api/v1", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":    "running",
-			"app":       "AAMS Delivery & Target Tracking System API (v1)",
-			"version":   "1.0.0",
-			"timestamp": time.Now().Format(time.RFC3339),
-			"health":    "/api/v1/health",
-		})
-	})
-	serverStartTime := time.Now()
-
-	r.GET("/api/v1/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":    "healthy",
-			"app":       "Delivery Employee Management System API",
-			"version":   "1.0.0",
-			"timestamp": time.Now().Format(time.RFC3339),
-		})
-	})
-
-	// Server performance & health metrics endpoint (used by Admin Dashboard)
-	r.GET("/api/v1/system/performance", func(c *gin.Context) {
-		var mem runtime.MemStats
-		runtime.ReadMemStats(&mem)
-
-		sqlDB, err := db.DB()
-		dbStatus := "connected"
-		dbOpen := 0
-		dbInUse := 0
-		dbIdle := 0
-		dbWaitCount := int64(0)
-		if err != nil {
-			dbStatus = "error: " + err.Error()
-		} else {
-			if pingErr := sqlDB.Ping(); pingErr != nil {
-				dbStatus = "disconnected: " + pingErr.Error()
-			}
-			stats := sqlDB.Stats()
-			dbOpen = stats.OpenConnections
-			dbInUse = stats.InUse
-			dbIdle = stats.Idle
-			dbWaitCount = stats.WaitCount
-		}
-
-		uptimeDuration := time.Since(serverStartTime)
-		uptimeDays := int(uptimeDuration.Hours()) / 24
-		uptimeHours := int(uptimeDuration.Hours()) % 24
-		uptimeMins := int(uptimeDuration.Minutes()) % 60
-		uptimeSecs := int(uptimeDuration.Seconds()) % 60
-
-		uptimeStr := fmt.Sprintf("%d يوم و %d ساعة و %d دقيقة و %d ثانية", uptimeDays, uptimeHours, uptimeMins, uptimeSecs)
-		if uptimeDays == 0 && uptimeHours == 0 {
-			uptimeStr = fmt.Sprintf("%d دقيقة و %d ثانية", uptimeMins, uptimeSecs)
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"status":         "healthy",
-			"app":            "AAMS Backend Server",
-			"server_time":    time.Now().Format("2006-01-02 15:04:05"),
-			"uptime_seconds": int64(uptimeDuration.Seconds()),
-			"uptime_string":  uptimeStr,
-			"started_at":     serverStartTime.Format("2006-01-02 15:04:05"),
-			"goroutines":     runtime.NumGoroutine(),
-			"cpus":           runtime.NumCPU(),
-			"go_version":     runtime.Version(),
-			"os":             runtime.GOOS,
-			"arch":           runtime.GOARCH,
-			"memory": gin.H{
-				"alloc_mb":       math.Round(float64(mem.Alloc)/1024/1024*100) / 100,
-				"total_alloc_mb": math.Round(float64(mem.TotalAlloc)/1024/1024*100) / 100,
-				"sys_mb":         math.Round(float64(mem.Sys)/1024/1024*100) / 100,
-				"heap_alloc_mb":  math.Round(float64(mem.HeapAlloc)/1024/1024*100) / 100,
-				"heap_inuse_mb":  math.Round(float64(mem.HeapInuse)/1024/1024*100) / 100,
-				"num_gc":         mem.NumGC,
-			},
-			"database": gin.H{
-				"status":           dbStatus,
-				"open_connections": dbOpen,
-				"in_use":           dbInUse,
-				"idle":             dbIdle,
-				"wait_count":       dbWaitCount,
-			},
-		})
-	})
-
-	// ---------------------------------------------------------
-	// 1. Unauthenticated Public Routes
-	// ---------------------------------------------------------
-	authModule.RegisterPublicRoutes(r)
-	systemModule.RegisterPublicRoutes(r)
-	hrLegalModule.RegisterPublicRoutes(r)
-
-	// ---------------------------------------------------------
-	// 2. Protected Authenticated Routes (JWT Required)
-	// ---------------------------------------------------------
-	protected := r.Group("/api/v1")
-	protected.Use(middleware.AuthMiddleware(cfg.JWTSecret, adminRepo, empRepo))
-	{
-		authModule.RegisterRoutes(protected)
-		employeeModule.RegisterRoutes(protected)
-		workModule.RegisterRoutes(protected)
-		fleetModule.RegisterRoutes(protected)
-		inventoryModule.RegisterRoutes(protected)
-		maintenanceModule.RegisterRoutes(protected)
-		attendanceModule.RegisterRoutes(protected)
-		custodyModule.RegisterRoutes(protected)
-		hrLegalModule.RegisterRoutes(protected)
-		ticketModule.RegisterRoutes(protected)
-		targetModule.RegisterRoutes(protected)
-		systemModule.RegisterRoutes(protected)
-		operationVideoModule.RegisterRoutes(protected)
-	}
-
-	// Create HTTP server with timeouts
-	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
-
-	// Start server in a goroutine
-	go func() {
-		log.Printf("Server starting on port %s...", cfg.Port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
-		}
-	}()
-
-	// Wait for interrupt signal for graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Println("Shutting down server...")
-
-	// Stop the backup service
-	backupSvc.Stop()
-
-	// Give outstanding requests 15 seconds to complete
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
-	}
-
-	// Close database connection
-	if sqlDB, err := db.DB(); err == nil {
-		if closeErr := sqlDB.Close(); closeErr != nil {
-			log.Printf("Error closing database: %v", closeErr)
-		} else {
-			log.Println("Database connection closed")
-		}
-	}
-
-	log.Println("Server exited gracefully")
+	return corsConfig
 }
-
-func startIqamaExpirationChecker(db *gorm.DB) {
-	// Run every 24 hours
-	ticker := time.NewTicker(24 * time.Hour)
-	go func() {
-		// Run once immediately on startup
-		checkIqamaExpirations(db)
-		for range ticker.C {
-			checkIqamaExpirations(db)
-		}
-	}()
-}
-
-func checkIqamaExpirations(db *gorm.DB) {
-	// Find all employees whose iqama expires in <= 60 days
-	var emps []domain.Employee
-	threshold := time.Now().AddDate(0, 0, 60)
-
-	if err := db.Where("iqama_expiration_date IS NOT NULL AND iqama_expiration_date <= ?", threshold).Find(&emps).Error; err != nil {
-		log.Printf("[Cron] Error checking iqama expirations: %v", err)
-		return
-	}
-
-	todayStr := time.Now().Format("2006-01-02")
-	count := 0
-
-	for _, emp := range emps {
-		// Check if a notification already exists for today
-		var existing domain.Notification
-		err := db.Where("employee_id = ? AND type = ? AND DATE(created_at) = ?", emp.ID, "iqama_expiry", todayStr).First(&existing).Error
-		if err != nil {
-			// Doesn't exist, create it
-			var expTime time.Time
-			if emp.IqamaExpirationDate != nil {
-				parsed, err := time.Parse("2006-01-02", *emp.IqamaExpirationDate)
-				if err == nil {
-					expTime = parsed
-				} else {
-					expTime = time.Now()
-				}
-			} else {
-				expTime = time.Now()
-			}
-			daysLeft := int(time.Until(expTime).Hours() / 24)
-
-			title := "تنبيه اقتراب انتهاء إقامة"
-			body := "إقامة الموظف " + emp.Name + " تنتهي بعد " + fmt.Sprintf("%d", daysLeft) + " يوم."
-			if daysLeft <= 0 {
-				title = "تنبيه انتهاء إقامة"
-				body = "إقامة الموظف " + emp.Name + " منتهية!"
-			}
-
-			notif := domain.Notification{
-				BranchID:   emp.BranchID,
-				EmployeeID: &emp.ID,
-				Title:      title,
-				Body:       body,
-				Type:       "iqama_expiry",
-				Status:     "unread",
-			}
-			db.Create(&notif)
-			count++
-		}
-	}
-
-	if count > 0 {
-		log.Printf("[Cron] Generated %d iqama expiration notifications", count)
-	}
-}
-
-func seedDemoReviewer(db *gorm.DB) {
-	demoID := uuid.MustParse("00000000-0000-0000-0000-000001234596")
-	var emp domain.Employee
-	if err := db.Where("national_id = ?", "1234596").First(&emp).Error; err != nil {
-		hash, _ := bcrypt.GenerateFromPassword([]byte("1234"), bcrypt.DefaultCost)
-		demoEmployee := domain.Employee{
-			ID:               demoID,
-			Name:             "تست جوجل",
-			NationalID:       "1234596",
-			PasswordHash:     string(hash),
-			EmployeeNumber:   "EMP-1234596",
-			JobRole:          "DRIVER",
-			Phone:            "0500000000",
-			MotorcycleNumber: "7777",
-			KeyNumber:        "KEY-01",
-			VehicleType:      "motorcycle",
-			Shift:            "morning",
-		}
-		if createErr := db.Create(&demoEmployee).Error; createErr == nil {
-			log.Println("[Seed] Created Google Play Demo Reviewer account (NationalID: 1234596 / Pass: 1234)")
-		}
-	} else {
-		_ = db.Model(&emp).Update("name", "تست جوجل").Error
-	}
-}
-
-func startOperationVideoCleanupWorker(svc operation_video_service_purge, uploadDir string) {
-	// Daily ticker checking every 24 hours
-	ticker := time.NewTicker(24 * time.Hour)
-	go func() {
-		// Run once on server startup
-		if purged, err := svc.PurgeExpiredVideos(context.Background(), uploadDir); err != nil {
-			log.Printf("[Cron-OperationVideo] Initial purge error: %v", err)
-		} else if purged > 0 {
-			log.Printf("[Cron-OperationVideo] Initial startup purge removed %d expired videos", purged)
-		}
-
-		for range ticker.C {
-			if purged, err := svc.PurgeExpiredVideos(context.Background(), uploadDir); err != nil {
-				log.Printf("[Cron-OperationVideo] Daily purge error: %v", err)
-			} else if purged > 0 {
-				log.Printf("[Cron-OperationVideo] Daily purge removed %d expired videos", purged)
-			}
-		}
-	}()
-}
-
-type operation_video_service_purge interface {
-	PurgeExpiredVideos(ctx context.Context, uploadBaseDir string) (int, error)
-}
-
-

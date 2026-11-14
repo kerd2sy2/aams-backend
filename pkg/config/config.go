@@ -51,7 +51,7 @@ func LoadConfig() *Config {
 	s3Region := getEnv("S3_REGION", "us-east-1")
 	s3Endpoint := getEnv("S3_ENDPOINT", "")
 	storageMode := getEnv("STORAGE_MODE", "local")
-	allowedOrigins := getEnv("ALLOWED_ORIGINS", "https://aams.kerd2sy.com,https://api.kerd2sy.com,https://aams-logistics.kerd2sy.com")
+	allowedOrigins := getEnv("ALLOWED_ORIGINS", "https://aams.kerd2sy.com,https://api.kerd2sy.com")
 	sqlitePath := getEnv("SQLITE_PATH", `D:\aams\backend\delivery_local.db`)
 	pgDumpPath := getEnv("PG_DUMP_PATH", "pg_dump")
 

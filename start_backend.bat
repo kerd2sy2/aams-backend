@@ -7,8 +7,7 @@ taskkill /f /im api.exe 2>nul
 
 set PORT=8080
 set GIN_MODE=release
-set JWT_SECRET=hV6bI9UDaAw1zqlMdTL7tEB3orZ5gQpPfJCGnFm0N8vcixesHOkyRK4uWS2YXj
-set JWT_REFRESH_SECRET=g3SwHtEdyKFrViDNkXIuWb92xhTq81YAvpRB4Gfo7nUl0a6JezCjLcm5OQMsPZ
+rem Secrets (JWT_SECRET, JWT_REFRESH_SECRET) are loaded from .env by config.LoadConfig()
 
 echo Starting Backend...
 if exist api.exe (
