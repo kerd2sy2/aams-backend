@@ -74,6 +74,7 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 	colNinja := -1
 	colKeeta := -1
 	colToyo := -1
+	colHunger := -1
 	colPlate := -1
 	colNotes := -1
 
@@ -104,6 +105,9 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 			if strings.Contains(trimCell, "تويو") {
 				colToyo = cIdx
 			}
+			if strings.Contains(trimCell, "هنجر") || strings.Contains(trimCell, "هنقر") || strings.Contains(strings.ToLower(trimCell), "hunger") {
+				colHunger = cIdx
+			}
 			if strings.Contains(trimCell, "اللوحة") {
 				colPlate = cIdx
 			}
@@ -124,7 +128,7 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 			colDriver = 3
 		}
 	}
-	if colNinja < 0 && colKeeta < 0 && colToyo < 0 {
+	if colNinja < 0 && colKeeta < 0 && colToyo < 0 && colHunger < 0 {
 		colNinja = 5
 		colKeeta = 6
 	}
@@ -174,7 +178,11 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 		if colToyo >= 0 {
 			toyoCount = parseInt(getCell(r, colToyo))
 		}
-		rowTotal := ninjaCount + keetaCount + toyoCount
+		hungerCount := 0
+		if colHunger >= 0 {
+			hungerCount = parseInt(getCell(r, colHunger))
+		}
+		rowTotal := ninjaCount + keetaCount + toyoCount + hungerCount
 
 		if rowTotal == 0 {
 			if n := parseInt(appName); n > 0 {
@@ -191,12 +199,14 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 		}
 
 		if appName == "" {
-			if ninjaCount > 0 && keetaCount == 0 && toyoCount == 0 {
+			if ninjaCount > 0 && keetaCount == 0 && toyoCount == 0 && hungerCount == 0 {
 				appName = "نينجا"
-			} else if keetaCount > 0 && ninjaCount == 0 && toyoCount == 0 {
+			} else if keetaCount > 0 && ninjaCount == 0 && toyoCount == 0 && hungerCount == 0 {
 				appName = "كيتا"
-			} else if toyoCount > 0 && ninjaCount == 0 && keetaCount == 0 {
+			} else if toyoCount > 0 && ninjaCount == 0 && keetaCount == 0 && hungerCount == 0 {
 				appName = "تويو"
+			} else if hungerCount > 0 && ninjaCount == 0 && keetaCount == 0 && toyoCount == 0 {
+				appName = "هنجر"
 			} else {
 				appName = "كيتا"
 			}
@@ -234,6 +244,7 @@ func (s *excelImportService) ParseAndPreviewExcel(ctx context.Context, fileBytes
 			NinjaOrders:   ninjaCount,
 			KeetaOrders:   keetaCount,
 			ToyoOrders:    toyoCount,
+			HungerOrders:  hungerCount,
 			TotalOrders:   rowTotal,
 			PlateNumber:   plate,
 			Notes:         notes,

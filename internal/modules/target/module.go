@@ -41,6 +41,15 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 		targetRoutes.GET("/settings", m.Handler.GetTargetSettings)
 		targetRoutes.GET("/batches", m.Handler.ListImportBatches)
 
+		// Supervisor & Admin identifier creation / update / employee linking
+		supervisorTarget := targetRoutes.Group("")
+		supervisorTarget.Use(middleware.RequireRoles("ADMIN", "SUPER_ADMIN", "SUPERVISOR"))
+		{
+			supervisorTarget.POST("/identifiers", m.Handler.CreateIdentifier)
+			supervisorTarget.PUT("/identifiers/:id", m.Handler.UpdateIdentifier)
+			supervisorTarget.PATCH("/identifiers/:id/link-employee", m.Handler.LinkIdentifierEmployee)
+		}
+
 		// Admin-only management routes
 		adminTarget := targetRoutes.Group("")
 		adminTarget.Use(middleware.RequireRoles("ADMIN", "SUPER_ADMIN"))
@@ -49,9 +58,6 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 			adminTarget.POST("/import/confirm", m.Handler.ConfirmExcelImport)
 			adminTarget.DELETE("/batches/:id", m.Handler.DeleteImportBatch)
 			adminTarget.DELETE("/batches/date/:orderDate", m.Handler.DeleteSheetByDate)
-			adminTarget.POST("/identifiers", m.Handler.CreateIdentifier)
-			adminTarget.PUT("/identifiers/:id", m.Handler.UpdateIdentifier)
-			adminTarget.PATCH("/identifiers/:id/link-employee", m.Handler.LinkIdentifierEmployee)
 			adminTarget.PATCH("/identifiers/:id/block", m.Handler.BlockIdentifier)
 			adminTarget.DELETE("/identifiers", m.Handler.DeleteAllIdentifiers)
 			adminTarget.DELETE("/identifiers/wipe-all", m.Handler.DeleteAllIdentifiers)

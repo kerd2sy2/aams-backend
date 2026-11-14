@@ -18,17 +18,30 @@ func NewNotificationHandler(svc NotificationService) *NotificationHandler {
 	return &NotificationHandler{svc: svc}
 }
 
+func resolveActorID(c *gin.Context) (uuid.UUID, bool) {
+	if adminIDVal, exists := c.Get("admin_id"); exists {
+		if id, ok := adminIDVal.(uuid.UUID); ok && id != uuid.Nil {
+			return id, true
+		}
+	}
+	if empIDVal, exists := c.Get("employee_id"); exists {
+		if id, ok := empIDVal.(uuid.UUID); ok && id != uuid.Nil {
+			return id, true
+		}
+	}
+	return uuid.Nil, false
+}
+
 func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
-	adminIDVal, exists := c.Get("admin_id")
+	actorID, exists := resolveActorID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
 		return
 	}
-	adminID, _ := adminIDVal.(uuid.UUID)
 	branchID := getBranchID(c)
 	status := c.Query("status")
 
-	notifs, err := h.svc.GetMyNotifications(c.Request.Context(), adminID, branchID, status)
+	notifs, err := h.svc.GetMyNotifications(c.Request.Context(), actorID, branchID, status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل جلب الإشعارات"})
 		return
@@ -38,14 +51,13 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 }
 
 func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
-	adminIDVal, exists := c.Get("admin_id")
+	actorID, exists := resolveActorID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
 		return
 	}
-	adminID, _ := adminIDVal.(uuid.UUID)
 
-	if err := h.svc.MarkAllAsRead(c.Request.Context(), adminID); err != nil {
+	if err := h.svc.MarkAllAsRead(c.Request.Context(), actorID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل تحديث حالة الإشعارات"})
 		return
 	}
@@ -61,10 +73,9 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 		return
 	}
 
-	adminIDVal, _ := c.Get("admin_id")
-	adminID, _ := adminIDVal.(uuid.UUID)
+	actorID, _ := resolveActorID(c)
 
-	if err := h.svc.MarkAsRead(c.Request.Context(), id, adminID); err != nil {
+	if err := h.svc.MarkAsRead(c.Request.Context(), id, actorID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل تحديث الإشعار"})
 		return
 	}

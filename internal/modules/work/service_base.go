@@ -29,6 +29,7 @@ type ExternalEmployeeProvider interface {
 	UpdateEmployeeOnStartWork(ctx context.Context, id uuid.UUID, appID, appType, motorcycleNumber string) error
 	UpdateEmployeeOnEndWork(ctx context.Context, id uuid.UUID, addedDistance float64, totalOrders int) error
 	SendShiftApprovalNotification(ctx context.Context, empID uuid.UUID, sessionID uuid.UUID, ordersCount int, fuelCost float64, supervisorName string) error
+	SendShiftStartedNotificationToSupervisor(ctx context.Context, empID uuid.UUID, session *WorkSession, previousMotorcycle string) error
 	SendShiftEndedNotificationToSupervisor(ctx context.Context, empID uuid.UUID, session *WorkSession) error
 }
 

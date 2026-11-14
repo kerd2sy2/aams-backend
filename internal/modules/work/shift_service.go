@@ -28,6 +28,13 @@ func (s *workService) StartWork(ctx context.Context, req StartWorkRequest) (*Wor
 		return nil, errors.New("الموظف لديه شفت عمل نشط بالفعل حالياً")
 	}
 
+	previousMotorcycle := strings.TrimSpace(emp.MotorcycleNumber)
+	if previousMotorcycle == "" {
+		if lastSess, errLast := s.repo.FindLastCompletedSession(ctx, empID); errLast == nil && lastSess != nil {
+			previousMotorcycle = strings.TrimSpace(lastSess.MotorcycleNumber)
+		}
+	}
+
 	motorcycleNumber := emp.MotorcycleNumber
 	if req.MotorcycleNumber != "" {
 		motorcycleNumber = req.MotorcycleNumber
@@ -163,6 +170,10 @@ func (s *workService) StartWork(ctx context.Context, req StartWorkRequest) (*Wor
 
 	if err != nil {
 		return nil, fmt.Errorf("فشل في بدء الشفت: %w", err)
+	}
+
+	if s.empProvider != nil {
+		_ = s.empProvider.SendShiftStartedNotificationToSupervisor(ctx, empID, session, previousMotorcycle)
 	}
 
 	return session, nil

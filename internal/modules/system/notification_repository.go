@@ -20,9 +20,15 @@ func (r *gormSystemRepository) FindNotificationsByAdmin(ctx context.Context, adm
 	}
 
 	if branchID != nil {
-		query = query.Where("admin_id = ? OR branch_id = ? OR (admin_id IS NULL AND branch_id IS NULL)", adminID, branchID)
+		query = query.Where(
+			"admin_id = ? OR employee_id = ? OR (admin_id IS NULL AND employee_id IS NULL AND (branch_id = ? OR branch_id IS NULL)) OR (branch_id = ? AND type IN ('SHIFT_STARTED','MOTORCYCLE_CHANGED','SHIFT_COMPLETED_PENDING_REVIEW','ADVANCE_REQUEST','MAINTENANCE_REQUEST','INVESTIGATION_REQUEST'))",
+			adminID, adminID, branchID, branchID,
+		)
 	} else {
-		query = query.Where("admin_id = ? OR (admin_id IS NULL AND branch_id IS NULL)", adminID)
+		query = query.Where(
+			"admin_id = ? OR employee_id = ? OR (admin_id IS NULL AND employee_id IS NULL AND branch_id IS NULL)",
+			adminID, adminID,
+		)
 	}
 
 	if err := query.Order("created_at DESC").Limit(200).Find(&notifs).Error; err != nil {
@@ -36,7 +42,9 @@ func (r *gormSystemRepository) MarkNotificationAsRead(ctx context.Context, id uu
 }
 
 func (r *gormSystemRepository) MarkAllNotificationsAsRead(ctx context.Context, adminID uuid.UUID) error {
-	return r.db.WithContext(ctx).Model(&Notification{}).Where("status = ?", "unread").Update("status", "read").Error
+	return r.db.WithContext(ctx).Model(&Notification{}).
+		Where("status = ? AND (admin_id = ? OR employee_id = ? OR (admin_id IS NULL AND employee_id IS NULL))", "unread", adminID, adminID).
+		Update("status", "read").Error
 }
 
 func (r *gormSystemRepository) CreateNotification(ctx context.Context, notif *Notification) error {

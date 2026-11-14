@@ -12,6 +12,7 @@ type ParsedExcelRow struct {
 	NinjaOrders   int    `json:"ninja_orders"`
 	KeetaOrders   int    `json:"keeta_orders"`
 	ToyoOrders    int    `json:"toyo_orders"`
+	HungerOrders  int    `json:"hunger_orders"`
 	TotalOrders   int    `json:"total_orders"`
 	PlateNumber   string `json:"plate_number"`
 	Notes         string `json:"notes"`

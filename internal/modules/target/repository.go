@@ -135,17 +135,29 @@ func (r *gormTargetRepository) FindIdentifierByIDOrCode(ctx context.Context, idO
 		}
 	}
 
-	stripped := strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(clean), "ninja_"), "keeta_")
+	lowerClean := strings.ToLower(clean)
+	stripped := strings.TrimPrefix(
+		strings.TrimPrefix(
+			strings.TrimPrefix(
+				strings.TrimPrefix(lowerClean, "ninja_"),
+				"keeta_",
+			),
+			"hungerstation_",
+		),
+		"hunger_",
+	)
 	err := r.db.WithContext(ctx).Preload("Drivers").
-		Where("LOWER(TRIM(code)) = ? OR LOWER(TRIM(code)) = ? OR LOWER(TRIM(name)) = ? OR LOWER(TRIM(name)) = ?", strings.ToLower(clean), stripped, strings.ToLower(clean), stripped).
+		Where("LOWER(TRIM(code)) = ? OR LOWER(TRIM(code)) = ? OR LOWER(TRIM(name)) = ? OR LOWER(TRIM(name)) = ?", lowerClean, stripped, lowerClean, stripped).
 		First(&ident).Error
 	if err == nil {
 		return &ident, nil
 	}
 
 	appName := "NINJA"
-	if strings.Contains(strings.ToLower(clean), "keeta") {
+	if strings.Contains(lowerClean, "keeta") || strings.Contains(lowerClean, "كيتا") {
 		appName = "KEETA"
+	} else if strings.Contains(lowerClean, "hunger") || strings.Contains(lowerClean, "هنقر") || strings.Contains(lowerClean, "هنجر") {
+		appName = "HUNGER"
 	}
 	newIdent := Identifier{
 		ID:            uuid.New(),

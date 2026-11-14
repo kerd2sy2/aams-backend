@@ -62,12 +62,8 @@ func (a *gormEmployeeAdapter) UpdateEmployeeOnStartWork(ctx context.Context, id 
 	if appType != "" {
 		updates["application_type"] = appType
 	}
-	if motorcycleNumber != "" {
-		var currentAssigned *string
-		_ = a.db.WithContext(ctx).Table("employees").Select("motorcycle_number").Where("id = ?", id).Scan(&currentAssigned).Error
-		if currentAssigned == nil || strings.TrimSpace(*currentAssigned) == "" {
-			updates["motorcycle_number"] = motorcycleNumber
-		}
+	if cleanBike := strings.TrimSpace(motorcycleNumber); cleanBike != "" {
+		updates["motorcycle_number"] = cleanBike
 	}
 	return a.db.WithContext(ctx).Table("employees").Where("id = ?", id).Updates(updates).Error
 }
