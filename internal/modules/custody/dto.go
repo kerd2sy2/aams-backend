@@ -14,6 +14,7 @@ type CustodyExpenseResponse struct {
 	Amount            float64   `json:"amount"`
 	RecipientName     string    `json:"recipient_name"`
 	ExportNumber      string    `json:"export_number"`
+	IsExcluded        bool      `json:"is_excluded"`
 	ImageURL          string    `json:"image_url"`
 	CreatedByName     string    `json:"created_by_name"`
 	CreatedByUsername string    `json:"created_by_username"`
@@ -71,6 +72,7 @@ type UpdateCustodyExpenseRequest struct {
 	ExportNumber  *string  `json:"export_number"`
 	ImageURL      *string  `json:"image_url"`
 	Date          *string  `json:"date"`
+	IsExcluded    *bool    `json:"is_excluded"`
 }
 
 type AddCustodyAmountRequest struct {

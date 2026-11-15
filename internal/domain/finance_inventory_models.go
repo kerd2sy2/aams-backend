@@ -150,6 +150,7 @@ type CustodyExpense struct {
 	Amount            float64    `gorm:"default:0" json:"amount"`
 	RecipientName     string     `gorm:"type:varchar(150)" json:"recipient_name"`
 	ExportNumber      string     `gorm:"type:varchar(50);index" json:"export_number"`
+	IsExcluded        bool       `gorm:"default:false" json:"is_excluded"`
 	CreatedByID       *uuid.UUID `gorm:"type:char(36);index" json:"created_by_id"`
 	CreatedByName     string     `gorm:"type:varchar(100)" json:"created_by_name"`
 	CreatedByUsername string     `gorm:"type:varchar(50)" json:"created_by_username"`

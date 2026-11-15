@@ -71,20 +71,22 @@ func (s *custodyService) toResponse(day *CustodyDay) *CustodyDayResponse {
 
 	var totalExp float64
 	for _, e := range day.Expenses {
-		totalExp += e.Amount
-		switch e.Category {
-		case "fuel":
-			resp.Totals.Fuel += e.Amount
-		case "internet_advance":
-			resp.Totals.InternetAdvance += e.Amount
-		case "advance":
-			resp.Totals.Advance += e.Amount
-		case "license":
-			resp.Totals.License += e.Amount
-		case "spare_parts":
-			resp.Totals.SpareParts += e.Amount
-		default:
-			resp.Totals.Other += e.Amount
+		if !e.IsExcluded {
+			totalExp += e.Amount
+			switch e.Category {
+			case "fuel":
+				resp.Totals.Fuel += e.Amount
+			case "internet_advance":
+				resp.Totals.InternetAdvance += e.Amount
+			case "advance":
+				resp.Totals.Advance += e.Amount
+			case "license":
+				resp.Totals.License += e.Amount
+			case "spare_parts":
+				resp.Totals.SpareParts += e.Amount
+			default:
+				resp.Totals.Other += e.Amount
+			}
 		}
 		resp.Expenses = append(resp.Expenses, CustodyExpenseResponse{
 			ID:                e.ID,
@@ -93,6 +95,7 @@ func (s *custodyService) toResponse(day *CustodyDay) *CustodyDayResponse {
 			Amount:            e.Amount,
 			RecipientName:     e.RecipientName,
 			ExportNumber:      e.ExportNumber,
+			IsExcluded:        e.IsExcluded,
 			ImageURL:          e.ImageURL,
 			CreatedByName:     e.CreatedByName,
 			CreatedByUsername: e.CreatedByUsername,
@@ -109,7 +112,9 @@ func (s *custodyService) toResponse(day *CustodyDay) *CustodyDayResponse {
 func (s *custodyService) sumExpenses(day *CustodyDay) float64 {
 	var total float64
 	for _, e := range day.Expenses {
-		total += e.Amount
+		if !e.IsExcluded {
+			total += e.Amount
+		}
 	}
 	return total
 }

@@ -94,6 +94,9 @@ func (s *custodyService) UpdateExpense(ctx context.Context, expenseID uuid.UUID,
 	if req.ExportNumber != nil {
 		expense.ExportNumber = *req.ExportNumber
 	}
+	if req.IsExcluded != nil {
+		expense.IsExcluded = *req.IsExcluded
+	}
 
 	dateChanged := req.Date != nil && *req.Date != "" && *req.Date != day.Date
 	var targetDay *CustodyDay
