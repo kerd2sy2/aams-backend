@@ -42,10 +42,11 @@ func NewVehicleService(vehicleRepo VehicleRepository, storageService IStorageCon
 }
 
 func oilChangeInterval(vehicleType string) float64 {
-	if strings.EqualFold(vehicleType, "car") {
+	vt := strings.TrimSpace(vehicleType)
+	if strings.EqualFold(vt, "car") || vt == "سيارة" {
 		return 10000
 	}
-	return 950 // motorcycle default
+	return 1000 // motorcycle default
 }
 
 func (s *vehicleService) Create(ctx context.Context, req CreateVehicleRequest) (*Vehicle, error) {

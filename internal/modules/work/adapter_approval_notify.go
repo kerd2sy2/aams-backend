@@ -56,10 +56,7 @@ func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context,
 		vType = strings.ToLower(strings.TrimSpace(emp.VehicleType))
 	}
 
-	interval := 950.0
-	if vType == "car" {
-		interval = 10000.0
-	}
+	interval := oilChangeInterval(vType)
 
 	var remainingKM float64 = interval
 	hasOilCalculation := false
@@ -76,8 +73,8 @@ func (a *gormEmployeeAdapter) SendShiftApprovalNotification(ctx context.Context,
 			Order("CASE WHEN TRIM(plate_number) = '" + bikeNumber + "' THEN 0 ELSE 1 END").
 			First(&vehicle).Error
 		if err == nil {
-			if strings.EqualFold(vehicle.VehicleType, "car") {
-				interval = 10000.0
+			if strings.TrimSpace(vehicle.VehicleType) != "" {
+				interval = oilChangeInterval(vehicle.VehicleType)
 			}
 			currentKM := vehicle.CurrentKM
 			if currentKM <= 0 && session.EndKM > 0 {
