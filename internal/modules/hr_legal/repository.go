@@ -3,6 +3,7 @@ package hr_legal
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -360,6 +361,11 @@ func (r *gormHRLegalRepository) FindViolations(ctx context.Context, filter Traff
 
 	if filter.Status != "" {
 		db = db.Where("traffic_violations.status = ?", filter.Status)
+	}
+	if rt := strings.ToUpper(strings.TrimSpace(filter.RecordType)); rt == "PENALTY" {
+		db = db.Where("traffic_violations.record_type = ?", "PENALTY")
+	} else if rt == "TRAFFIC" {
+		db = db.Where("(traffic_violations.record_type = ? OR traffic_violations.record_type = '' OR traffic_violations.record_type IS NULL)", "TRAFFIC")
 	}
 	if filter.StartDate != "" {
 		db = db.Where("traffic_violations.violation_date >= ?", filter.StartDate+" 00:00:00")

@@ -127,6 +127,7 @@ type TrafficViolation struct {
 	ViolationDate   time.Time      `gorm:"index" json:"violation_date"`
 	City            string         `gorm:"type:varchar(100)" json:"city"`
 	Status          string         `gorm:"type:varchar(30);default:'RECORDED';index" json:"status"`
+	RecordType      string         `gorm:"type:varchar(30);default:'TRAFFIC';index" json:"record_type"`
 	BranchID        *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
 	Notes           string         `gorm:"type:text" json:"notes"`
 	HistoryLog      string         `gorm:"type:text;default:'[]'" json:"history_log"`

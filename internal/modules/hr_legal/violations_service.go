@@ -175,6 +175,15 @@ func (s *hrLegalService) CreateViolation(ctx context.Context, req CreateTrafficV
 		}
 	}
 
+	recordType := strings.ToUpper(strings.TrimSpace(req.RecordType))
+	if recordType != "PENALTY" && recordType != "TRAFFIC" {
+		if strings.HasPrefix(strings.ToUpper(req.ViolationNumber), "PEN-") {
+			recordType = "PENALTY"
+		} else {
+			recordType = "TRAFFIC"
+		}
+	}
+
 	v := &TrafficViolation{
 		ID:              uuid.New(),
 		ViolationNumber: req.ViolationNumber,
@@ -186,6 +195,7 @@ func (s *hrLegalService) CreateViolation(ctx context.Context, req CreateTrafficV
 		ViolationDate:   violationDate,
 		City:            req.City,
 		Status:          status,
+		RecordType:      recordType,
 		BranchID:        branchID,
 		Notes:           req.Notes,
 	}
@@ -273,6 +283,12 @@ func (s *hrLegalService) UpdateViolation(ctx context.Context, id uuid.UUID, req 
 			v.PaidAmount = v.Amount
 		} else if *req.Status == "RECORDED" {
 			v.PaidAmount = 0
+		}
+	}
+	if req.RecordType != nil {
+		rt := strings.ToUpper(strings.TrimSpace(*req.RecordType))
+		if rt == "PENALTY" || rt == "TRAFFIC" {
+			v.RecordType = rt
 		}
 	}
 	if req.Notes != nil {

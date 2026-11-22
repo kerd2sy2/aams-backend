@@ -222,6 +222,7 @@ type CreateTrafficViolationRequest struct {
 	ViolationDate   string     `json:"violation_date"`
 	City            string     `json:"city"`
 	Status          string     `json:"status"`
+	RecordType      string     `json:"record_type"`
 	BranchID        *uuid.UUID `json:"branch_id"`
 	Notes           string     `json:"notes"`
 }
@@ -237,12 +238,14 @@ type UpdateTrafficViolationRequest struct {
 	ViolationDate   *string    `json:"violation_date"`
 	City            *string    `json:"city"`
 	Status          *string    `json:"status"`
+	RecordType      *string    `json:"record_type"`
 	Notes           *string    `json:"notes"`
 }
 
 type TrafficViolationFilter struct {
 	BranchID   *uuid.UUID `form:"-"`
 	EmployeeID *uuid.UUID `form:"-"`
+	RecordType string     `form:"record_type"`
 	Status     string     `form:"status"`
 	Search     string     `form:"search"`
 	StartDate  string     `form:"start_date"`
