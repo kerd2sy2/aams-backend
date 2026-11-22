@@ -8,6 +8,7 @@ import (
 
 type CreateSupportTicketRequest struct {
 	EmployeeID  *uuid.UUID `json:"employee_id"`
+	ViolationID *uuid.UUID `json:"violation_id"`
 	Subject     string     `json:"subject" binding:"required"`
 	Category    string     `json:"category" binding:"required"`
 	Priority    string     `json:"priority"`
@@ -40,6 +41,7 @@ type SupportTicketResponse struct {
 	ID           uuid.UUID  `json:"id"`
 	TicketNumber string     `json:"ticket_number"`
 	EmployeeID   *uuid.UUID `json:"employee_id"`
+	ViolationID  *uuid.UUID `json:"violation_id,omitempty"`
 	EmployeeName string     `json:"employee_name,omitempty"`
 	Subject      string     `json:"subject"`
 	Category     string     `json:"category"`

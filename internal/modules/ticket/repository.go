@@ -2,6 +2,9 @@ package ticket
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -13,6 +16,7 @@ type SupportTicketRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByID(ctx context.Context, id uuid.UUID) (*SupportTicket, error)
 	FindAll(ctx context.Context, filter SupportTicketFilter) ([]SupportTicket, int64, error)
+	AppendViolationHistoryStep(ctx context.Context, violationID uuid.UUID, stepType, title, details string) error
 }
 
 type gormSupportTicketRepository struct {
@@ -86,4 +90,54 @@ func (r *gormSupportTicketRepository) FindAll(ctx context.Context, filter Suppor
 
 	err := q.Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
 	return list, total, err
+}
+
+type linkedViolationStep struct {
+	Type    string  `json:"type"`
+	Title   string  `json:"title"`
+	Details string  `json:"details,omitempty"`
+	Amount  float64 `json:"amount,omitempty"`
+	At      string  `json:"at"`
+}
+
+func (r *gormSupportTicketRepository) AppendViolationHistoryStep(ctx context.Context, violationID uuid.UUID, stepType, title, details string) error {
+	var row struct {
+		HistoryLog string
+		Amount     float64
+	}
+	if err := r.db.WithContext(ctx).
+		Table("traffic_violations").
+		Select("history_log, amount").
+		Where("id = ? AND deleted_at IS NULL", violationID).
+		First(&row).Error; err != nil {
+		return err
+	}
+
+	var steps []linkedViolationStep
+	if strings.TrimSpace(row.HistoryLog) != "" {
+		_ = json.Unmarshal([]byte(row.HistoryLog), &steps)
+	}
+	if len(steps) == 0 {
+		steps = append(steps, linkedViolationStep{
+			Type:    "RECORDED",
+			Title:   "تم تسجيل الخصم",
+			Amount:  row.Amount,
+			At:      time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+	steps = append(steps, linkedViolationStep{
+		Type:    stepType,
+		Title:   title,
+		Details: details,
+		At:      time.Now().UTC().Format(time.RFC3339),
+	})
+
+	encoded, err := json.Marshal(steps)
+	if err != nil {
+		return err
+	}
+	return r.db.WithContext(ctx).
+		Table("traffic_violations").
+		Where("id = ?", violationID).
+		Update("history_log", string(encoded)).Error
 }

@@ -17,6 +17,7 @@ type SupportTicket struct {
 	ID           uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
 	TicketNumber string         `gorm:"type:varchar(50);index;not null" json:"ticket_number"`
 	EmployeeID   *uuid.UUID     `gorm:"type:char(36);index" json:"employee_id"`
+	ViolationID  *uuid.UUID     `gorm:"type:char(36);index" json:"violation_id"`
 	Subject      string         `gorm:"type:varchar(255);not null" json:"subject"`
 	Category     string         `gorm:"type:varchar(50);default:'OPERATIONAL';index" json:"category"`
 	Priority     string         `gorm:"type:varchar(20);default:'MEDIUM';index" json:"priority"`

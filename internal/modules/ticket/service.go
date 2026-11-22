@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -85,6 +86,7 @@ func (s *supportTicketService) Create(ctx context.Context, req CreateSupportTick
 		ID:           uuid.New(),
 		TicketNumber: ticketNum,
 		EmployeeID:   req.EmployeeID,
+		ViolationID:  req.ViolationID,
 		Subject:      req.Subject,
 		Category:     category,
 		Priority:     priority,
@@ -95,6 +97,16 @@ func (s *supportTicketService) Create(ctx context.Context, req CreateSupportTick
 
 	if err := s.repo.Create(ctx, ticket); err != nil {
 		return nil, err
+	}
+
+	if req.ViolationID != nil {
+		_ = s.repo.AppendViolationHistoryStep(
+			ctx,
+			*req.ViolationID,
+			"DISPUTED",
+			"تم تقديم اعتراض",
+			fmt.Sprintf("تذكرة %s", ticketNum),
+		)
 	}
 
 	if req.EmployeeID != nil && s.notifContract != nil {
@@ -123,6 +135,8 @@ func (s *supportTicketService) Update(ctx context.Context, id uuid.UUID, req Upd
 		return nil, errors.New("التذكرة غير موجودة")
 	}
 
+	oldResolution := strings.TrimSpace(ticket.Resolution)
+
 	if req.Subject != nil {
 		ticket.Subject = *req.Subject
 	}
@@ -144,6 +158,35 @@ func (s *supportTicketService) Update(ctx context.Context, id uuid.UUID, req Upd
 
 	if err := s.repo.Update(ctx, ticket); err != nil {
 		return nil, err
+	}
+
+	newResolution := strings.TrimSpace(ticket.Resolution)
+	if newResolution != "" && newResolution != oldResolution {
+		if ticket.ViolationID != nil {
+			_ = s.repo.AppendViolationHistoryStep(
+				ctx,
+				*ticket.ViolationID,
+				"TICKET_REPLY",
+				"رد الإدارة على الاعتراض",
+				newResolution,
+			)
+		}
+		if ticket.EmployeeID != nil && s.notifContract != nil {
+			empID := *ticket.EmployeeID
+			tNum := ticket.TicketNumber
+			reply := newResolution
+			safe.Go(func() {
+				s.notifContract.SendAsyncNotification(context.Background(), PushNotificationDTO{
+					TargetUserID: empID,
+					Title:        "رد الإدارة على اعتراضك",
+					Body:         fmt.Sprintf("تذكرة %s: %s", tNum, reply),
+					Data: map[string]string{
+						"ticket_id": ticket.ID.String(),
+						"type":      "VIOLATION",
+					},
+				})
+			})
+		}
 	}
 
 	if req.Status != nil && (*req.Status == "RESOLVED" || *req.Status == "CLOSED") && ticket.EmployeeID != nil && s.notifContract != nil {
