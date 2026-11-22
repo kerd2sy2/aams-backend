@@ -19,6 +19,8 @@ type WorkRepository interface {
 	FindActiveSessionByEmployeeIDForUpdate(ctx context.Context, empID uuid.UUID) (*WorkSession, error)
 	FindLastCompletedSession(ctx context.Context, empID uuid.UUID) (*WorkSession, error)
 	FindCompletedSessionByEmployeeAndDate(ctx context.Context, empID uuid.UUID, dateStr string) (*WorkSession, error)
+	FindCompletedSessionsByEmployeeAndDate(ctx context.Context, empID uuid.UUID, dateStr string) ([]WorkSession, error)
+	SoftDeleteByIDs(ctx context.Context, ids []uuid.UUID) error
 	FindLastSessionByMotorcycle(ctx context.Context, motorcycleNumber string) (*WorkSession, error)
 	CountTodaySessions(ctx context.Context, empID uuid.UUID) (int64, error)
 	GetActiveSessions(ctx context.Context, branchID *uuid.UUID) ([]WorkSession, error)
@@ -86,16 +88,44 @@ func (r *gormWorkRepository) FindLastCompletedSession(ctx context.Context, empID
 	return &session, nil
 }
 
+func riyadhDayBounds(dateStr string) (time.Time, time.Time, error) {
+	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
+	t, err := time.ParseInLocation("2006-01-02", dateStr, riyadh)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	startOfDay := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, riyadh)
+	return startOfDay, startOfDay.Add(24 * time.Hour), nil
+}
+
 func (r *gormWorkRepository) FindCompletedSessionByEmployeeAndDate(ctx context.Context, empID uuid.UUID, dateStr string) (*WorkSession, error) {
-	var session WorkSession
-	err := r.db.WithContext(ctx).
-		Where("employee_id = ? AND DATE(start_time) = ? AND status = ?", empID, dateStr, "COMPLETED").
-		Order("start_time DESC").
-		First(&session).Error
+	sessions, err := r.FindCompletedSessionsByEmployeeAndDate(ctx, empID, dateStr)
 	if err != nil {
 		return nil, err
 	}
-	return &session, nil
+	if len(sessions) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &sessions[0], nil
+}
+
+func (r *gormWorkRepository) FindCompletedSessionsByEmployeeAndDate(ctx context.Context, empID uuid.UUID, dateStr string) ([]WorkSession, error) {
+	var sessions []WorkSession
+	q := r.db.WithContext(ctx).Where("employee_id = ? AND status = ?", empID, "COMPLETED")
+	if startOfDay, endOfDay, err := riyadhDayBounds(dateStr); err == nil {
+		q = q.Where("start_time >= ? AND start_time < ?", startOfDay, endOfDay)
+	} else {
+		q = q.Where("DATE(start_time AT TIME ZONE 'Asia/Riyadh') = ?", dateStr)
+	}
+	err := q.Order("start_time DESC").Find(&sessions).Error
+	return sessions, err
+}
+
+func (r *gormWorkRepository) SoftDeleteByIDs(ctx context.Context, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Where("id IN ?", ids).Delete(&WorkSession{}).Error
 }
 
 func (r *gormWorkRepository) FindLastSessionByMotorcycle(ctx context.Context, motorcycleNumber string) (*WorkSession, error) {

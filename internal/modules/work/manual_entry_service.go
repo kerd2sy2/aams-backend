@@ -30,16 +30,18 @@ func (s *workService) SaveManualEntries(
 
 	var savedSessions []WorkSession
 
+	riyadh := time.FixedZone("Asia/Riyadh", 3*60*60)
+
 	err = s.repo.ExecInTx(ctx, func(txRepo WorkRepository) error {
 		for _, item := range req.Entries {
 			dateStr := strings.TrimSpace(item.Date)
-			parsedDay, parseErr := time.ParseInLocation("2006-01-02", dateStr, time.Now().Location())
+			parsedDay, parseErr := time.ParseInLocation("2006-01-02", dateStr, riyadh)
 			if parseErr != nil {
 				return fmt.Errorf("صيغة التاريخ غير صالحة (%s)", dateStr)
 			}
 
-			startTime := time.Date(parsedDay.Year(), parsedDay.Month(), parsedDay.Day(), 10, 0, 0, 0, parsedDay.Location())
-			endTime := time.Date(parsedDay.Year(), parsedDay.Month(), parsedDay.Day(), 22, 0, 0, 0, parsedDay.Location())
+			startTime := time.Date(parsedDay.Year(), parsedDay.Month(), parsedDay.Day(), 10, 0, 0, 0, riyadh)
+			endTime := time.Date(parsedDay.Year(), parsedDay.Month(), parsedDay.Day(), 22, 0, 0, 0, riyadh)
 
 			distance := item.Distance
 			startKM := item.StartKM
@@ -63,11 +65,18 @@ func (s *workService) SaveManualEntries(
 				noteText = "إدخال يدوي من لوحة التحكم"
 			}
 
-			existing, _ := txRepo.FindCompletedSessionByEmployeeAndDate(ctx, empUUID, dateStr)
-			if existing != nil {
-				oldDist := existing.Distance
-				oldOrders := existing.OrdersCount
-				wasReviewed := existing.IsReviewed
+			existingList, _ := txRepo.FindCompletedSessionsByEmployeeAndDate(ctx, empUUID, dateStr)
+			if len(existingList) > 0 {
+				existing := &existingList[0]
+
+				var prevReviewedDist float64
+				var prevReviewedOrders int
+				for _, sess := range existingList {
+					if sess.IsReviewed {
+						prevReviewedDist += sess.Distance
+						prevReviewedOrders += sess.OrdersCount
+					}
+				}
 
 				existing.OrdersCount = item.OrdersCount
 				existing.Distance = distance
@@ -94,13 +103,20 @@ func (s *workService) SaveManualEntries(
 					return err
 				}
 
-				if s.empProvider != nil {
-					deltaDist := distance
-					deltaOrders := item.OrdersCount
-					if wasReviewed {
-						deltaDist = distance - oldDist
-						deltaOrders = item.OrdersCount - oldOrders
+				// Soft-delete any extra duplicate sessions on the same Riyadh date so the day has a single authoritative record
+				if len(existingList) > 1 {
+					dupIDs := make([]uuid.UUID, 0, len(existingList)-1)
+					for _, dup := range existingList[1:] {
+						dupIDs = append(dupIDs, dup.ID)
 					}
+					if err := txRepo.SoftDeleteByIDs(ctx, dupIDs); err != nil {
+						return err
+					}
+				}
+
+				if s.empProvider != nil {
+					deltaDist := distance - prevReviewedDist
+					deltaOrders := item.OrdersCount - prevReviewedOrders
 					if deltaDist != 0 || deltaOrders != 0 {
 						_ = s.empProvider.UpdateEmployeeOnEndWork(ctx, empUUID, deltaDist, deltaOrders)
 					}
