@@ -1,11 +1,28 @@
 package ticket
 
 import (
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+func isFieldEmployeeCaller(c *gin.Context) (uuid.UUID, bool) {
+	isEmp, _ := c.Get("is_employee")
+	role := strings.ToUpper(strings.TrimSpace(c.GetString("admin_role")))
+	isSupervisorOrAdmin := role == "SUPERVISOR" || role == "ADMIN" || role == "SUPER_ADMIN" ||
+		role == "OWNER" || role == "GENERAL_MANAGER" || role == "OPERATIONS_MANAGER" || role == "ACCOUNTANT"
+	if !isSupervisorOrAdmin && (isEmp == true || role == "DRIVER" || role == "EMPLOYEE" || role == "DELEGATE") {
+		if authEmpID, exists := c.Get("employee_id"); exists {
+			if aUUID, ok := authEmpID.(uuid.UUID); ok && aUUID != uuid.Nil {
+				return aUUID, true
+			}
+		}
+	}
+	return uuid.Nil, false
+}
 
 type SupportTicketHandler struct {
 	ticketService SupportTicketService
@@ -22,15 +39,23 @@ func (h *SupportTicketHandler) Create(c *gin.Context) {
 		return
 	}
 
+	enforceCooldown := false
 	var branchID *uuid.UUID
-	if bID, exists := c.Get("branch_id"); exists && bID != nil {
+	if empUUID, isFieldEmp := isFieldEmployeeCaller(c); isFieldEmp {
+		req.EmployeeID = &empUUID
+		enforceCooldown = true
+	} else if bID, exists := c.Get("branch_id"); exists && bID != nil {
 		if val, ok := bID.(uuid.UUID); ok {
 			branchID = &val
 		}
 	}
 
-	ticket, err := h.ticketService.Create(c.Request.Context(), req, branchID)
+	ticket, err := h.ticketService.Create(c.Request.Context(), req, branchID, enforceCooldown)
 	if err != nil {
+		if errors.Is(err, ErrComplaintCooldown) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error(), "code": "COMPLAINT_COOLDOWN"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -83,7 +108,10 @@ func (h *SupportTicketHandler) GetAll(c *gin.Context) {
 	}
 
 	var branchID *uuid.UUID
-	if bID, exists := c.Get("branch_id"); exists && bID != nil {
+	if empUUID, isFieldEmp := isFieldEmployeeCaller(c); isFieldEmp {
+		filter.EmployeeID = &empUUID
+		branchID = nil
+	} else if bID, exists := c.Get("branch_id"); exists && bID != nil {
 		if val, ok := bID.(uuid.UUID); ok {
 			branchID = &val
 		}

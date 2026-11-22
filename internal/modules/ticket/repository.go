@@ -16,6 +16,7 @@ type SupportTicketRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByID(ctx context.Context, id uuid.UUID) (*SupportTicket, error)
 	FindAll(ctx context.Context, filter SupportTicketFilter) ([]SupportTicket, int64, error)
+	FindLatestGeneralComplaintByEmployee(ctx context.Context, employeeID uuid.UUID) (*SupportTicket, error)
 	AppendViolationHistoryStep(ctx context.Context, violationID uuid.UUID, stepType, title, details string) error
 }
 
@@ -90,6 +91,18 @@ func (r *gormSupportTicketRepository) FindAll(ctx context.Context, filter Suppor
 
 	err := q.Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
 	return list, total, err
+}
+
+func (r *gormSupportTicketRepository) FindLatestGeneralComplaintByEmployee(ctx context.Context, employeeID uuid.UUID) (*SupportTicket, error) {
+	var ticket SupportTicket
+	err := r.db.WithContext(ctx).
+		Where("employee_id = ? AND violation_id IS NULL", employeeID).
+		Order("created_at DESC").
+		First(&ticket).Error
+	if err != nil {
+		return nil, err
+	}
+	return &ticket, nil
 }
 
 type linkedViolationStep struct {

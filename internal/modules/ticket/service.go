@@ -33,8 +33,10 @@ type PushNotificationDTO struct {
 	Data         map[string]string `json:"data"`
 }
 
+var ErrComplaintCooldown = errors.New("يمكنك تقديم شكوى واحدة فقط كل 24 ساعة")
+
 type SupportTicketService interface {
-	Create(ctx context.Context, req CreateSupportTicketRequest, adminBranchID *uuid.UUID) (*SupportTicket, error)
+	Create(ctx context.Context, req CreateSupportTicketRequest, adminBranchID *uuid.UUID, enforceCooldown bool) (*SupportTicket, error)
 	Update(ctx context.Context, id uuid.UUID, req UpdateSupportTicketRequest) (*SupportTicket, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (*SupportTicket, error)
@@ -59,7 +61,25 @@ func NewSupportTicketService(
 	}
 }
 
-func (s *supportTicketService) Create(ctx context.Context, req CreateSupportTicketRequest, adminBranchID *uuid.UUID) (*SupportTicket, error) {
+func (s *supportTicketService) Create(ctx context.Context, req CreateSupportTicketRequest, adminBranchID *uuid.UUID, enforceCooldown bool) (*SupportTicket, error) {
+	if enforceCooldown && req.ViolationID == nil && req.EmployeeID != nil {
+		if latest, err := s.repo.FindLatestGeneralComplaintByEmployee(ctx, *req.EmployeeID); err == nil && latest != nil {
+			elapsed := time.Since(latest.CreatedAt)
+			if elapsed < 24*time.Hour {
+				remaining := 24*time.Hour - elapsed
+				hours := int(remaining.Hours())
+				mins := int(remaining.Minutes()) % 60
+				if hours > 0 {
+					return nil, fmt.Errorf("%w — المتبقي %d ساعة و %d دقيقة", ErrComplaintCooldown, hours, mins)
+				}
+				if mins < 1 {
+					mins = 1
+				}
+				return nil, fmt.Errorf("%w — المتبقي %d دقيقة", ErrComplaintCooldown, mins)
+			}
+		}
+	}
+
 	category := "OPERATIONAL"
 	if req.Category != "" {
 		category = req.Category
