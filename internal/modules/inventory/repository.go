@@ -31,6 +31,16 @@ type InventoryRepository interface {
 	DeletePurchaseInvoice(ctx context.Context, id uuid.UUID) error
 	UpdateVehicleOilKM(ctx context.Context, plateNumber string, currentKM float64) error
 	FindVehicleByPlateOrID(ctx context.Context, id *uuid.UUID, plateNumber string) (*VehicleInfo, error)
+	FindDriversForOilNotify(ctx context.Context, employeeID *uuid.UUID, plateNumber string) ([]BikeDriverNotifyInfo, error)
+	SaveOilNotification(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, title, body string) error
+}
+
+type BikeDriverNotifyInfo struct {
+	ID            uuid.UUID  `gorm:"column:id"`
+	Name          string     `gorm:"column:name"`
+	PushToken     string     `gorm:"column:push_token"`
+	PreferredLang string     `gorm:"column:preferred_lang"`
+	BranchID      *uuid.UUID `gorm:"column:branch_id"`
 }
 
 type VehicleInfo struct {
@@ -310,4 +320,68 @@ func (r *gormInventoryRepository) FindVehicleByPlateOrID(ctx context.Context, id
 		return nil, err
 	}
 	return &v, nil
+}
+
+func (r *gormInventoryRepository) FindDriversForOilNotify(ctx context.Context, employeeID *uuid.UUID, plateNumber string) ([]BikeDriverNotifyInfo, error) {
+	seen := make(map[uuid.UUID]bool)
+	var result []BikeDriverNotifyInfo
+
+	if employeeID != nil && *employeeID != uuid.Nil {
+		var emp BikeDriverNotifyInfo
+		err := r.db.WithContext(ctx).Table("employees").
+			Select("id, name, push_token, preferred_lang, branch_id").
+			Where("id = ? AND deleted_at IS NULL", *employeeID).
+			First(&emp).Error
+		if err == nil && emp.ID != uuid.Nil {
+			seen[emp.ID] = true
+			result = append(result, emp)
+		}
+	}
+
+	clean := strings.TrimSpace(plateNumber)
+	if clean != "" {
+		like := r.likeOp()
+		var matched []BikeDriverNotifyInfo
+		cond1 := "deleted_at IS NULL AND (TRIM(motorcycle_number) = ? OR motorcycle_number " + like + " ? OR motorcycle_number " + like + " ?)"
+		_ = r.db.WithContext(ctx).Table("employees").
+			Select("id, name, push_token, preferred_lang, branch_id").
+			Where(cond1, clean, clean+"%", "%"+clean+"%").
+			Find(&matched).Error
+
+		if len(matched) == 0 {
+			digits := extractDigitsFromPlate(clean)
+			if len(digits) >= 3 {
+				cond2 := "deleted_at IS NULL AND (TRIM(motorcycle_number) = ? OR motorcycle_number " + like + " ? OR motorcycle_number " + like + " ?)"
+				_ = r.db.WithContext(ctx).Table("employees").
+					Select("id, name, push_token, preferred_lang, branch_id").
+					Where(cond2, digits, digits+"%", "%"+digits+"%").
+					Find(&matched).Error
+			}
+		}
+
+		for _, emp := range matched {
+			if emp.ID != uuid.Nil && !seen[emp.ID] {
+				seen[emp.ID] = true
+				result = append(result, emp)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (r *gormInventoryRepository) SaveOilNotification(ctx context.Context, empID uuid.UUID, branchID *uuid.UUID, title, body string) error {
+	now := time.Now()
+	notif := map[string]interface{}{
+		"id":          uuid.New(),
+		"employee_id": empID,
+		"branch_id":   branchID,
+		"title":       title,
+		"message":     body,
+		"type":        "OIL_DISPENSED",
+		"is_read":     false,
+		"created_at":  now,
+		"updated_at":  now,
+	}
+	return r.db.WithContext(ctx).Table("notifications").Create(notif).Error
 }

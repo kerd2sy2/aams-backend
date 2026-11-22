@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	legacyService "delivery-backend/internal/service"
 )
 
 type InventoryItemWithStock struct {
@@ -411,7 +413,80 @@ func (s *inventoryService) DispenseOil(ctx context.Context, req DispenseOilReque
 		_ = s.repo.UpdateVehicleOilKM(ctx, req.PlateNumber, req.CurrentKM)
 	}
 
+	s.notifyDriversOnOilDispense(ctx, req, adminName)
+
 	return txs, nil
+}
+
+func (s *inventoryService) notifyDriversOnOilDispense(ctx context.Context, req DispenseOilRequest, adminName string) {
+	drivers, err := s.repo.FindDriversForOilNotify(ctx, req.EmployeeID, req.PlateNumber)
+	if err != nil || len(drivers) == 0 {
+		return
+	}
+
+	supName := strings.TrimSpace(adminName)
+	if supName == "" {
+		supName = "المشرف"
+	}
+	plate := strings.TrimSpace(req.PlateNumber)
+
+	for _, drv := range drivers {
+		lang := strings.ToLower(strings.TrimSpace(drv.PreferredLang))
+		var title, body string
+
+		switch lang {
+		case "en":
+			title = "Oil Dispensed for Your Bike 🛢️"
+			if plate != "" && req.CurrentKM > 0 {
+				body = fmt.Sprintf("Oil was dispensed for bike (%s) by %s at %.0f km.", plate, supName, req.CurrentKM)
+			} else if plate != "" {
+				body = fmt.Sprintf("Oil was dispensed for your bike (%s) by %s.", plate, supName)
+			} else {
+				body = fmt.Sprintf("Oil was dispensed for your bike by %s.", supName)
+			}
+		case "ur":
+			title = "آپ کی بائیک کے لیے آئل جاری کر دیا گیا 🛢️"
+			if plate != "" && req.CurrentKM > 0 {
+				body = fmt.Sprintf("سپروائزر %s نے آپ کی بائیک (%s) کے لیے %.0f کلومیٹر پر آئل جاری کر دیا۔", supName, plate, req.CurrentKM)
+			} else if plate != "" {
+				body = fmt.Sprintf("سپروائزر %s نے آپ کی بائیک (%s) کے لیے آئل جاری کر دیا۔", supName, plate)
+			} else {
+				body = fmt.Sprintf("سپروائزر %s نے آپ کی بائیک کے لیے آئل جاری کر دیا۔", supName)
+			}
+		case "bn":
+			title = "আপনার বাইকের জন্য তেল দেওয়া হয়েছে 🛢️"
+			if plate != "" && req.CurrentKM > 0 {
+				body = fmt.Sprintf("সুপারভাইজার %s আপনার বাইক (%s)-এর জন্য %.0f কিমি-তে তেল প্রদান করেছেন।", supName, plate, req.CurrentKM)
+			} else if plate != "" {
+				body = fmt.Sprintf("সুপারভাইজার %s আপনার বাইক (%s)-এর জন্য তেল প্রদান করেছেন।", supName, plate)
+			} else {
+				body = fmt.Sprintf("সুপারভাইজার %s আপনার বাইকের জন্য তেল প্রদান করেছেন।", supName)
+			}
+		default: // "ar"
+			title = "تم صرف زيت للدباب 🛢️"
+			if plate != "" && req.CurrentKM > 0 {
+				body = fmt.Sprintf("تم صرف زيت لدبابك (%s) بواسطة %s عند عداد %.0f كم.", plate, supName, req.CurrentKM)
+			} else if plate != "" {
+				body = fmt.Sprintf("تم صرف زيت لدبابك (%s) بواسطة %s.", plate, supName)
+			} else {
+				body = fmt.Sprintf("تم صرف زيت لدبابك بواسطة %s.", supName)
+			}
+		}
+
+		_ = s.repo.SaveOilNotification(ctx, drv.ID, drv.BranchID, title, body)
+
+		if token := strings.TrimSpace(drv.PushToken); token != "" {
+			go legacyService.SendFCMBroadcast(
+				[]string{token},
+				title,
+				body,
+				map[string]string{
+					"type":  "OIL_DISPENSED",
+					"plate": plate,
+				},
+			)
+		}
+	}
 }
 
 func (s *inventoryService) DispenseOilForVehicle(ctx context.Context, plateNumber string, currentKM float64, branchID *uuid.UUID, adminName string) error {
