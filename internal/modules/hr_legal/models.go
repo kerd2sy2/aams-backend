@@ -129,6 +129,7 @@ type TrafficViolation struct {
 	Status          string         `gorm:"type:varchar(30);default:'RECORDED';index" json:"status"`
 	BranchID        *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
 	Notes           string         `gorm:"type:text" json:"notes"`
+	HistoryLog      string         `gorm:"type:text;default:'[]'" json:"history_log"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`

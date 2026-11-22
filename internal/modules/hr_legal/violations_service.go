@@ -2,6 +2,7 @@ package hr_legal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -12,6 +13,51 @@ import (
 
 	"github.com/google/uuid"
 )
+
+type violationHistoryStep struct {
+	Type    string  `json:"type"`
+	Title   string  `json:"title"`
+	Details string  `json:"details,omitempty"`
+	Amount  float64 `json:"amount,omitempty"`
+	At      string  `json:"at"`
+}
+
+func appendViolationHistoryStep(v *TrafficViolation, stepType, title, details string, amount float64) {
+	if v == nil {
+		return
+	}
+	var steps []violationHistoryStep
+	if strings.TrimSpace(v.HistoryLog) != "" {
+		_ = json.Unmarshal([]byte(v.HistoryLog), &steps)
+	}
+	steps = append(steps, violationHistoryStep{
+		Type:    stepType,
+		Title:   title,
+		Details: details,
+		Amount:  amount,
+		At:      time.Now().UTC().Format(time.RFC3339),
+	})
+	if encoded, err := json.Marshal(steps); err == nil {
+		v.HistoryLog = string(encoded)
+	}
+}
+
+func violationStatusArabicLabel(st string) string {
+	switch strings.ToUpper(st) {
+	case "RECORDED":
+		return "مسجل"
+	case "PARTIAL":
+		return "مخصوم جزئياً"
+	case "DEDUCTED":
+		return "تم الخصم بالكامل"
+	case "PAID":
+		return "مسدد بالكامل"
+	case "DISPUTED":
+		return "معترض عليه"
+	default:
+		return st
+	}
+}
 
 func (s *hrLegalService) sendViolationNotification(ctx context.Context, v *TrafficViolation, isPayment bool, paymentAmount float64) {
 	if v == nil || v.EmployeeID == nil {
@@ -144,6 +190,14 @@ func (s *hrLegalService) CreateViolation(ctx context.Context, req CreateTrafficV
 		Notes:           req.Notes,
 	}
 
+	appendViolationHistoryStep(
+		v,
+		"RECORDED",
+		"تم تسجيل الخصم",
+		fmt.Sprintf("المبلغ: %.0f ر.س", req.Amount),
+		req.Amount,
+	)
+
 	if err := s.repo.CreateViolation(ctx, v); err != nil {
 		return nil, err
 	}
@@ -162,6 +216,11 @@ func (s *hrLegalService) UpdateViolation(ctx context.Context, id uuid.UUID, req 
 	}
 
 	var paymentAdded float64
+	oldAmount := v.Amount
+	oldPaid := v.PaidAmount
+	oldStatus := v.Status
+	oldReason := v.Reason
+	oldNotes := v.Notes
 
 	if req.ViolationNumber != nil {
 		v.ViolationNumber = *req.ViolationNumber
@@ -218,6 +277,69 @@ func (s *hrLegalService) UpdateViolation(ctx context.Context, id uuid.UUID, req 
 	}
 	if req.Notes != nil {
 		v.Notes = *req.Notes
+	}
+
+	// Ensure legacy violations get an initial recorded step before appending edits
+	if strings.TrimSpace(v.HistoryLog) == "" || strings.TrimSpace(v.HistoryLog) == "[]" {
+		appendViolationHistoryStep(
+			v,
+			"RECORDED",
+			"تم تسجيل الخصم",
+			fmt.Sprintf("المبلغ: %.0f ر.س", oldAmount),
+			oldAmount,
+		)
+	}
+
+	if v.Amount != oldAmount {
+		appendViolationHistoryStep(
+			v,
+			"AMOUNT_UPDATED",
+			"تم تعديل قيمة الخصم",
+			fmt.Sprintf("من %.0f إلى %.0f ر.س", oldAmount, v.Amount),
+			v.Amount,
+		)
+	}
+	if paymentAdded > 0 {
+		rem := math.Max(0, v.Amount-v.PaidAmount)
+		if rem <= 0 {
+			appendViolationHistoryStep(
+				v,
+				"DEDUCTED",
+				"تم خصم كامل المبلغ",
+				fmt.Sprintf("دفعة %.0f ر.س • اكتمل الخصم", paymentAdded),
+				paymentAdded,
+			)
+		} else {
+			appendViolationHistoryStep(
+				v,
+				"PAYMENT",
+				"تم خصم دفعة جزئية",
+				fmt.Sprintf("خصم %.0f ر.س • المتبقي %.0f ر.س", paymentAdded, rem),
+				paymentAdded,
+			)
+		}
+	} else if v.PaidAmount < oldPaid && v.Status == "RECORDED" {
+		appendViolationHistoryStep(
+			v,
+			"STATUS_CHANGED",
+			"تم إعادة الحالة إلى مسجل",
+			"تم تصفير المبلغ المخصوم",
+			0,
+		)
+	} else if v.Status != oldStatus {
+		appendViolationHistoryStep(
+			v,
+			"STATUS_CHANGED",
+			"تم تغيير الحالة",
+			fmt.Sprintf("الحالة الجديدة: %s", violationStatusArabicLabel(v.Status)),
+			0,
+		)
+	}
+	if strings.TrimSpace(v.Reason) != strings.TrimSpace(oldReason) {
+		appendViolationHistoryStep(v, "REASON_UPDATED", "تم تعديل السبب", v.Reason, 0)
+	}
+	if strings.TrimSpace(v.Notes) != strings.TrimSpace(oldNotes) && strings.TrimSpace(v.Notes) != "" {
+		appendViolationHistoryStep(v, "NOTE_UPDATED", "تم تحديث التقرير", v.Notes, 0)
 	}
 
 	if err := s.repo.UpdateViolation(ctx, v); err != nil {
