@@ -152,7 +152,15 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req UpdateEm
 	if req.KeyNumber != "" {
 		emp.KeyNumber = req.KeyNumber
 	}
-	if req.MotorcycleNumber != "" {
+	if req.ClearMotorcycle {
+		emp.MotorcycleNumber = ""
+		if req.KeyNumber == "" {
+			emp.KeyNumber = ""
+		}
+		if req.VehicleRegistrationImage == "" {
+			emp.VehicleRegistrationImage = ""
+		}
+	} else if req.MotorcycleNumber != "" {
 		emp.MotorcycleNumber = req.MotorcycleNumber
 	}
 	if req.ApplicationID != "" {

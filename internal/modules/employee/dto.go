@@ -53,6 +53,7 @@ type CreateEmployeeRequest struct {
 	VehicleRegistrationImage string              `json:"vehicle_registration_image"`
 	KeyNumber                string              `json:"key_number"`
 	MotorcycleNumber         string              `json:"motorcycle_number"`
+	ClearMotorcycle          bool                `json:"clear_motorcycle"`
 	ApplicationID            string              `json:"application_id"`
 	ApplicationType          string              `json:"application_type"`
 	VehicleType              string              `json:"vehicle_type"`
@@ -78,6 +79,7 @@ type UpdateEmployeeRequest struct {
 	VehicleRegistrationImage string              `json:"vehicle_registration_image"`
 	KeyNumber                string              `json:"key_number"`
 	MotorcycleNumber         string              `json:"motorcycle_number"`
+	ClearMotorcycle          bool                `json:"clear_motorcycle"`
 	ApplicationID            string              `json:"application_id"`
 	ApplicationType          string              `json:"application_type"`
 	VehicleType              string              `json:"vehicle_type"`
