@@ -39,7 +39,7 @@ type BikeDriverNotifyInfo struct {
 	ID            uuid.UUID  `gorm:"column:id"`
 	Name          string     `gorm:"column:name"`
 	PushToken     string     `gorm:"column:push_token"`
-	PreferredLang string     `gorm:"column:preferred_lang"`
+	PreferredLang string     `gorm:"column:language"`
 	BranchID      *uuid.UUID `gorm:"column:branch_id"`
 }
 
@@ -329,7 +329,7 @@ func (r *gormInventoryRepository) FindDriversForOilNotify(ctx context.Context, e
 	if employeeID != nil && *employeeID != uuid.Nil {
 		var emp BikeDriverNotifyInfo
 		err := r.db.WithContext(ctx).Table("employees").
-			Select("id, name, push_token, preferred_lang, branch_id").
+			Select("id, name, push_token, language, branch_id").
 			Where("id = ? AND deleted_at IS NULL", *employeeID).
 			First(&emp).Error
 		if err == nil && emp.ID != uuid.Nil {
@@ -344,7 +344,7 @@ func (r *gormInventoryRepository) FindDriversForOilNotify(ctx context.Context, e
 		var matched []BikeDriverNotifyInfo
 		cond1 := "deleted_at IS NULL AND (TRIM(motorcycle_number) = ? OR motorcycle_number " + like + " ? OR motorcycle_number " + like + " ?)"
 		_ = r.db.WithContext(ctx).Table("employees").
-			Select("id, name, push_token, preferred_lang, branch_id").
+			Select("id, name, push_token, language, branch_id").
 			Where(cond1, clean, clean+"%", "%"+clean+"%").
 			Find(&matched).Error
 
@@ -353,7 +353,7 @@ func (r *gormInventoryRepository) FindDriversForOilNotify(ctx context.Context, e
 			if len(digits) >= 3 {
 				cond2 := "deleted_at IS NULL AND (TRIM(motorcycle_number) = ? OR motorcycle_number " + like + " ? OR motorcycle_number " + like + " ?)"
 				_ = r.db.WithContext(ctx).Table("employees").
-					Select("id, name, push_token, preferred_lang, branch_id").
+					Select("id, name, push_token, language, branch_id").
 					Where(cond2, digits, digits+"%", "%"+digits+"%").
 					Find(&matched).Error
 			}
@@ -377,9 +377,9 @@ func (r *gormInventoryRepository) SaveOilNotification(ctx context.Context, empID
 		"employee_id": empID,
 		"branch_id":   branchID,
 		"title":       title,
-		"message":     body,
+		"body":        body,
 		"type":        "OIL_DISPENSED",
-		"is_read":     false,
+		"status":      "unread",
 		"created_at":  now,
 		"updated_at":  now,
 	}
