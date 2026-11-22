@@ -189,6 +189,12 @@ func (s *hrLegalService) UpdateViolation(ctx context.Context, id uuid.UUID, req 
 	if req.AddPayment != nil && *req.AddPayment > 0 {
 		v.PaidAmount += *req.AddPayment
 		paymentAdded = *req.AddPayment
+		if v.PaidAmount >= v.Amount && v.Amount > 0 {
+			v.PaidAmount = v.Amount
+			v.Status = "DEDUCTED"
+		} else if v.PaidAmount > 0 {
+			v.Status = "PARTIAL"
+		}
 	}
 	if req.Reason != nil {
 		v.Reason = *req.Reason
