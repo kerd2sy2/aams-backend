@@ -76,7 +76,12 @@ func (h *SupportTicketHandler) Update(c *gin.Context) {
 		return
 	}
 
-	ticket, err := h.ticketService.Update(c.Request.Context(), id, req)
+	adminName := strings.TrimSpace(c.GetString("admin_name"))
+	if adminName == "" {
+		adminName = strings.TrimSpace(c.GetString("user_name"))
+	}
+
+	ticket, err := h.ticketService.Update(c.Request.Context(), id, req, adminName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -105,6 +110,16 @@ func (h *SupportTicketHandler) GetAll(c *gin.Context) {
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "فلاتر غير صالحة"})
 		return
+	}
+	if s := strings.TrimSpace(filter.EmployeeIDStr); s != "" {
+		if parsed, err := uuid.Parse(s); err == nil {
+			filter.EmployeeID = &parsed
+		}
+	}
+	if s := strings.TrimSpace(filter.BranchIDStr); s != "" {
+		if parsed, err := uuid.Parse(s); err == nil {
+			filter.BranchID = &parsed
+		}
 	}
 
 	var branchID *uuid.UUID

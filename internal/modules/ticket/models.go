@@ -22,9 +22,12 @@ type SupportTicket struct {
 	Category     string         `gorm:"type:varchar(50);default:'OPERATIONAL';index" json:"category"`
 	Priority     string         `gorm:"type:varchar(20);default:'MEDIUM';index" json:"priority"`
 	Status       string         `gorm:"type:varchar(30);default:'OPEN';index" json:"status"`
-	Description  string         `gorm:"type:text;not null" json:"description"`
-	Resolution   string         `gorm:"type:text" json:"resolution"`
-	BranchID     *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
+	Description   string         `gorm:"type:text;not null" json:"description"`
+	Resolution    string         `gorm:"type:text" json:"resolution"`
+	RepliedByName string         `gorm:"type:varchar(120);default:''" json:"replied_by_name"`
+	RepliedAt     *time.Time     `json:"replied_at,omitempty"`
+	HistoryLog    string         `gorm:"type:text;default:''" json:"history_log"`
+	BranchID      *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`

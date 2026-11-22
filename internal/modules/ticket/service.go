@@ -2,6 +2,7 @@ package ticket
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,6 +12,40 @@ import (
 
 	"delivery-backend/internal/shared/safe"
 )
+
+type TicketHistoryStep struct {
+	Type    string `json:"type"`
+	Title   string `json:"title"`
+	Details string `json:"details,omitempty"`
+	By      string `json:"by,omitempty"`
+	At      string `json:"at"`
+}
+
+func appendTicketHistory(rawLog string, step TicketHistoryStep) string {
+	var steps []TicketHistoryStep
+	if strings.TrimSpace(rawLog) != "" {
+		_ = json.Unmarshal([]byte(rawLog), &steps)
+	}
+	steps = append(steps, step)
+	b, err := json.Marshal(steps)
+	if err != nil {
+		return rawLog
+	}
+	return string(b)
+}
+
+func ticketStatusArabic(status string) string {
+	switch strings.ToUpper(strings.TrimSpace(status)) {
+	case "IN_PROGRESS":
+		return "قيد المعالجة"
+	case "RESOLVED":
+		return "تم الحل"
+	case "CLOSED":
+		return "مغلقة"
+	default:
+		return "مفتوحة"
+	}
+}
 
 type IEmployeeContract interface {
 	GetEmployeeSummary(ctx context.Context, id uuid.UUID) (*EmployeeSummaryDTO, error)
@@ -37,7 +72,7 @@ var ErrComplaintCooldown = errors.New("يمكنك تقديم شكوى واحدة
 
 type SupportTicketService interface {
 	Create(ctx context.Context, req CreateSupportTicketRequest, adminBranchID *uuid.UUID, enforceCooldown bool) (*SupportTicket, error)
-	Update(ctx context.Context, id uuid.UUID, req UpdateSupportTicketRequest) (*SupportTicket, error)
+	Update(ctx context.Context, id uuid.UUID, req UpdateSupportTicketRequest, adminName string) (*SupportTicket, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (*SupportTicket, error)
 	GetAll(ctx context.Context, filter SupportTicketFilter, adminBranchID *uuid.UUID) ([]SupportTicket, int64, error)
@@ -102,6 +137,13 @@ func (s *supportTicketService) Create(ctx context.Context, req CreateSupportTick
 
 	ticketNum := fmt.Sprintf("TCK-%d", time.Now().Unix()%1000000)
 
+	initialHistory := appendTicketHistory("", TicketHistoryStep{
+		Type:    "CREATED",
+		Title:   "تم تقديم الشكوى",
+		Details: req.Subject,
+		At:      time.Now().UTC().Format(time.RFC3339),
+	})
+
 	ticket := &SupportTicket{
 		ID:           uuid.New(),
 		TicketNumber: ticketNum,
@@ -112,6 +154,7 @@ func (s *supportTicketService) Create(ctx context.Context, req CreateSupportTick
 		Priority:     priority,
 		Status:       "OPEN",
 		Description:  req.Description,
+		HistoryLog:   initialHistory,
 		BranchID:     branchID,
 	}
 
@@ -149,13 +192,18 @@ func (s *supportTicketService) Create(ctx context.Context, req CreateSupportTick
 	return s.repo.FindByID(ctx, ticket.ID)
 }
 
-func (s *supportTicketService) Update(ctx context.Context, id uuid.UUID, req UpdateSupportTicketRequest) (*SupportTicket, error) {
+func (s *supportTicketService) Update(ctx context.Context, id uuid.UUID, req UpdateSupportTicketRequest, adminName string) (*SupportTicket, error) {
 	ticket, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, errors.New("التذكرة غير موجودة")
 	}
 
 	oldResolution := strings.TrimSpace(ticket.Resolution)
+	oldStatus := strings.TrimSpace(ticket.Status)
+	actorName := strings.TrimSpace(adminName)
+	if actorName == "" {
+		actorName = "الإدارة"
+	}
 
 	if req.Subject != nil {
 		ticket.Subject = *req.Subject
@@ -176,11 +224,32 @@ func (s *supportTicketService) Update(ctx context.Context, id uuid.UUID, req Upd
 		ticket.Resolution = *req.Resolution
 	}
 
+	now := time.Now().UTC()
+	newResolution := strings.TrimSpace(ticket.Resolution)
+	if newResolution != "" && newResolution != oldResolution {
+		ticket.RepliedByName = actorName
+		ticket.RepliedAt = &now
+		ticket.HistoryLog = appendTicketHistory(ticket.HistoryLog, TicketHistoryStep{
+			Type:    "REPLY",
+			Title:   "رد الإدارة",
+			Details: newResolution,
+			By:      actorName,
+			At:      now.Format(time.RFC3339),
+		})
+	}
+	if req.Status != nil && strings.TrimSpace(*req.Status) != "" && strings.TrimSpace(*req.Status) != oldStatus {
+		ticket.HistoryLog = appendTicketHistory(ticket.HistoryLog, TicketHistoryStep{
+			Type:    "STATUS",
+			Title:   fmt.Sprintf("تم تغيير الحالة إلى %s", ticketStatusArabic(*req.Status)),
+			By:      actorName,
+			At:      now.Format(time.RFC3339),
+		})
+	}
+
 	if err := s.repo.Update(ctx, ticket); err != nil {
 		return nil, err
 	}
 
-	newResolution := strings.TrimSpace(ticket.Resolution)
 	if newResolution != "" && newResolution != oldResolution {
 		if ticket.ViolationID != nil {
 			_ = s.repo.AppendViolationHistoryStep(
@@ -195,14 +264,20 @@ func (s *supportTicketService) Update(ctx context.Context, id uuid.UUID, req Upd
 			empID := *ticket.EmployeeID
 			tNum := ticket.TicketNumber
 			reply := newResolution
+			notifTitle := "رد الإدارة على شكواك"
+			notifType := "COMPLAINT"
+			if ticket.ViolationID != nil {
+				notifTitle = "رد الإدارة على اعتراضك"
+				notifType = "VIOLATION"
+			}
 			safe.Go(func() {
 				s.notifContract.SendAsyncNotification(context.Background(), PushNotificationDTO{
 					TargetUserID: empID,
-					Title:        "رد الإدارة على اعتراضك",
-					Body:         fmt.Sprintf("تذكرة %s: %s", tNum, reply),
+					Title:        notifTitle,
+					Body:         fmt.Sprintf("تذكرة %s (%s): %s", tNum, actorName, reply),
 					Data: map[string]string{
 						"ticket_id": ticket.ID.String(),
-						"type":      "VIOLATION",
+						"type":      notifType,
 					},
 				})
 			})

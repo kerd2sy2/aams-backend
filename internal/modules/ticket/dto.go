@@ -26,15 +26,17 @@ type UpdateSupportTicketRequest struct {
 }
 
 type SupportTicketFilter struct {
-	EmployeeID *uuid.UUID `form:"employee_id"`
-	BranchID   *uuid.UUID `form:"branch_id"`
-	Status     string     `form:"status"`
-	Category   string     `form:"category"`
-	Priority   string     `form:"priority"`
-	Search     string     `form:"search"`
-	Page       int        `form:"page,default=1"`
-	Limit      int        `form:"limit,default=50"`
-	PageSize   int        `form:"page_size"`
+	EmployeeID    *uuid.UUID `form:"-"`
+	BranchID      *uuid.UUID `form:"-"`
+	EmployeeIDStr string     `form:"employee_id"`
+	BranchIDStr   string     `form:"branch_id"`
+	Status        string     `form:"status"`
+	Category      string     `form:"category"`
+	Priority      string     `form:"priority"`
+	Search        string     `form:"search"`
+	Page          int        `form:"page,default=1"`
+	Limit         int        `form:"limit,default=50"`
+	PageSize      int        `form:"page_size"`
 }
 
 type SupportTicketResponse struct {
@@ -47,9 +49,12 @@ type SupportTicketResponse struct {
 	Category     string     `json:"category"`
 	Priority     string     `json:"priority"`
 	Status       string     `json:"status"`
-	Description  string     `json:"description"`
-	Resolution   string     `json:"resolution"`
-	BranchID     *uuid.UUID `json:"branch_id"`
+	Description   string     `json:"description"`
+	Resolution    string     `json:"resolution"`
+	RepliedByName string     `json:"replied_by_name,omitempty"`
+	RepliedAt     *time.Time `json:"replied_at,omitempty"`
+	HistoryLog    string     `json:"history_log,omitempty"`
+	BranchID      *uuid.UUID `json:"branch_id"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
