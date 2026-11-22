@@ -206,7 +206,7 @@ func (s *hrLegalService) UpdateViolation(ctx context.Context, id uuid.UUID, req 
 		if (*req.Status == "DEDUCTED" || *req.Status == "PAID") && v.PaidAmount < v.Amount {
 			paymentAdded = v.Amount - v.PaidAmount
 			v.PaidAmount = v.Amount
-		} else if *req.Status == "RECORDED" && req.PaidAmount == nil {
+		} else if *req.Status == "RECORDED" {
 			v.PaidAmount = 0
 		}
 	}
