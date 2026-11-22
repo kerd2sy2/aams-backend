@@ -154,6 +154,9 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 		if s.empProvider != nil {
 			_ = s.empProvider.SendShiftApprovalNotification(ctx, *session.EmployeeID, session.ID, session.OrdersCount, session.FuelCost, reviewerName)
 		}
+	} else if wasReviewed && session.IsReviewed && req.EndKM != nil && s.vehicleProvider != nil && session.MotorcycleNumber != "" {
+		// If supervisor corrected EndKM on an already-reviewed shift, sync the corrected odometer to the vehicle
+		_ = s.vehicleProvider.UpdateVehicleKM(ctx, session.MotorcycleNumber, session.EndKM)
 	}
 
 	return session, nil

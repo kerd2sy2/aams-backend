@@ -248,7 +248,7 @@ func (s *workService) EndWork(ctx context.Context, req EndWorkRequest, reviewerI
 				return err
 			}
 		}
-		if s.vehicleProvider != nil && session.MotorcycleNumber != "" {
+		if session.IsReviewed && s.vehicleProvider != nil && session.MotorcycleNumber != "" {
 			_ = s.vehicleProvider.UpdateVehicleKM(ctx, session.MotorcycleNumber, req.EndKM)
 		}
 		return nil

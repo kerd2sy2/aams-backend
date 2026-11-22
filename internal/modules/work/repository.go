@@ -81,7 +81,7 @@ func (r *gormWorkRepository) FindActiveSessionByEmployeeIDForUpdate(ctx context.
 
 func (r *gormWorkRepository) FindLastCompletedSession(ctx context.Context, empID uuid.UUID) (*WorkSession, error) {
 	var session WorkSession
-	err := r.db.WithContext(ctx).Where("employee_id = ? AND status = ?", empID, "COMPLETED").Order("end_time DESC").First(&session).Error
+	err := r.db.WithContext(ctx).Where("employee_id = ? AND status = ? AND is_reviewed = ?", empID, "COMPLETED", true).Order("end_time DESC").First(&session).Error
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (r *gormWorkRepository) SoftDeleteByIDs(ctx context.Context, ids []uuid.UUI
 
 func (r *gormWorkRepository) FindLastSessionByMotorcycle(ctx context.Context, motorcycleNumber string) (*WorkSession, error) {
 	var session WorkSession
-	err := r.db.WithContext(ctx).Where("motorcycle_number = ? AND status = ?", motorcycleNumber, "COMPLETED").Order("end_time DESC").First(&session).Error
+	err := r.db.WithContext(ctx).Where("motorcycle_number = ? AND status = ? AND is_reviewed = ?", motorcycleNumber, "COMPLETED", true).Order("end_time DESC").First(&session).Error
 	if err != nil {
 		return nil, err
 	}
