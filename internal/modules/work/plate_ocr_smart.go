@@ -421,7 +421,7 @@ func (s *workService) ScanPlateImageSmart(ctx context.Context, imageBase64 strin
 	// Tier 3: Optional Gemini Vision fallback ONLY if local engine couldn't get a high-confidence plate.
 	// Gracefully ignored if Gemini has no quota/credits or fails!
 	if (digits == "" || enLetters == "" || conf < 0.78) && strings.TrimSpace(os.Getenv("GEMINI_API_KEY")) != "" {
-		if gd, ge, ga, gErr := s.callGeminiPlateVision(ctx, imageBase64); gErr == nil && gd != "" && ge != "" {
+		if gd, ge, _, gErr := s.callGeminiPlateVision(ctx, imageBase64); gErr == nil && gd != "" && ge != "" {
 			// Snap Gemini output against live fleet too
 			fd, fe, fa, _ := s.matchAgainstLiveFleet(ctx, gd, ge)
 			digits, enLetters, arLetters = fd, fe, fa
