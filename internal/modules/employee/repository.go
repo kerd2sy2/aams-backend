@@ -21,6 +21,7 @@ type EmployeeRepository interface {
 	GetLocations(ctx context.Context, branchID *uuid.UUID) ([]EmployeeLocationDTO, error)
 	UpdateLocation(ctx context.Context, id uuid.UUID, lat, lng float64, isVPN, isMock, outOfZone bool) error
 	UpdatePhone(ctx context.Context, id uuid.UUID, phone string) error
+	UpdateLocalizedNames(ctx context.Context, id uuid.UUID, localizedNames string) error
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
 	BatchSetOilChange(ctx context.Context, entries []OilSetupEntry) (int, error)
 }
@@ -305,6 +306,10 @@ func (r *gormEmployeeRepository) UpdateLocation(ctx context.Context, id uuid.UUI
 
 func (r *gormEmployeeRepository) UpdatePhone(ctx context.Context, id uuid.UUID, phone string) error {
 	return r.db.WithContext(ctx).Model(&Employee{}).Where("id = ?", id).Update("phone", phone).Error
+}
+
+func (r *gormEmployeeRepository) UpdateLocalizedNames(ctx context.Context, id uuid.UUID, localizedNames string) error {
+	return r.db.WithContext(ctx).Model(&Employee{}).Where("id = ?", id).Update("localized_names", localizedNames).Error
 }
 
 func (r *gormEmployeeRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {

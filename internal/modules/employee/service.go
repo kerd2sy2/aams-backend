@@ -2,6 +2,7 @@ package employee
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -25,6 +26,7 @@ type EmployeeService interface {
 	GetLocations(ctx context.Context, branchID *uuid.UUID) ([]EmployeeLocationDTO, error)
 	UpdateLocation(ctx context.Context, id uuid.UUID, req UpdateLocationRequest) error
 	SetPhone(ctx context.Context, id uuid.UUID, phone string) error
+	SetLocalizedName(ctx context.Context, id uuid.UUID, lang, name string) (string, error)
 	ChangePassword(ctx context.Context, id uuid.UUID, oldPassword, newPassword string) error
 	ResetPassword(ctx context.Context, id uuid.UUID, newPassword string) error
 	BatchSetOilChange(ctx context.Context, req BatchOilSetupRequest) (int, error)
@@ -257,6 +259,35 @@ func (s *employeeService) UpdateLocation(ctx context.Context, id uuid.UUID, req 
 
 func (s *employeeService) SetPhone(ctx context.Context, id uuid.UUID, phone string) error {
 	return s.repo.UpdatePhone(ctx, id, phone)
+}
+
+func (s *employeeService) SetLocalizedName(ctx context.Context, id uuid.UUID, lang, name string) (string, error) {
+	cleanLang := strings.ToLower(strings.TrimSpace(lang))
+	cleanName := strings.TrimSpace(name)
+	if cleanLang == "" || cleanName == "" {
+		return "", errors.New("الاسم واللغة مطلوبان")
+	}
+	if cleanLang != "en" && cleanLang != "ur" && cleanLang != "bn" {
+		return "", errors.New("لغة غير مدعومة")
+	}
+	emp, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return "", ErrEmployeeNotFound
+	}
+	namesMap := map[string]string{}
+	if strings.TrimSpace(emp.LocalizedNames) != "" {
+		_ = json.Unmarshal([]byte(emp.LocalizedNames), &namesMap)
+	}
+	namesMap[cleanLang] = cleanName
+	b, err := json.Marshal(namesMap)
+	if err != nil {
+		return "", err
+	}
+	updated := string(b)
+	if err := s.repo.UpdateLocalizedNames(ctx, id, updated); err != nil {
+		return "", err
+	}
+	return updated, nil
 }
 
 func (s *employeeService) ChangePassword(ctx context.Context, id uuid.UUID, oldPassword, newPassword string) error {

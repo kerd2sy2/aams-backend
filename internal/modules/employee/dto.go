@@ -98,6 +98,11 @@ type SetPhoneRequest struct {
 	Phone string `json:"phone" binding:"required"`
 }
 
+type SetLocalizedNameRequest struct {
+	Language string `json:"language" binding:"required"`
+	Name     string `json:"name" binding:"required"`
+}
+
 type UpdateLocationRequest struct {
 	Latitude       float64  `json:"latitude" binding:"required"`
 	Longitude      float64  `json:"longitude" binding:"required"`
