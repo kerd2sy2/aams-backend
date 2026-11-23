@@ -104,18 +104,39 @@ func SendFCMBroadcast(tokens []string, title, body string, extraData map[string]
 
 	var fcmTokens []string
 	var expoTokens []string
+	seenFCM := make(map[string]bool)
+	seenExpo := make(map[string]bool)
 
 	for _, rawTok := range tokens {
+		var deviceFCM string
+		var deviceExpo string
 		for _, tok := range strings.Split(rawTok, ",") {
 			tok = strings.TrimSpace(tok)
 			if tok == "" {
 				continue
 			}
 			if strings.HasPrefix(tok, "ExponentPushToken[") || strings.HasPrefix(tok, "ExpoPushToken[") {
-				expoTokens = append(expoTokens, tok)
+				if deviceExpo == "" {
+					deviceExpo = tok
+				}
 			} else if len(tok) > 20 {
-				// Native FCM token
-				fcmTokens = append(fcmTokens, tok)
+				if deviceFCM == "" {
+					deviceFCM = tok
+				}
+			}
+		}
+
+		// Prefer native FCM when available; only fall back to Expo Push if no native FCM token (or FCM client unavailable)
+		// This prevents sending two identical notifications (FCM + Expo) to the same phone.
+		if deviceFCM != "" && globalFCMClient != nil {
+			if !seenFCM[deviceFCM] {
+				seenFCM[deviceFCM] = true
+				fcmTokens = append(fcmTokens, deviceFCM)
+			}
+		} else if deviceExpo != "" {
+			if !seenExpo[deviceExpo] {
+				seenExpo[deviceExpo] = true
+				expoTokens = append(expoTokens, deviceExpo)
 			}
 		}
 	}
