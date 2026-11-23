@@ -295,9 +295,26 @@ func (s *workService) lookupLearnedCorrection(ctx context.Context, rawText strin
 	return "", "", "", false
 }
 
-func (s *workService) matchAgainstLiveFleet(ctx context.Context, digits, enLetters string) (string, string, string, bool) {
+var digitLookalikeReplacer = strings.NewReplacer(
+	"Z", "7", "L", "4", "O", "0", "Q", "0", "I", "1", "S", "5", "B", "8", "G", "6", "T", "7",
+)
+
+func hammingDist4(a, b string) int {
+	if len(a) != 4 || len(b) != 4 {
+		return 99
+	}
+	d := 0
+	for i := 0; i < 4; i++ {
+		if a[i] != b[i] {
+			d++
+		}
+	}
+	return d
+}
+
+func (s *workService) matchAgainstLiveFleet(ctx context.Context, rawText, digits, enLetters string) (string, string, string, bool) {
 	db := s.getWorkDB()
-	if db == nil || len(digits) < 3 {
+	if db == nil {
 		return digits, enLetters, formatEnToArLetters(enLetters), false
 	}
 	var plates []string
@@ -305,24 +322,54 @@ func (s *workService) matchAgainstLiveFleet(ctx context.Context, digits, enLette
 		return digits, enLetters, formatEnToArLetters(enLetters), false
 	}
 
-	var exactDigitMatches [][3]string
+	rawClean := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(rawText), "KSA", ""))
+	rawAlnum := nonAlnumRegex.ReplaceAllString(rawClean, "")
+	rawDigitsNorm := digitLookalikeReplacer.Replace(rawAlnum)
+
+	bestScore := 0
+	secondScore := 0
+	var bestPlate [3]string
+
 	for _, p := range plates {
 		fd, fe, fa := normalizePlateParts(p)
 		if fd == "" || fe == "" {
 			continue
 		}
-		if fd == digits && fe == enLetters {
-			return fd, fe, fa, true
+		score := 0
+
+		// 1. Direct parsed digits match
+		if digits == fd {
+			score += 65
+		} else if len(fd) == 4 && strings.Contains(rawDigitsNorm, fd) {
+			// Handles noisy OCR like "204339544ZAJ" or "5LLZAJ" -> "5447AJ"!
+			score += 60
+		} else if len(digits) == 4 && hammingDist4(digits, fd) == 1 {
+			score += 42
+		} else if len(digits) == 3 && strings.HasPrefix(fd, digits) {
+			score += 38
 		}
-		if fd == digits {
-			exactDigitMatches = append(exactDigitMatches, [3]string{fd, fe, fa})
+
+		// 2. Letters match (parsed or inside rawText)
+		if enLetters != "" && enLetters == fe {
+			score += 40
+		} else if len(fe) >= 2 && strings.Contains(rawAlnum, fe) {
+			score += 36
+		} else if len(fe) >= 2 && (strings.Contains(rawAlnum, string(fe[0])) || strings.Contains(rawAlnum, string(fe[1]))) {
+			score += 16
+		}
+
+		if score > bestScore {
+			secondScore = bestScore
+			bestScore = score
+			bestPlate = [3]string{fd, fe, fa}
+		} else if score > secondScore {
+			secondScore = score
 		}
 	}
 
-	// If only ONE bike in the entire fleet has these exact 4 digits, snap to it automatically!
-	if len(exactDigitMatches) == 1 && len(digits) == 4 {
-		m := exactDigitMatches[0]
-		return m[0], m[1], m[2], true
+	// Confident unique fleet match
+	if bestScore >= 76 && bestScore > secondScore {
+		return bestPlate[0], bestPlate[1], bestPlate[2], true
 	}
 	return digits, enLetters, formatEnToArLetters(enLetters), false
 }
@@ -407,13 +454,16 @@ func (s *workService) ScanPlateImageSmart(ctx context.Context, imageBase64 strin
 		}
 	}
 
-	// Tier 2B: Match against Live Fleet DB (vehicles table)
-	if digits != "" {
-		fd, fe, fa, matched := s.matchAgainstLiveFleet(ctx, digits, enLetters)
+	// Tier 2B: Smart Fuzzy Match against Live Fleet DB (vehicles table) — recovers noisy reads like "KSA544ZA" / "5LLZAJ" -> "5447 ا ح"
+	if digits != "" || rawText != "" {
+		fd, fe, fa, matched := s.matchAgainstLiveFleet(ctx, rawText, digits, enLetters)
 		if matched {
 			digits, enLetters, arLetters = fd, fe, fa
-			if conf < 0.90 {
-				conf = 0.90
+			if conf < 0.92 {
+				conf = 0.92
+			}
+			if engine == "" || engine == "local_rapidocr" {
+				engine = "local_fleet_smart"
 			}
 		}
 	}
@@ -422,14 +472,15 @@ func (s *workService) ScanPlateImageSmart(ctx context.Context, imageBase64 strin
 	// Gracefully ignored if Gemini has no quota/credits or fails!
 	if (digits == "" || enLetters == "" || conf < 0.78) && strings.TrimSpace(os.Getenv("GEMINI_API_KEY")) != "" {
 		if gd, ge, _, gErr := s.callGeminiPlateVision(ctx, imageBase64); gErr == nil && gd != "" && ge != "" {
-			// Snap Gemini output against live fleet too
-			fd, fe, fa, _ := s.matchAgainstLiveFleet(ctx, gd, ge)
+			fd, fe, fa, _ := s.matchAgainstLiveFleet(ctx, gd+" "+ge, gd, ge)
 			digits, enLetters, arLetters = fd, fe, fa
 			conf = 0.95
 			engine = "gemini_fallback"
-			// Auto-learn so next time the free local engine solves it without Gemini!
 			s.saveLearnedSampleAsync(rawText, digits, enLetters, arLetters, engine, conf, rawText != "", "", imageBase64)
 		}
+	} else if digits != "" && enLetters != "" && conf >= 0.85 {
+		// Auto-collect high-confidence local scans for continuous self-learning
+		s.saveLearnedSampleAsync(rawText, digits, enLetters, arLetters, engine, conf, false, "", imageBase64)
 	}
 
 	if digits == "" || enLetters == "" {
