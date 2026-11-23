@@ -186,8 +186,8 @@ func sendExpoPushNotifications(tokens []string, title, body, imgURL string, extr
 			Title:     title,
 			Body:      body,
 			Data:      dataPayload,
-			Sound:     "default",
-			ChannelID: "aams_broadcasts",
+			Sound:     "aams_notify.wav",
+			ChannelID: "aams_notify_v2",
 			Priority:  "high",
 		}
 	}
@@ -258,9 +258,8 @@ func (f *fcmSenderClient) sendOne(accessToken, token, title, body string, extraD
 	}
 
 	androidNotification := map[string]interface{}{
-		"channel_id":            "aams_broadcasts",
-		"sound":                 "default",
-		"default_sound":         true,
+		"channel_id":            "aams_notify_v2",
+		"sound":                 "aams_notify",
 		"visibility":            "PUBLIC",
 		"notification_priority": "PRIORITY_MAX",
 	}
