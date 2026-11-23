@@ -93,43 +93,44 @@ func (s *authService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 		// Fallback to Employee (Field Delegate) login
 		if empMap, empErr := s.adminRepo.FindEmployeeByLogin(ctx, userKey); empErr == nil && empMap != nil {
 			pwdHash, _ := empMap["password_hash"].(string)
+			pwdHash = strings.TrimSpace(pwdHash)
 			natID, _ := empMap["national_id"].(string)
 			phoneVal, _ := empMap["phone"].(string)
 
-			// Default password checks:
-			// 1. Last 4 digits of employee phone
-			// 2. Last 4 digits of input user phone
-			// 3. Last 4 digits of National ID (fallback)
 			matched := false
 
 			if pwdHash != "" {
-				// User set a custom bcrypt password
+				// Employee has set a custom password — strictly verify bcrypt hash ONLY (never fall back to last 4 digits)
 				if err := bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(cleanPassword)); err == nil {
 					matched = true
 				}
-			}
-
-			if !matched && phoneVal != "" {
-				phoneDigits := extractDigits(phoneVal)
-				if len(phoneDigits) >= 4 && cleanPassword == phoneDigits[len(phoneDigits)-4:] {
-					matched = true
+			} else {
+				// No custom password set yet — allow default last 4 digits of phone / input / National ID
+				if phoneVal != "" {
+					phoneDigits := extractDigits(phoneVal)
+					if len(phoneDigits) >= 4 && cleanPassword == phoneDigits[len(phoneDigits)-4:] {
+						matched = true
+					}
 				}
-			}
 
-			if !matched && len(cleanUserDigits) >= 4 {
-				if cleanPassword == cleanUserDigits[len(cleanUserDigits)-4:] {
-					matched = true
+				if !matched && len(cleanUserDigits) >= 4 {
+					if cleanPassword == cleanUserDigits[len(cleanUserDigits)-4:] {
+						matched = true
+					}
 				}
-			}
 
-			if !matched && natID != "" {
-				natDigits := extractDigits(natID)
-				if len(natDigits) >= 4 && cleanPassword == natDigits[len(natDigits)-4:] {
-					matched = true
+				if !matched && natID != "" {
+					natDigits := extractDigits(natID)
+					if len(natDigits) >= 4 && cleanPassword == natDigits[len(natDigits)-4:] {
+						matched = true
+					}
 				}
 			}
 
 			if !matched {
+				if pwdHash != "" {
+					return nil, errors.New("رقم الجوال أو كلمة المرور غير صحيحة")
+				}
 				return nil, errors.New("كلمة المرور غير صحيحة، كلمة المرور هي آخر 4 أرقام من رقم الجوال")
 			}
 
@@ -160,14 +161,10 @@ func (s *authService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 
 	// Verify Admin password:
 	adminPasswordMatched := false
-	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(cleanPassword)); err == nil {
-		adminPasswordMatched = true
-	}
+	hasCustomAdminPassword := strings.TrimSpace(admin.Password) != "" && !admin.MustChangePassword
 
-	// Default password for admin: last 4 digits of phone
-	if !adminPasswordMatched && admin.Phone != "" {
-		adminPhoneDigits := extractDigits(admin.Phone)
-		if len(adminPhoneDigits) >= 4 && cleanPassword == adminPhoneDigits[len(adminPhoneDigits)-4:] {
+	if strings.TrimSpace(admin.Password) != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(cleanPassword)); err == nil {
 			adminPasswordMatched = true
 		}
 	}
@@ -177,7 +174,30 @@ func (s *authService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 		linkedEmpMap, _ = s.adminRepo.FindEmployeeByLogin(ctx, admin.EmployeeID.String())
 	}
 
-	if !adminPasswordMatched && linkedEmpMap != nil {
+	// If linked employee has a custom bcrypt password set (e.g. via mobile app), accept that hash too
+	linkedEmpHasCustomPwd := false
+	if linkedEmpMap != nil {
+		if empHash, ok := linkedEmpMap["password_hash"].(string); ok && strings.TrimSpace(empHash) != "" {
+			linkedEmpHasCustomPwd = true
+			if !adminPasswordMatched {
+				if err := bcrypt.CompareHashAndPassword([]byte(strings.TrimSpace(empHash)), []byte(cleanPassword)); err == nil {
+					adminPasswordMatched = true
+				}
+			}
+		}
+	}
+
+	// Only allow last-4-digits fallback when NO custom password has been set yet
+	allowDefaultLast4Fallback := !hasCustomAdminPassword && !linkedEmpHasCustomPwd
+
+	if allowDefaultLast4Fallback && !adminPasswordMatched && admin.Phone != "" {
+		adminPhoneDigits := extractDigits(admin.Phone)
+		if len(adminPhoneDigits) >= 4 && cleanPassword == adminPhoneDigits[len(adminPhoneDigits)-4:] {
+			adminPasswordMatched = true
+		}
+	}
+
+	if allowDefaultLast4Fallback && !adminPasswordMatched && linkedEmpMap != nil {
 		if phoneVal, ok := linkedEmpMap["phone"].(string); ok && phoneVal != "" {
 			empPhoneDigits := extractDigits(phoneVal)
 			if len(empPhoneDigits) >= 4 && cleanPassword == empPhoneDigits[len(empPhoneDigits)-4:] {
@@ -194,7 +214,7 @@ func (s *authService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 		}
 	}
 
-	if !adminPasswordMatched && len(cleanUserDigits) >= 4 {
+	if allowDefaultLast4Fallback && !adminPasswordMatched && len(cleanUserDigits) >= 4 {
 		if cleanPassword == cleanUserDigits[len(cleanUserDigits)-4:] {
 			adminPasswordMatched = true
 		}

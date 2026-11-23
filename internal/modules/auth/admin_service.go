@@ -176,7 +176,7 @@ func (s *adminService) ChangePassword(ctx context.Context, id uuid.UUID, oldPass
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(oldPassword)); err != nil {
 		matched := false
-		if admin.Phone != "" {
+		if (admin.MustChangePassword || strings.TrimSpace(admin.Password) == "") && admin.Phone != "" {
 			phoneDigits := extractDigits(admin.Phone)
 			if len(phoneDigits) >= 4 && oldPassword == phoneDigits[len(phoneDigits)-4:] {
 				matched = true
