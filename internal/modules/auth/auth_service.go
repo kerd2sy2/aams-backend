@@ -94,18 +94,21 @@ func (s *authService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 		if empMap, empErr := s.adminRepo.FindEmployeeByLogin(ctx, userKey); empErr == nil && empMap != nil {
 			pwdHash, _ := empMap["password_hash"].(string)
 			pwdHash = strings.TrimSpace(pwdHash)
+			mustChange, _ := empMap["must_change_password"].(bool)
 			natID, _ := empMap["national_id"].(string)
 			phoneVal, _ := empMap["phone"].(string)
 
 			matched := false
 
 			if pwdHash != "" {
-				// Employee has set a custom password — strictly verify bcrypt hash ONLY (never fall back to last 4 digits)
 				if err := bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(cleanPassword)); err == nil {
 					matched = true
 				}
-			} else {
-				// No custom password set yet — allow default last 4 digits of phone / input / National ID
+			}
+
+			// Allow default last-4-digits fallback ONLY when no custom password is finalized yet (pwdHash == "" or must_change_password == true).
+			// Once the employee changes their password (must_change_password == false && pwdHash != ""), strictly reject last 4 digits!
+			if !matched && (pwdHash == "" || mustChange) {
 				if phoneVal != "" {
 					phoneDigits := extractDigits(phoneVal)
 					if len(phoneDigits) >= 4 && cleanPassword == phoneDigits[len(phoneDigits)-4:] {
@@ -128,7 +131,7 @@ func (s *authService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 			}
 
 			if !matched {
-				if pwdHash != "" {
+				if pwdHash != "" && !mustChange {
 					return nil, errors.New("رقم الجوال أو كلمة المرور غير صحيحة")
 				}
 				return nil, errors.New("كلمة المرور غير صحيحة، كلمة المرور هي آخر 4 أرقام من رقم الجوال")
@@ -174,11 +177,14 @@ func (s *authService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 		linkedEmpMap, _ = s.adminRepo.FindEmployeeByLogin(ctx, admin.EmployeeID.String())
 	}
 
-	// If linked employee has a custom bcrypt password set (e.g. via mobile app), accept that hash too
+	// If linked employee has a finalized custom bcrypt password set (e.g. via mobile app), accept that hash too
 	linkedEmpHasCustomPwd := false
 	if linkedEmpMap != nil {
+		empMustChange, _ := linkedEmpMap["must_change_password"].(bool)
 		if empHash, ok := linkedEmpMap["password_hash"].(string); ok && strings.TrimSpace(empHash) != "" {
-			linkedEmpHasCustomPwd = true
+			if !empMustChange {
+				linkedEmpHasCustomPwd = true
+			}
 			if !adminPasswordMatched {
 				if err := bcrypt.CompareHashAndPassword([]byte(strings.TrimSpace(empHash)), []byte(cleanPassword)); err == nil {
 					adminPasswordMatched = true
