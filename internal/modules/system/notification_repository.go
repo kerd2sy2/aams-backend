@@ -316,8 +316,8 @@ func (r *gormSystemRepository) UpdateEmployeePushToken(ctx context.Context, empI
 					Update("push_token", nil).Error
 			}
 		}
-	} else {
-		// Empty token passed (e.g. employee logged out)
+	} else if strings.TrimSpace(language) == "" {
+		// Explicit logout clear (empty token AND no language update)
 		updates["push_token"] = nil
 	}
 
