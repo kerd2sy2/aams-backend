@@ -39,12 +39,13 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 		return
 	}
 	status := c.Query("status")
+	portal := c.Query("portal")
 
 	isEmp, _ := c.Get("is_employee")
 	if isEmp == true {
 		if empIDVal, ok := c.Get("employee_id"); ok {
 			if empID, ok2 := empIDVal.(uuid.UUID); ok2 && empID != uuid.Nil {
-				notifs, err := h.svc.GetEmployeePersonalNotifications(c.Request.Context(), empID, status)
+				notifs, err := h.svc.GetEmployeePersonalNotifications(c.Request.Context(), empID, status, portal)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل جلب الإشعارات"})
 					return
@@ -56,7 +57,7 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 	}
 
 	branchID := getBranchID(c)
-	notifs, err := h.svc.GetMyNotifications(c.Request.Context(), actorID, branchID, status)
+	notifs, err := h.svc.GetMyNotifications(c.Request.Context(), actorID, branchID, status, portal)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل جلب الإشعارات"})
 		return

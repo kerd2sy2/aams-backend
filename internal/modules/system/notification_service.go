@@ -9,8 +9,8 @@ import (
 
 type NotificationService interface {
 	INotificationSender
-	GetMyNotifications(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string) ([]Notification, error)
-	GetEmployeePersonalNotifications(ctx context.Context, empID uuid.UUID, status string) ([]Notification, error)
+	GetMyNotifications(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string, portal string) ([]Notification, error)
+	GetEmployeePersonalNotifications(ctx context.Context, empID uuid.UUID, status string, portal string) ([]Notification, error)
 	MarkAllAsRead(ctx context.Context, adminID uuid.UUID) error
 	MarkAsRead(ctx context.Context, id uuid.UUID, adminID uuid.UUID) error
 	ClearAll(ctx context.Context, actorID uuid.UUID) error
@@ -48,12 +48,12 @@ func (s *notificationService) SendNotification(ctx context.Context, branchID, ad
 	return s.repo.CreateNotification(ctx, notif)
 }
 
-func (s *notificationService) GetMyNotifications(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string) ([]Notification, error) {
-	return s.repo.FindNotificationsByAdmin(ctx, adminID, branchID, status)
+func (s *notificationService) GetMyNotifications(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string, portal string) ([]Notification, error) {
+	return s.repo.FindNotificationsByAdmin(ctx, adminID, branchID, status, portal)
 }
 
-func (s *notificationService) GetEmployeePersonalNotifications(ctx context.Context, empID uuid.UUID, status string) ([]Notification, error) {
-	return s.repo.FindNotificationsByEmployee(ctx, empID, status)
+func (s *notificationService) GetEmployeePersonalNotifications(ctx context.Context, empID uuid.UUID, status string, portal string) ([]Notification, error) {
+	return s.repo.FindNotificationsByEmployee(ctx, empID, status, portal)
 }
 
 func (s *notificationService) ClearAll(ctx context.Context, actorID uuid.UUID) error {

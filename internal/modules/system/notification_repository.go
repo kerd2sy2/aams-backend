@@ -11,7 +11,94 @@ import (
 	"gorm.io/gorm"
 )
 
-func (r *gormSystemRepository) FindNotificationsByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string) ([]Notification, error) {
+var (
+	supervisorNotifTypes = []string{
+		"SHIFT_STARTED",
+		"MOTORCYCLE_CHANGED",
+		"SHIFT_COMPLETED_PENDING_REVIEW",
+		"ADVANCE_REQUEST",
+		"MAINTENANCE_REQUEST",
+		"INVESTIGATION_REQUEST",
+		"OIL_CHANGE_REQUEST",
+		"ACCIDENT_REPORT",
+	}
+	edaraNotifTypes = []string{
+		"ADMIN_ALERT",
+		"COMPLAINT_CREATED",
+		"TICKET_CREATED",
+		"SUPPORT_TICKET",
+		"TARGET_ALERT",
+		"SYSTEM_ALERT",
+		"EXPENSE_REPORT",
+		"ADVANCE_REQUEST",
+		"INVESTIGATION_REQUEST",
+	}
+	custodyNotifTypes = []string{
+		"CUSTODY_ADDED",
+		"CUSTODY_UPDATED",
+		"EXPENSE_APPROVED",
+		"EXPENSE_REJECTED",
+		"EXPENSE_SUBMITTED",
+		"ADVANCE_APPROVED",
+	}
+	nonMandobNotifTypes = []string{
+		"SHIFT_STARTED",
+		"MOTORCYCLE_CHANGED",
+		"SHIFT_COMPLETED_PENDING_REVIEW",
+		"ADVANCE_REQUEST",
+		"MAINTENANCE_REQUEST",
+		"INVESTIGATION_REQUEST",
+		"OIL_CHANGE_REQUEST",
+		"ACCIDENT_REPORT",
+		"ADMIN_ALERT",
+		"COMPLAINT_CREATED",
+		"TICKET_CREATED",
+		"SUPPORT_TICKET",
+		"TARGET_ALERT",
+		"EXPENSE_REPORT",
+		"EXPENSE_SUBMITTED",
+	}
+)
+
+func deduplicateNotifications(items []Notification) []Notification {
+	if len(items) <= 1 {
+		return items
+	}
+	seen := make(map[string]bool, len(items))
+	result := make([]Notification, 0, len(items))
+	for _, n := range items {
+		// Group identical notifications sent within the same minute (e.g. legacy multi-supervisor rows)
+		key := fmt.Sprintf("%s|%s|%s|%s",
+			strings.ToUpper(strings.TrimSpace(n.Type)),
+			strings.TrimSpace(n.Title),
+			strings.TrimSpace(n.Body),
+			n.CreatedAt.UTC().Format("2006-01-02 15:04"),
+		)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, n)
+	}
+	return result
+}
+
+func applyPortalNotificationFilter(query *gorm.DB, portal string) *gorm.DB {
+	switch strings.ToLower(strings.TrimSpace(portal)) {
+	case "mandob", "delegate":
+		return query.Where("type NOT IN ?", nonMandobNotifTypes)
+	case "supervisor", "eshraf":
+		return query.Where("type IN ?", supervisorNotifTypes)
+	case "edara", "admin":
+		return query.Where("type IN ?", edaraNotifTypes)
+	case "custody", "ohda":
+		return query.Where("type IN ?", custodyNotifTypes)
+	default:
+		return query
+	}
+}
+
+func (r *gormSystemRepository) FindNotificationsByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string, portal string) ([]Notification, error) {
 	var notifs []Notification
 	query := r.db.WithContext(ctx)
 
@@ -19,10 +106,16 @@ func (r *gormSystemRepository) FindNotificationsByAdmin(ctx context.Context, adm
 		query = query.Where("status = ?", status)
 	}
 
-	if branchID != nil {
+	p := strings.ToLower(strings.TrimSpace(portal))
+	if p == "mandob" || p == "delegate" {
+		// On Mandob guard, strictly return personal driver notifications addressed to this actor
+		query = query.Where("employee_id = ?", adminID)
+	} else if branchID != nil {
+		// Strictly match notifications addressed to THIS admin/supervisor or untargeted branch-wide notices
+		// (NEVER pull copies addressed to other supervisors in the same branch!)
 		query = query.Where(
-			"admin_id = ? OR employee_id = ? OR (admin_id IS NULL AND employee_id IS NULL AND (branch_id = ? OR branch_id IS NULL)) OR (branch_id = ? AND type IN ('SHIFT_STARTED','MOTORCYCLE_CHANGED','SHIFT_COMPLETED_PENDING_REVIEW','ADVANCE_REQUEST','MAINTENANCE_REQUEST','INVESTIGATION_REQUEST'))",
-			adminID, adminID, branchID, branchID,
+			"admin_id = ? OR employee_id = ? OR (admin_id IS NULL AND employee_id IS NULL AND (branch_id = ? OR branch_id IS NULL))",
+			adminID, adminID, branchID,
 		)
 	} else {
 		query = query.Where(
@@ -31,22 +124,25 @@ func (r *gormSystemRepository) FindNotificationsByAdmin(ctx context.Context, adm
 		)
 	}
 
+	query = applyPortalNotificationFilter(query, portal)
+
 	if err := query.Order("created_at DESC").Limit(200).Find(&notifs).Error; err != nil {
 		return nil, err
 	}
-	return notifs, nil
+	return deduplicateNotifications(notifs), nil
 }
 
-func (r *gormSystemRepository) FindNotificationsByEmployee(ctx context.Context, empID uuid.UUID, status string) ([]Notification, error) {
+func (r *gormSystemRepository) FindNotificationsByEmployee(ctx context.Context, empID uuid.UUID, status string, portal string) ([]Notification, error) {
 	var notifs []Notification
 	query := r.db.WithContext(ctx).Where("employee_id = ?", empID)
 	if status == "unread" || status == "read" {
 		query = query.Where("status = ?", status)
 	}
+	query = applyPortalNotificationFilter(query, portal)
 	if err := query.Order("created_at DESC").Limit(200).Find(&notifs).Error; err != nil {
 		return nil, err
 	}
-	return notifs, nil
+	return deduplicateNotifications(notifs), nil
 }
 
 func (r *gormSystemRepository) ClearAllNotifications(ctx context.Context, actorID uuid.UUID) error {

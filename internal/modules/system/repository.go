@@ -23,8 +23,8 @@ type SystemRepository interface {
 	UpsertSetting(ctx context.Context, setting *AppSetting) error
 
 	// Notifications & Broadcasts
-	FindNotificationsByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string) ([]Notification, error)
-	FindNotificationsByEmployee(ctx context.Context, empID uuid.UUID, status string) ([]Notification, error)
+	FindNotificationsByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string, portal string) ([]Notification, error)
+	FindNotificationsByEmployee(ctx context.Context, empID uuid.UUID, status string, portal string) ([]Notification, error)
 	MarkNotificationAsRead(ctx context.Context, id uuid.UUID, adminID uuid.UUID) error
 	MarkAllNotificationsAsRead(ctx context.Context, adminID uuid.UUID) error
 	ClearAllNotifications(ctx context.Context, actorID uuid.UUID) error
