@@ -93,6 +93,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/notifications", m.NotificationHandler.GetMyNotifications)
 	rg.PUT("/notifications/read-all", m.NotificationHandler.MarkAllAsRead)
 	rg.PUT("/notifications/:id/read", m.NotificationHandler.MarkAsRead)
+	rg.DELETE("/notifications/clear-all", m.NotificationHandler.ClearAll)
 
 	// Broadcast & Survey Notifications - Sending/deleting restricted to Management/Supervisors
 	rg.POST("/notifications/broadcast", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.NotificationHandler.SendBroadcast)

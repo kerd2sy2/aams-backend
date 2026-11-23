@@ -37,6 +37,24 @@ func (r *gormSystemRepository) FindNotificationsByAdmin(ctx context.Context, adm
 	return notifs, nil
 }
 
+func (r *gormSystemRepository) FindNotificationsByEmployee(ctx context.Context, empID uuid.UUID, status string) ([]Notification, error) {
+	var notifs []Notification
+	query := r.db.WithContext(ctx).Where("employee_id = ?", empID)
+	if status == "unread" || status == "read" {
+		query = query.Where("status = ?", status)
+	}
+	if err := query.Order("created_at DESC").Limit(200).Find(&notifs).Error; err != nil {
+		return nil, err
+	}
+	return notifs, nil
+}
+
+func (r *gormSystemRepository) ClearAllNotifications(ctx context.Context, actorID uuid.UUID) error {
+	return r.db.WithContext(ctx).
+		Where("employee_id = ? OR admin_id = ?", actorID, actorID).
+		Delete(&Notification{}).Error
+}
+
 func (r *gormSystemRepository) MarkNotificationAsRead(ctx context.Context, id uuid.UUID, adminID uuid.UUID) error {
 	return r.db.WithContext(ctx).Model(&Notification{}).Where("id = ?", id).Update("status", "read").Error
 }

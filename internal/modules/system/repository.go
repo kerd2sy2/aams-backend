@@ -24,8 +24,10 @@ type SystemRepository interface {
 
 	// Notifications & Broadcasts
 	FindNotificationsByAdmin(ctx context.Context, adminID uuid.UUID, branchID *uuid.UUID, status string) ([]Notification, error)
+	FindNotificationsByEmployee(ctx context.Context, empID uuid.UUID, status string) ([]Notification, error)
 	MarkNotificationAsRead(ctx context.Context, id uuid.UUID, adminID uuid.UUID) error
 	MarkAllNotificationsAsRead(ctx context.Context, adminID uuid.UUID) error
+	ClearAllNotifications(ctx context.Context, actorID uuid.UUID) error
 	CreateNotification(ctx context.Context, notif *Notification) error
 	CreateBroadcast(ctx context.Context, broadcast *BroadcastNotification) error
 	FindBroadcasts(ctx context.Context, branchID *uuid.UUID, limit, offset int) ([]BroadcastNotification, int64, error)

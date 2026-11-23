@@ -38,9 +38,24 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
 		return
 	}
-	branchID := getBranchID(c)
 	status := c.Query("status")
 
+	isEmp, _ := c.Get("is_employee")
+	if isEmp == true {
+		if empIDVal, ok := c.Get("employee_id"); ok {
+			if empID, ok2 := empIDVal.(uuid.UUID); ok2 && empID != uuid.Nil {
+				notifs, err := h.svc.GetEmployeePersonalNotifications(c.Request.Context(), empID, status)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل جلب الإشعارات"})
+					return
+				}
+				c.JSON(http.StatusOK, gin.H{"data": notifs})
+				return
+			}
+		}
+	}
+
+	branchID := getBranchID(c)
 	notifs, err := h.svc.GetMyNotifications(c.Request.Context(), actorID, branchID, status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل جلب الإشعارات"})
@@ -48,6 +63,21 @@ func (h *NotificationHandler) GetMyNotifications(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": notifs})
+}
+
+func (h *NotificationHandler) ClearAll(c *gin.Context) {
+	actorID, exists := resolveActorID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
+		return
+	}
+
+	if err := h.svc.ClearAll(c.Request.Context(), actorID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "فشل مسح الإشعارات"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "تم مسح جميع الإشعارات"})
 }
 
 func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
