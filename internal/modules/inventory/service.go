@@ -322,7 +322,7 @@ func (s *inventoryService) DispenseOil(ctx context.Context, req DispenseOilReque
 			if req.PlateNumber == "" {
 				req.PlateNumber = veh.PlateNumber
 			}
-			if req.CurrentKM <= 0 {
+			if req.CurrentKM <= 0 || req.CurrentKM < veh.CurrentKM {
 				req.CurrentKM = veh.CurrentKM
 			}
 			if effectiveBranch == nil && veh.BranchID != nil {

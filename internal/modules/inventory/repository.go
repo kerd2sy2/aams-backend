@@ -272,7 +272,7 @@ func (r *gormInventoryRepository) UpdateVehicleOilKM(ctx context.Context, plateN
 		"updated_at":           now,
 	}
 	if currentKM > 0 {
-		updates["current_km"] = currentKM
+		updates["current_km"] = gorm.Expr("GREATEST(COALESCE(current_km, 0), ?)", currentKM)
 	}
 	like := r.likeOp()
 	cond1 := "deleted_at IS NULL AND (TRIM(plate_number) = ? OR plate_number " + like + " ? OR plate_number " + like + " ?)"
