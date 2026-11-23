@@ -2,13 +2,12 @@ package work
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-
-	
 )
 
 type gormEmployeeAdapter struct {
@@ -78,6 +77,24 @@ func (a *gormEmployeeAdapter) UpdateEmployeeOnEndWork(ctx context.Context, id uu
 		"total_distance": gorm.Expr("total_distance + ?", addedDistance),
 		"total_orders":   gorm.Expr("total_orders + ?", totalOrders),
 		"is_working":     false,
+	}
+
+	// Auto-revert temporary multi-app / bike assignment back to employee's default after shift ends
+	var empApps struct {
+		AssignedApps string `gorm:"column:assigned_apps"`
+	}
+	_ = a.db.WithContext(ctx).Table("employees").Select("assigned_apps").Where("id = ?", id).Scan(&empApps).Error
+	if strings.TrimSpace(empApps.AssignedApps) != "" {
+		var entries []struct {
+			Temporary      bool   `json:"temporary"`
+			PrevMotorcycle string `json:"prev_motorcycle"`
+		}
+		if err := json.Unmarshal([]byte(empApps.AssignedApps), &entries); err == nil && len(entries) > 0 && entries[0].Temporary {
+			updates["assigned_apps"] = ""
+			if prevBike := strings.TrimSpace(entries[0].PrevMotorcycle); prevBike != "" {
+				updates["motorcycle_number"] = prevBike
+			}
+		}
 	}
 
 	return a.db.WithContext(ctx).Table("employees").Where("id = ?", id).Updates(updates).Error
