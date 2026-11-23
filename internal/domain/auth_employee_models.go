@@ -97,6 +97,8 @@ type Employee struct {
 	MotorcycleNumber         string         `gorm:"type:varchar(50)" json:"motorcycle_number"`
 	ApplicationID            string         `gorm:"type:varchar(50);index" json:"application_id"`
 	ApplicationType          string         `gorm:"type:varchar(50);index" json:"application_type"`
+	AssignedApps             string         `gorm:"type:text;default:''" json:"assigned_apps"`
+	LocalizedNames           string         `gorm:"type:text;default:''" json:"localized_names"`
 	VehicleType              string         `gorm:"type:varchar(20);default:'motorcycle'" json:"vehicle_type"` // "car" or "motorcycle"
 	Shift                    string         `gorm:"type:varchar(20);default:'morning'" json:"shift"`           // "morning" or "evening"
 	BranchID                 *uuid.UUID     `gorm:"type:char(36);index" json:"branch_id"`
