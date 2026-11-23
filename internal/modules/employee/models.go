@@ -46,6 +46,7 @@ type Employee struct {
 	PushToken                string              `gorm:"type:text" json:"push_token"`
 	DeviceUUID               string              `gorm:"type:varchar(100)" json:"device_uuid"`
 	Language                 string              `gorm:"type:varchar(10);default:'ar'" json:"language"`
+	MustChangePassword       bool                `gorm:"default:true" json:"must_change_password"`
 	IsWorking                bool                `gorm:"default:false" json:"is_working"`
 	RoleID                   *uuid.UUID          `gorm:"type:char(36);index" json:"role_id"`
 	RoleObj                  *rootDomain.Role    `gorm:"foreignKey:RoleID" json:"role_obj,omitempty"`

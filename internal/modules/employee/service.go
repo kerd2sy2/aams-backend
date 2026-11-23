@@ -86,6 +86,7 @@ func (s *employeeService) Create(ctx context.Context, req CreateEmployeeRequest)
 		Barcode:                  barcodeData,
 		QRCode:                   qrData,
 		Language:                 "ar",
+		MustChangePassword:       true,
 	}
 
 	if emp.JobRole == "" {
@@ -299,33 +300,40 @@ func (s *employeeService) ChangePassword(ctx context.Context, id uuid.UUID, oldP
 	cleanOld := strings.TrimSpace(oldPassword)
 	cleanNew := strings.TrimSpace(newPassword)
 
-	if cleanNew == "" || len(cleanNew) < 4 {
-		return errors.New("كلمة المرور الجديدة يجب ألا تقل عن 4 خانات")
+	// Enforce strictly 4 ASCII digits only (no letters, no symbols)
+	newDigits := extractASCIIOnlyDigits(cleanNew)
+	if len(cleanNew) != 4 || len(newDigits) != 4 {
+		return errors.New("كلمة المرور الجديدة يجب أن تتكون من 4 أرقام فقط (بدون حروف أو رموز)")
 	}
 
-	if emp.PasswordHash != "" {
-		if err := bcrypt.CompareHashAndPassword([]byte(emp.PasswordHash), []byte(cleanOld)); err != nil {
-			return ErrOldPasswordIncorrect
-		}
-	} else {
-		// Default password: last 4 digits of Phone or National ID / Iqama
-		matched := false
-		if emp.Phone != "" {
-			phoneDigits := extractASCIIOnlyDigits(emp.Phone)
-			if len(phoneDigits) >= 4 && cleanOld == phoneDigits[len(phoneDigits)-4:] {
-				matched = true
+	// Allow authenticated employee to set new 4-digit PIN without entering old password
+	skipOldCheck := cleanOld == ""
+
+	if !skipOldCheck {
+		if emp.PasswordHash != "" {
+			if err := bcrypt.CompareHashAndPassword([]byte(emp.PasswordHash), []byte(cleanOld)); err != nil {
+				return ErrOldPasswordIncorrect
 			}
-		}
-		if !matched && emp.NationalID != "" {
-			natDigits := extractASCIIOnlyDigits(emp.NationalID)
-			if len(natDigits) >= 4 && cleanOld == natDigits[len(natDigits)-4:] {
-				matched = true
-			} else if cleanOld == emp.NationalID {
-				matched = true
+		} else {
+			// Default password: last 4 digits of Phone or National ID / Iqama
+			matched := false
+			if emp.Phone != "" {
+				phoneDigits := extractASCIIOnlyDigits(emp.Phone)
+				if len(phoneDigits) >= 4 && cleanOld == phoneDigits[len(phoneDigits)-4:] {
+					matched = true
+				}
 			}
-		}
-		if !matched {
-			return errors.New("كلمة المرور الحالية غير صحيحة (كلمة المرور الافتراضية هي آخر 4 أرقام من رقم الجوال)")
+			if !matched && emp.NationalID != "" {
+				natDigits := extractASCIIOnlyDigits(emp.NationalID)
+				if len(natDigits) >= 4 && cleanOld == natDigits[len(natDigits)-4:] {
+					matched = true
+				} else if cleanOld == emp.NationalID {
+					matched = true
+				}
+			}
+			if !matched {
+				return errors.New("كلمة المرور الحالية غير صحيحة (كلمة المرور الافتراضية هي آخر 4 أرقام من رقم الجوال)")
+			}
 		}
 	}
 
