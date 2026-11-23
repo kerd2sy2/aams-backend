@@ -454,13 +454,17 @@ func (s *workService) ScanPlateImageSmart(ctx context.Context, imageBase64 strin
 		}
 	}
 
-	// Tier 2B: Smart Fuzzy Match against Live Fleet DB (vehicles table) — recovers noisy reads like "KSA544ZA" / "5LLZAJ" -> "5447 ا ح"
-	if digits != "" || rawText != "" {
+	// Tier 2B: Smart Fuzzy Match against Live Fleet DB (vehicles table)
+	// CRITICAL RULE: If local OCR already read a clean 4-digit + 2-letter plate with high confidence (>= 0.78),
+	// NEVER overwrite its digits with a neighbor plate (e.g. never turn 8044 BE into 8043 BE!).
+	// Only run fuzzy Hamming-distance fleet recovery when OCR was partial/noisy (missing digits/letters or conf < 0.78).
+	hasCleanFullRead := len(digits) == 4 && len(enLetters) >= 2 && conf >= 0.78
+	if !hasCleanFullRead && (digits != "" || rawText != "") {
 		fd, fe, fa, matched := s.matchAgainstLiveFleet(ctx, rawText, digits, enLetters)
 		if matched {
 			digits, enLetters, arLetters = fd, fe, fa
-			if conf < 0.92 {
-				conf = 0.92
+			if conf < 0.90 {
+				conf = 0.90
 			}
 			if engine == "" || engine == "local_rapidocr" {
 				engine = "local_fleet_smart"
