@@ -2,6 +2,7 @@ package work
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
 )
 
 func (s *workService) StartWork(ctx context.Context, req StartWorkRequest) (*WorkSession, error) {
@@ -197,6 +197,21 @@ func (s *workService) EndWork(ctx context.Context, req EndWorkRequest, reviewerI
 	distance := 0.0
 	if req.EndKM >= session.StartKM {
 		distance = req.EndKM - session.StartKM
+	}
+
+	if len(req.AppOrders) > 0 {
+		if b, mErr := json.Marshal(req.AppOrders); mErr == nil {
+			session.AppOrdersJSON = string(b)
+		}
+		if req.OrdersCount <= 0 {
+			sumOrders := 0
+			for _, ao := range req.AppOrders {
+				if ao.OrdersCount > 0 {
+					sumOrders += ao.OrdersCount
+				}
+			}
+			req.OrdersCount = sumOrders
+		}
 	}
 
 	now := time.Now()

@@ -95,6 +95,9 @@ func (s *employeeService) Create(ctx context.Context, req CreateEmployeeRequest)
 	if emp.Shift == "" {
 		emp.Shift = "morning"
 	}
+	if req.AssignedApps != nil {
+		emp.AssignedApps = *req.AssignedApps
+	}
 
 	if err := s.repo.Create(ctx, emp); err != nil {
 		return nil, fmt.Errorf("فشل في حفظ الموظف: %w", err)
@@ -168,6 +171,9 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req UpdateEm
 	}
 	if req.ApplicationType != "" {
 		emp.ApplicationType = req.ApplicationType
+	}
+	if req.AssignedApps != nil {
+		emp.AssignedApps = *req.AssignedApps
 	}
 	if req.VehicleType != "" {
 		emp.VehicleType = req.VehicleType

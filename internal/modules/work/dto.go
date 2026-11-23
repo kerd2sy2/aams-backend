@@ -52,17 +52,24 @@ type StartWorkRequest struct {
 	Notes            string  `json:"notes"`
 }
 
+type AppOrderItem struct {
+	AppType     string `json:"app_type"`
+	AppID       string `json:"app_id,omitempty"`
+	OrdersCount int    `json:"orders_count"`
+}
+
 type EndWorkRequest struct {
-	EmployeeID      string  `json:"employee_id" binding:"required,uuid"`
-	EndKM           float64 `json:"end_km" binding:"gte=0"`
-	EndKMImage      string  `json:"end_km_image"`
-	OrdersCount     int     `json:"orders_count"`
-	FuelCost        float64 `json:"fuel_cost"`
-	ApplicationID   string  `json:"application_id"`
-	ApplicationType string  `json:"application_type"`
-	Notes           string  `json:"notes"`
-	IsReviewed      *bool   `json:"is_reviewed"`
-	ReviewNotes     string  `json:"review_notes"`
+	EmployeeID      string         `json:"employee_id" binding:"required,uuid"`
+	EndKM           float64        `json:"end_km" binding:"gte=0"`
+	EndKMImage      string         `json:"end_km_image"`
+	OrdersCount     int            `json:"orders_count"`
+	AppOrders       []AppOrderItem `json:"app_orders,omitempty"`
+	FuelCost        float64        `json:"fuel_cost"`
+	ApplicationID   string         `json:"application_id"`
+	ApplicationType string         `json:"application_type"`
+	Notes           string         `json:"notes"`
+	IsReviewed      *bool          `json:"is_reviewed"`
+	ReviewNotes     string         `json:"review_notes"`
 }
 
 type ReviewWorkSessionRequest struct {

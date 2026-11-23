@@ -20,6 +20,7 @@ type WorkSession struct {
 	FuelCost             float64        `gorm:"default:0" json:"fuel_cost"`
 	ApplicationID        string         `gorm:"type:varchar(50)" json:"application_id"`
 	ApplicationType      string         `gorm:"type:varchar(50)" json:"application_type"`
+	AppOrdersJSON        string         `gorm:"type:text;default:''" json:"app_orders_json"`
 	VehicleType          string         `gorm:"type:varchar(20)" json:"vehicle_type"`
 	MotorcycleNumber     string         `gorm:"type:varchar(50)" json:"motorcycle_number"`
 	StartPlateImage      string         `gorm:"type:text" json:"start_plate_image"`

@@ -56,6 +56,7 @@ type CreateEmployeeRequest struct {
 	ClearMotorcycle          bool                `json:"clear_motorcycle"`
 	ApplicationID            string              `json:"application_id"`
 	ApplicationType          string              `json:"application_type"`
+	AssignedApps             *string             `json:"assigned_apps"`
 	VehicleType              string              `json:"vehicle_type"`
 	Shift                    string              `json:"shift"`
 	BranchID                 *uuid.UUID          `json:"branch_id"`
@@ -82,6 +83,7 @@ type UpdateEmployeeRequest struct {
 	ClearMotorcycle          bool                `json:"clear_motorcycle"`
 	ApplicationID            string              `json:"application_id"`
 	ApplicationType          string              `json:"application_type"`
+	AssignedApps             *string             `json:"assigned_apps"`
 	VehicleType              string              `json:"vehicle_type"`
 	Shift                    string              `json:"shift"`
 	BranchID                 *uuid.UUID          `json:"branch_id"`
