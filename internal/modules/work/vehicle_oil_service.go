@@ -121,10 +121,7 @@ func (s *workService) GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.
 }
 
 func (s *workService) ScanPlateImage(ctx context.Context, imageBase64 string) (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"success": true,
-		"message": "plate scanned successfully",
-	}, nil
+	return s.ScanPlateImageSmart(ctx, imageBase64)
 }
 
 func (s *workService) CheckOilChange(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (*OilChangeCheckResponse, error) {

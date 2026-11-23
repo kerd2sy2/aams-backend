@@ -259,6 +259,16 @@ func (h *WorkHandler) ScanPlate(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+func (h *WorkHandler) PlateFeedback(c *gin.Context) {
+	var req PlateFeedbackRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات التغذية الراجعة غير صالحة"})
+		return
+	}
+	_ = h.svc.RecordPlateFeedback(c.Request.Context(), req)
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
 func (h *WorkHandler) TodayCount(c *gin.Context) {
 	empIDStr := c.Query("employee_id")
 	empID, err := uuid.Parse(empIDStr)

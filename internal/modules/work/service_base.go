@@ -66,6 +66,7 @@ type WorkService interface {
 	ReviewSession(ctx context.Context, sessionID uuid.UUID, req ReviewWorkSessionRequest, reviewerID *uuid.UUID, reviewerName string) (*WorkSession, error)
 	GetLastSessionOrVehicleKM(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (*LastKMResponse, error)
 	ScanPlateImage(ctx context.Context, imageBase64 string) (map[string]interface{}, error)
+	RecordPlateFeedback(ctx context.Context, req PlateFeedbackRequest) error
 	CheckOilChange(ctx context.Context, empID uuid.UUID, motorcycleNumber string) (*OilChangeCheckResponse, error)
 	GetSessionByID(ctx context.Context, sessionID uuid.UUID) (*WorkSession, error)
 	GetActiveSessions(ctx context.Context, branchID *uuid.UUID) ([]WorkSession, error)

@@ -43,6 +43,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/work/active", m.Handler.GetActiveSession)
 	rg.GET("/work/last-km", m.Handler.GetLastKM)
 	rg.POST("/work/scan-plate", m.Handler.ScanPlate)
+	rg.POST("/work/plate-feedback", m.Handler.PlateFeedback)
 	rg.GET("/work/today-count", m.Handler.TodayCount)
 	rg.GET("/work/check-oil", m.Handler.CheckOilChange)
 
