@@ -184,7 +184,8 @@ func (h *EmployeeHandler) GetByID(c *gin.Context) {
 	}
 
 	emp, err := h.svc.FindByID(c.Request.Context(), id)
-	if err != nil || !scope.AllowsBranch(emp.BranchID) {
+	isSupervisorRole := strings.EqualFold(scope.Role, "SUPERVISOR")
+	if err != nil || (!isSupervisorRole && !scope.AllowsBranch(emp.BranchID)) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
 		return
 	}
@@ -211,7 +212,8 @@ func (h *EmployeeHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
 		return
 	}
-	if !scope.AllowsBranch(existingEmp.BranchID) {
+	isSupervisorRole := strings.EqualFold(scope.Role, "SUPERVISOR")
+	if !isSupervisorRole && !scope.AllowsBranch(existingEmp.BranchID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "لا تملك صلاحية تعديل موظف في فرع آخر"})
 		return
 	}
@@ -222,7 +224,9 @@ func (h *EmployeeHandler) Update(c *gin.Context) {
 		return
 	}
 
-	if !scope.IsGlobal && req.BranchID != nil && !scope.AllowsBranch(req.BranchID) {
+	// Allow supervisors to edit searched cross-branch employees without blocking on their existing branch_id
+	sameAsExistingBranch := req.BranchID != nil && existingEmp.BranchID != nil && *req.BranchID == *existingEmp.BranchID
+	if !scope.IsGlobal && !isSupervisorRole && req.BranchID != nil && !scope.AllowsBranch(req.BranchID) && !sameAsExistingBranch {
 		c.JSON(http.StatusForbidden, gin.H{"error": "غير مصرح بنقل الموظف إلى فرع آخر"})
 		return
 	}
