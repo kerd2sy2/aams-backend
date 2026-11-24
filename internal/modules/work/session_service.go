@@ -2,6 +2,7 @@ package work
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"time"
@@ -9,6 +10,46 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// reconcileAppOrdersJSON keeps session.AppOrdersJSON in sync whenever a supervisor/admin edits OrdersCount.
+func reconcileAppOrdersJSON(session *WorkSession, newTotal int) {
+	if session == nil || session.AppOrdersJSON == "" {
+		return
+	}
+	var items []AppOrderInput
+	if err := json.Unmarshal([]byte(session.AppOrdersJSON), &items); err != nil || len(items) == 0 {
+		return
+	}
+	if newTotal < 0 {
+		newTotal = 0
+	}
+	if len(items) == 1 {
+		items[0].OrdersCount = newTotal
+	} else {
+		sum := 0
+		for _, it := range items {
+			if it.OrdersCount > 0 {
+				sum += it.OrdersCount
+			}
+		}
+		if sum != newTotal {
+			delta := newTotal - sum
+			for i := 0; i < len(items) && delta != 0; i++ {
+				updated := items[i].OrdersCount + delta
+				if updated < 0 {
+					delta = updated
+					items[i].OrdersCount = 0
+				} else {
+					items[i].OrdersCount = updated
+					delta = 0
+				}
+			}
+		}
+	}
+	if b, err := json.Marshal(items); err == nil {
+		session.AppOrdersJSON = string(b)
+	}
+}
 
 func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID, req UpdateWorkSessionRequest, adminName string) (*WorkSession, error) {
 	session, err := s.repo.FindByID(ctx, sessionID)
@@ -50,6 +91,7 @@ func (s *workService) UpdateWorkSession(ctx context.Context, sessionID uuid.UUID
 	}
 	if req.OrdersCount >= 0 {
 		session.OrdersCount = req.OrdersCount
+		reconcileAppOrdersJSON(session, req.OrdersCount)
 	}
 	if req.FuelCost >= 0 {
 		session.FuelCost = req.FuelCost
@@ -98,6 +140,7 @@ func (s *workService) ReviewSession(ctx context.Context, sessionID uuid.UUID, re
 			}
 		}
 		session.OrdersCount = *req.OrdersCount
+		reconcileAppOrdersJSON(session, *req.OrdersCount)
 	}
 	if req.EndKM != nil {
 		if session.OriginalEndKM == 0 && session.EndKM > 0 {

@@ -79,6 +79,7 @@ func (s *workService) SaveManualEntries(
 				}
 
 				existing.OrdersCount = item.OrdersCount
+				reconcileAppOrdersJSON(existing, item.OrdersCount)
 				existing.Distance = distance
 				existing.FuelCost = item.FuelCost
 				if startKM > 0 {
