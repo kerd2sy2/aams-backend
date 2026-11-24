@@ -77,11 +77,11 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.PUT("/leaves/:id/status", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.UpdateLeaveRequestStatus)
 	rg.DELETE("/leaves/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.Handler.DeleteLeaveRequest)
 
-	// 5. Traffic Violations
+	// 5. Traffic Violations & Penalties
 	rg.GET("/violations", m.Handler.GetAllViolations)
-	rg.POST("/violations", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.CreateViolation)
-	rg.PUT("/violations/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR"), m.Handler.UpdateViolation)
-	rg.DELETE("/violations/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN"), m.Handler.DeleteViolation)
+	rg.POST("/violations", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.Handler.CreateViolation)
+	rg.PUT("/violations/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.Handler.UpdateViolation)
+	rg.DELETE("/violations/:id", middleware.RequireRoles("SUPER_ADMIN", "ADMIN", "SUPERVISOR", "ACCOUNTANT"), m.Handler.DeleteViolation)
 
 	// 6. Fuel Logs
 	rg.GET("/fuel-logs", m.Handler.GetAllFuelLogs)
