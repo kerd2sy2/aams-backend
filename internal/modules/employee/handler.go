@@ -207,8 +207,12 @@ func (h *EmployeeHandler) Update(c *gin.Context) {
 	}
 
 	existingEmp, err := h.svc.FindByID(c.Request.Context(), id)
-	if err != nil || !scope.AllowsBranch(existingEmp.BranchID) {
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+	if !scope.AllowsBranch(existingEmp.BranchID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "لا تملك صلاحية تعديل موظف في فرع آخر"})
 		return
 	}
 
@@ -250,8 +254,12 @@ func (h *EmployeeHandler) Delete(c *gin.Context) {
 	}
 
 	existingEmp, err := h.svc.FindByID(c.Request.Context(), id)
-	if err != nil || !scope.AllowsBranch(existingEmp.BranchID) {
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+	if !scope.AllowsBranch(existingEmp.BranchID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "لا تملك صلاحية تعديل موظف في فرع آخر"})
 		return
 	}
 
@@ -454,8 +462,12 @@ func (h *EmployeeHandler) SetPhone(c *gin.Context) {
 	}
 
 	existingEmp, err := h.svc.FindByID(c.Request.Context(), id)
-	if err != nil || !scope.AllowsBranch(existingEmp.BranchID) {
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+	if !scope.AllowsBranch(existingEmp.BranchID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "لا تملك صلاحية تعديل موظف في فرع آخر"})
 		return
 	}
 
@@ -488,8 +500,12 @@ func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
 	}
 
 	existingEmp, err := h.svc.FindByID(c.Request.Context(), id)
-	if err != nil || !scope.AllowsBranch(existingEmp.BranchID) {
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "الموظف غير موجود"})
+		return
+	}
+	if !scope.AllowsBranch(existingEmp.BranchID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "لا تملك صلاحية تعديل موظف في فرع آخر"})
 		return
 	}
 
