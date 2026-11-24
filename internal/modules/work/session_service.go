@@ -16,7 +16,11 @@ func reconcileAppOrdersJSON(session *WorkSession, newTotal int) {
 	if session == nil || session.AppOrdersJSON == "" {
 		return
 	}
-	var items []AppOrderInput
+	var items []struct {
+		AppType     string `json:"app_type"`
+		AppID       string `json:"app_id,omitempty"`
+		OrdersCount int    `json:"orders_count"`
+	}
 	if err := json.Unmarshal([]byte(session.AppOrdersJSON), &items); err != nil || len(items) == 0 {
 		return
 	}
