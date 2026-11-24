@@ -116,10 +116,19 @@ func (l *LeaveRequest) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+type ViolationEmployeeSummary struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	KeyNumber  string    `json:"key_number"`
+	Phone      string    `json:"phone"`
+	NationalID string    `json:"national_id"`
+}
+
 type TrafficViolation struct {
-	ID              uuid.UUID      `gorm:"type:char(36);primary_key" json:"id"`
-	ViolationNumber string         `gorm:"type:varchar(100);index" json:"violation_number"`
-	EmployeeID      *uuid.UUID     `gorm:"type:char(36);index" json:"employee_id"`
+	ID              uuid.UUID                 `gorm:"type:char(36);primary_key" json:"id"`
+	ViolationNumber string                    `gorm:"type:varchar(100);index" json:"violation_number"`
+	EmployeeID      *uuid.UUID                `gorm:"type:char(36);index" json:"employee_id"`
+	Employee        *ViolationEmployeeSummary `gorm:"-" json:"employee,omitempty"`
 	VehiclePlate    string         `gorm:"type:varchar(50);index" json:"vehicle_plate"`
 	Amount          float64        `gorm:"not null;default:0" json:"amount"`
 	PaidAmount      float64        `gorm:"not null;default:0" json:"paid_amount"`

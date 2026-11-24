@@ -403,7 +403,43 @@ func (r *gormHRLegalRepository) FindViolations(ctx context.Context, filter Traff
 		Offset(offset).
 		Limit(limit).
 		Find(&list).Error
-	return list, total, totalAmount, deductedAmount, err
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
+
+	// Hydrate Employee summary (name, key_number, phone, national_id) in one batch query
+	empIDSet := make(map[uuid.UUID]struct{})
+	var empIDs []uuid.UUID
+	for _, v := range list {
+		if v.EmployeeID != nil && *v.EmployeeID != uuid.Nil {
+			if _, ok := empIDSet[*v.EmployeeID]; !ok {
+				empIDSet[*v.EmployeeID] = struct{}{}
+				empIDs = append(empIDs, *v.EmployeeID)
+			}
+		}
+	}
+	if len(empIDs) > 0 {
+		var emps []ViolationEmployeeSummary
+		if empErr := r.db.WithContext(ctx).Table("employees").
+			Select("id, name, key_number, phone, national_id").
+			Where("id IN ?", empIDs).
+			Find(&emps).Error; empErr == nil {
+			empMap := make(map[uuid.UUID]*ViolationEmployeeSummary, len(emps))
+			for i := range emps {
+				e := emps[i]
+				empMap[e.ID] = &e
+			}
+			for i := range list {
+				if list[i].EmployeeID != nil {
+					if summary, ok := empMap[*list[i].EmployeeID]; ok {
+						list[i].Employee = summary
+					}
+				}
+			}
+		}
+	}
+
+	return list, total, totalAmount, deductedAmount, nil
 }
 
 func (r *gormHRLegalRepository) GetEmployeeInfo(ctx context.Context, empID uuid.UUID) (*EmployeeInfo, error) {
