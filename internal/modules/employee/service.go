@@ -185,7 +185,13 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req UpdateEm
 			emp.VehicleRegistrationImage = ""
 		}
 	} else if req.MotorcycleNumber != "" {
-		emp.MotorcycleNumber = req.MotorcycleNumber
+		newPlate := strings.TrimSpace(req.MotorcycleNumber)
+		plateChanged := strings.TrimSpace(emp.MotorcycleNumber) != newPlate
+		emp.MotorcycleNumber = newPlate
+		// When vehicle changes, ALWAYS sync Istimara from the new vehicle (never carry over old bike's Istimara)
+		if plateChanged {
+			emp.VehicleRegistrationImage = s.repo.FindVehicleRegistrationByPlate(ctx, newPlate)
+		}
 	}
 	if req.ApplicationID != "" {
 		emp.ApplicationID = req.ApplicationID

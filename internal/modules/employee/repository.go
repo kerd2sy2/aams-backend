@@ -23,6 +23,7 @@ type EmployeeRepository interface {
 	UpdatePhone(ctx context.Context, id uuid.UUID, phone string) error
 	UpdateLocalizedNames(ctx context.Context, id uuid.UUID, localizedNames string) error
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
+	FindVehicleRegistrationByPlate(ctx context.Context, plate string) string
 	SaveVehicleRegistrationImage(ctx context.Context, empID uuid.UUID, plate, plateDigits, imageURL string) error
 	BatchSetOilChange(ctx context.Context, entries []OilSetupEntry) (int, error)
 }
@@ -318,6 +319,29 @@ func (r *gormEmployeeRepository) UpdatePassword(ctx context.Context, id uuid.UUI
 		"password_hash":        passwordHash,
 		"must_change_password": false,
 	}).Error
+}
+
+func (r *gormEmployeeRepository) FindVehicleRegistrationByPlate(ctx context.Context, plate string) string {
+	cleanPlate := strings.TrimSpace(plate)
+	if cleanPlate == "" {
+		return ""
+	}
+	var regImg string
+	digits := normalizePlateDigits(cleanPlate)
+	if digits != "" {
+		_ = r.db.WithContext(ctx).Table("vehicles").
+			Select("COALESCE(registration_image, '')").
+			Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR regexp_replace(plate_number, '[^0-9]', '', 'g') = ?)", cleanPlate, digits).
+			Limit(1).
+			Scan(&regImg).Error
+	} else {
+		_ = r.db.WithContext(ctx).Table("vehicles").
+			Select("COALESCE(registration_image, '')").
+			Where("deleted_at IS NULL AND TRIM(plate_number) = ?", cleanPlate).
+			Limit(1).
+			Scan(&regImg).Error
+	}
+	return strings.TrimSpace(regImg)
 }
 
 func (r *gormEmployeeRepository) SaveVehicleRegistrationImage(ctx context.Context, empID uuid.UUID, plate, plateDigits, imageURL string) error {
