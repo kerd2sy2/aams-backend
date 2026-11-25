@@ -143,14 +143,22 @@ func (h *AuthHandler) Me(c *gin.Context) {
 					branchName = emp.Branch.Name
 				}
 
-				// Strip oversized Base64/blob fields so /me stays fast (<2 KB) on mobile networks
+				// Strip only oversized Base64/blob fields so /me stays fast (<2 KB) while preserving /uploads/ URLs
 				cleanEmp := *emp
 				cleanEmp.Barcode = ""
 				cleanEmp.QRCode = ""
-				cleanEmp.NationalIDImage = ""
-				cleanEmp.DrivingLicenseImage = ""
-				cleanEmp.PassportImage = ""
-				cleanEmp.VehicleRegistrationImage = ""
+				if strings.HasPrefix(cleanEmp.NationalIDImage, "data:") {
+					cleanEmp.NationalIDImage = ""
+				}
+				if strings.HasPrefix(cleanEmp.DrivingLicenseImage, "data:") {
+					cleanEmp.DrivingLicenseImage = ""
+				}
+				if strings.HasPrefix(cleanEmp.PassportImage, "data:") {
+					cleanEmp.PassportImage = ""
+				}
+				if strings.HasPrefix(cleanEmp.VehicleRegistrationImage, "data:") {
+					cleanEmp.VehicleRegistrationImage = ""
+				}
 				if strings.HasPrefix(cleanEmp.PersonalImage, "data:") && len(cleanEmp.PersonalImage) > 4096 {
 					cleanEmp.PersonalImage = ""
 				}
