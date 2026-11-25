@@ -195,7 +195,7 @@ Return ONLY valid JSON with these exact keys (all dates in Gregorian YYYY-MM-DD 
 	}
 
 	b, _ := json.Marshal(reqBody)
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=%s", apiKey)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=%s", apiKey)
 	client := &http.Client{Timeout: 12 * time.Second}
 	resp, err := client.Post(url, "application/json", bytes.NewReader(b))
 	if err != nil {

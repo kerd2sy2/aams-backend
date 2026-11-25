@@ -215,7 +215,7 @@ Rules:
 	reqCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
 	defer cancel()
 
-	endpoint := "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+	endpoint := "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return "", "", "", err
