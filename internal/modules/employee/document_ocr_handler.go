@@ -253,3 +253,48 @@ func normalizeDocNationality(raw string) string {
 		return strings.TrimSpace(raw)
 	}
 }
+
+// tryAutoCropDocumentFile calls the local OpenCV /crop-document service to isolate and
+// upright-rotate ID/License/Passport/Registration cards from phone screenshots or photos.
+func tryAutoCropDocumentFile(savePath string) (string, bool) {
+	raw, err := os.ReadFile(savePath)
+	if err != nil || len(raw) == 0 {
+		return savePath, false
+	}
+	payload, _ := json.Marshal(map[string]string{
+		"image_base64": base64.StdEncoding.EncodeToString(raw),
+	})
+	client := &http.Client{Timeout: 6 * time.Second}
+	resp, err := client.Post("http://127.0.0.1:8091/crop-document", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		return savePath, false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return savePath, false
+	}
+	var out struct {
+		Success     bool   `json:"success"`
+		Cropped     bool   `json:"cropped"`
+		ImageBase64 string `json:"image_base64"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || !out.Success || !out.Cropped || out.ImageBase64 == "" {
+		return savePath, false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(out.ImageBase64)
+	if err != nil || len(decoded) < 2000 {
+		return savePath, false
+	}
+	ext := strings.ToLower(filepath.Ext(savePath))
+	targetPath := savePath
+	if ext != ".jpg" && ext != ".jpeg" {
+		targetPath = strings.TrimSuffix(savePath, filepath.Ext(savePath)) + ".jpg"
+	}
+	if err := os.WriteFile(targetPath, decoded, 0644); err != nil {
+		return savePath, false
+	}
+	if targetPath != savePath {
+		_ = os.Remove(savePath)
+	}
+	return targetPath, true
+}

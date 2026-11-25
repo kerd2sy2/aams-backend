@@ -151,6 +151,13 @@ func (h *EmployeeHandler) UploadImage(c *gin.Context) {
 		return
 	}
 
+	cat := strings.ToLower(strings.TrimSpace(c.PostForm("category")))
+	if cat == "national_id" || cat == "iqama" || cat == "license" || cat == "passport" || cat == "registration" {
+		if croppedPath, ok := tryAutoCropDocumentFile(savePath); ok {
+			filename = filepath.Base(croppedPath)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"url": "/uploads/" + filename})
 }
 
