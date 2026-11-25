@@ -51,6 +51,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/employees/me/phone", m.Handler.SetMyPhone)
 	rg.POST("/employees/me/localized-name", m.Handler.SetMyLocalizedName)
 	rg.POST("/employees/me/profile", m.Handler.UpdateMyProfile)
+	rg.POST("/employees/scan-document", m.Handler.ScanDocument)
 	rg.POST("/employees/me/location", m.Handler.SetMyLocation)
 	rg.POST("/upload", m.Handler.UploadImage)
 	rg.POST("/upload-file", m.Handler.UploadFile)

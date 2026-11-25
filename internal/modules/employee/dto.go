@@ -47,6 +47,9 @@ type CreateEmployeeRequest struct {
 	PersonalImage            string              `json:"personal_image"`
 	NationalID               string              `json:"national_id" binding:"required"`
 	IqamaExpirationDate      *string             `json:"iqama_expiration_date"`
+	Nationality              string              `json:"nationality"`
+	DateOfBirth              *string             `json:"date_of_birth"`
+	LocalizedNames           string              `json:"localized_names"`
 	NationalIDImage          string              `json:"national_id_image"`
 	DrivingLicenseImage      string              `json:"driving_license_image"`
 	PassportImage            string              `json:"passport_image"`
@@ -74,6 +77,9 @@ type UpdateEmployeeRequest struct {
 	PersonalImage            string              `json:"personal_image"`
 	NationalID               string              `json:"national_id"`
 	IqamaExpirationDate      *string             `json:"iqama_expiration_date"`
+	Nationality              string              `json:"nationality"`
+	DateOfBirth              *string             `json:"date_of_birth"`
+	LocalizedNames           string              `json:"localized_names"`
 	NationalIDImage          string              `json:"national_id_image"`
 	DrivingLicenseImage      string              `json:"driving_license_image"`
 	PassportImage            string              `json:"passport_image"`

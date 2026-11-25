@@ -70,6 +70,9 @@ func (s *employeeService) Create(ctx context.Context, req CreateEmployeeRequest)
 		NationalID:               req.NationalID,
 		PasswordHash:             string(hashedPwd),
 		IqamaExpirationDate:      req.IqamaExpirationDate,
+		Nationality:              strings.TrimSpace(req.Nationality),
+		DateOfBirth:              req.DateOfBirth,
+		LocalizedNames:           strings.TrimSpace(req.LocalizedNames),
 		NationalIDImage:          req.NationalIDImage,
 		DrivingLicenseImage:      req.DrivingLicenseImage,
 		PassportImage:            req.PassportImage,
@@ -143,6 +146,15 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req UpdateEm
 	}
 	if req.IqamaExpirationDate != nil {
 		emp.IqamaExpirationDate = req.IqamaExpirationDate
+	}
+	if strings.TrimSpace(req.Nationality) != "" {
+		emp.Nationality = strings.TrimSpace(req.Nationality)
+	}
+	if req.DateOfBirth != nil {
+		emp.DateOfBirth = req.DateOfBirth
+	}
+	if strings.TrimSpace(req.LocalizedNames) != "" {
+		emp.LocalizedNames = strings.TrimSpace(req.LocalizedNames)
 	}
 	if req.NationalIDImage != "" {
 		emp.NationalIDImage = req.NationalIDImage
