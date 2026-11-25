@@ -27,6 +27,7 @@ type EmployeeService interface {
 	UpdateLocation(ctx context.Context, id uuid.UUID, req UpdateLocationRequest) error
 	SetPhone(ctx context.Context, id uuid.UUID, phone string) error
 	SetLocalizedName(ctx context.Context, id uuid.UUID, lang, name string) (string, error)
+	UpdateMyProfile(ctx context.Context, id uuid.UUID, req UpdateMyProfileRequest) (*Employee, error)
 	ChangePassword(ctx context.Context, id uuid.UUID, oldPassword, newPassword string) error
 	ResetPassword(ctx context.Context, id uuid.UUID, newPassword string) error
 	BatchSetOilChange(ctx context.Context, req BatchOilSetupRequest) (int, error)
@@ -289,6 +290,56 @@ func (s *employeeService) SetLocalizedName(ctx context.Context, id uuid.UUID, la
 		return "", err
 	}
 	return updated, nil
+}
+
+func (s *employeeService) UpdateMyProfile(ctx context.Context, id uuid.UUID, req UpdateMyProfileRequest) (*Employee, error) {
+	emp, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, ErrEmployeeNotFound
+	}
+
+	// Never allow self-service modification of Arabic emp.Name; only non-Arabic localized_names
+	if req.LocalizedName != nil {
+		cleanLang := strings.ToLower(strings.TrimSpace(req.Language))
+		cleanName := strings.TrimSpace(*req.LocalizedName)
+		if (cleanLang == "en" || cleanLang == "ur" || cleanLang == "bn") && cleanName != "" {
+			namesMap := map[string]string{}
+			if strings.TrimSpace(emp.LocalizedNames) != "" {
+				_ = json.Unmarshal([]byte(emp.LocalizedNames), &namesMap)
+			}
+			namesMap[cleanLang] = cleanName
+			if b, errMarshal := json.Marshal(namesMap); errMarshal == nil {
+				emp.LocalizedNames = string(b)
+			}
+		}
+	}
+
+	if req.Nationality != nil {
+		emp.Nationality = strings.TrimSpace(*req.Nationality)
+	}
+
+	if req.IqamaExpirationDate != nil {
+		v := strings.TrimSpace(*req.IqamaExpirationDate)
+		if v == "" {
+			emp.IqamaExpirationDate = nil
+		} else {
+			emp.IqamaExpirationDate = &v
+		}
+	}
+
+	if req.DateOfBirth != nil {
+		v := strings.TrimSpace(*req.DateOfBirth)
+		if v == "" {
+			emp.DateOfBirth = nil
+		} else {
+			emp.DateOfBirth = &v
+		}
+	}
+
+	if err := s.repo.Update(ctx, emp); err != nil {
+		return nil, err
+	}
+	return emp, nil
 }
 
 func (s *employeeService) ChangePassword(ctx context.Context, id uuid.UUID, oldPassword, newPassword string) error {

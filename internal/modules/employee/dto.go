@@ -103,6 +103,14 @@ type SetLocalizedNameRequest struct {
 	Name     string `json:"name" binding:"required"`
 }
 
+type UpdateMyProfileRequest struct {
+	Language            string  `json:"language"`
+	LocalizedName       *string `json:"localized_name"`
+	Nationality         *string `json:"nationality"`
+	IqamaExpirationDate *string `json:"iqama_expiration_date"`
+	DateOfBirth         *string `json:"date_of_birth"`
+}
+
 type UpdateLocationRequest struct {
 	Latitude       float64  `json:"latitude" binding:"required"`
 	Longitude      float64  `json:"longitude" binding:"required"`

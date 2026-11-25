@@ -410,6 +410,32 @@ func (h *EmployeeHandler) SetMyLocalizedName(c *gin.Context) {
 	})
 }
 
+func (h *EmployeeHandler) UpdateMyProfile(c *gin.Context) {
+	empIDVal, exists := c.Get("employee_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "غير مصرح"})
+		return
+	}
+	empID, _ := empIDVal.(uuid.UUID)
+
+	var req UpdateMyProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "بيانات غير صالحة"})
+		return
+	}
+
+	emp, err := h.svc.UpdateMyProfile(c.Request.Context(), empID, req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "تم تحديث البيانات بنجاح",
+		"employee": emp,
+	})
+}
+
 func (h *EmployeeHandler) SetMyLocation(c *gin.Context) {
 	empIDVal, exists := c.Get("employee_id")
 	if !exists {

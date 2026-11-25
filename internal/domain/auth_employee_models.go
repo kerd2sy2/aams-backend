@@ -89,6 +89,8 @@ type Employee struct {
 	NationalID               string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"national_id"`
 	PasswordHash             string         `gorm:"type:varchar(255)" json:"-"`
 	IqamaExpirationDate      *string        `gorm:"type:varchar(20)" json:"iqama_expiration_date"` // YYYY-MM-DD
+	Nationality              string         `gorm:"type:varchar(80);default:''" json:"nationality"`
+	DateOfBirth              *string        `gorm:"type:varchar(20)" json:"date_of_birth"` // YYYY-MM-DD
 	NationalIDImage          string         `gorm:"type:text" json:"national_id_image"`
 	DrivingLicenseImage      string         `gorm:"type:text" json:"driving_license_image"`
 	PassportImage            string         `gorm:"type:text" json:"passport_image"`
