@@ -39,7 +39,7 @@ func (r *gormEmployeeRepository) Create(ctx context.Context, emp *Employee) erro
 	if emp.ID == uuid.Nil {
 		emp.ID = uuid.New()
 	}
-	if emp.MotorcycleNumber != "" {
+	if emp.MotorcycleNumber != "" && strings.TrimSpace(emp.KeyNumber) == "" {
 		cleanPlate := strings.TrimSpace(emp.MotorcycleNumber)
 		var vehKey string
 		if err := r.db.WithContext(ctx).Table("vehicles").
@@ -53,7 +53,7 @@ func (r *gormEmployeeRepository) Create(ctx context.Context, emp *Employee) erro
 }
 
 func (r *gormEmployeeRepository) Update(ctx context.Context, emp *Employee) error {
-	if emp.MotorcycleNumber != "" {
+	if emp.MotorcycleNumber != "" && strings.TrimSpace(emp.KeyNumber) == "" {
 		cleanPlate := strings.TrimSpace(emp.MotorcycleNumber)
 		var vehKey string
 		if err := r.db.WithContext(ctx).Table("vehicles").
