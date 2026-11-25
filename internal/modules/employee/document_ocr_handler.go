@@ -6,15 +6,52 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+// verifiedDocCache stores server-verified OCR results keyed by image_url (expires after 15 min)
+// so POST /employees/me/profile immediately uses the trusted result from /employees/scan-document
+// without a redundant second Gemini Vision call.
+type cachedDocScan struct {
+	Result    ScanDocumentResult
+	ExpiresAt time.Time
+}
+
+var verifiedDocCache sync.Map
+
+func cacheVerifiedDocScan(imageURL string, res ScanDocumentResult) {
+	u := strings.TrimSpace(imageURL)
+	if u == "" {
+		return
+	}
+	verifiedDocCache.Store(u, cachedDocScan{
+		Result:    res,
+		ExpiresAt: time.Now().Add(15 * time.Minute),
+	})
+}
+
+func getCachedDocScan(imageURL string) (ScanDocumentResult, bool) {
+	u := strings.TrimSpace(imageURL)
+	if u == "" {
+		return ScanDocumentResult{}, false
+	}
+	if val, ok := verifiedDocCache.Load(u); ok {
+		if entry, okType := val.(cachedDocScan); okType && time.Now().Before(entry.ExpiresAt) {
+			return entry.Result, true
+		}
+		verifiedDocCache.Delete(u)
+	}
+	return ScanDocumentResult{}, false
+}
 
 type ScanDocumentRequest struct {
 	ImageURL    string `json:"image_url"`
@@ -119,6 +156,10 @@ func (h *EmployeeHandler) ScanDocument(c *gin.Context) {
 		}
 	}
 
+	if req.ImageURL != "" && res.Success {
+		cacheVerifiedDocScan(req.ImageURL, res)
+	}
+
 	c.JSON(http.StatusOK, res)
 }
 
@@ -217,8 +258,26 @@ Return ONLY valid JSON with these exact keys (all dates in Gregorian YYYY-MM-DD 
 
 	b, _ := json.Marshal(reqBody)
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=%s", apiKey)
-	client := &http.Client{Timeout: 12 * time.Second}
-	resp, err := client.Post(url, "application/json", bytes.NewReader(b))
+	client := &http.Client{Timeout: 15 * time.Second}
+
+	var resp *http.Response
+	var err error
+	for attempt := 0; attempt < 2; attempt++ {
+		resp, err = client.Post(url, "application/json", bytes.NewReader(b))
+		if err == nil && resp.StatusCode == http.StatusOK {
+			break
+		}
+		if resp != nil {
+			bodySnippet, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+			log.Printf("[DocumentOCR] Gemini attempt %d failed status=%d body=%s", attempt+1, resp.StatusCode, string(bodySnippet))
+			resp.Body.Close()
+		} else {
+			log.Printf("[DocumentOCR] Gemini attempt %d error: %v", attempt+1, err)
+		}
+		if attempt == 0 {
+			time.Sleep(600 * time.Millisecond)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
