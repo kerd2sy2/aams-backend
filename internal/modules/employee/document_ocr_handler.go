@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type ScanDocumentRequest struct {
@@ -97,6 +98,26 @@ func (h *EmployeeHandler) ScanDocument(c *gin.Context) {
 	res.Success = res.NationalID != "" || res.DateOfBirth != "" || res.IqamaExpirationDate != "" ||
 		res.LicenseExpirationDate != "" || res.Nationality != "" || res.NameEn != "" || res.NameAr != ""
 	res.ElapsedMs = time.Since(t0).Milliseconds()
+
+	// Strict ownership check for self-service drivers: reject another person's ID/License card
+	if empIDVal, exists := c.Get("employee_id"); exists && res.NationalID != "" {
+		roleVal, _ := c.Get("role")
+		roleStr := strings.ToUpper(fmt.Sprint(roleVal))
+		if roleStr == "" || roleStr == "DRIVER" || roleStr == "EMPLOYEE" {
+			if empID, ok := empIDVal.(uuid.UUID); ok {
+				if emp, errEmp := h.svc.FindByID(c.Request.Context(), empID); errEmp == nil && emp != nil {
+					ownID := extractASCIIOnlyDigits(emp.NationalID)
+					cardID := extractASCIIOnlyDigits(res.NationalID)
+					if len(ownID) >= 8 && len(cardID) >= 8 && ownID != cardID {
+						c.JSON(http.StatusForbidden, gin.H{
+							"error": "هذه الوثيقة لا تخصك — رقم الهوية في الصورة لا يطابق رقم هويتك المسجل",
+						})
+						return
+					}
+				}
+			}
+		}
+	}
 
 	c.JSON(http.StatusOK, res)
 }

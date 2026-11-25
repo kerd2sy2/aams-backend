@@ -400,6 +400,13 @@ func (s *employeeService) UpdateMyProfile(ctx context.Context, id uuid.UUID, req
 						d := ocr.IqamaExpirationDate
 						emp.IqamaExpirationDate = &d
 					}
+					if ocr.NationalID != "" {
+						ownID := extractASCIIOnlyDigits(emp.NationalID)
+						cardID := extractASCIIOnlyDigits(ocr.NationalID)
+						if len(ownID) >= 8 && len(cardID) >= 8 && ownID != cardID {
+							return nil, errors.New("هذه الإقامة لا تخصك — رقم الهوية في الصورة لا يطابق رقم هويتك")
+						}
+					}
 					if (emp.DateOfBirth == nil || *emp.DateOfBirth == "") && ocr.DateOfBirth != "" {
 						d := ocr.DateOfBirth
 						emp.DateOfBirth = &d
@@ -436,6 +443,13 @@ func (s *employeeService) UpdateMyProfile(ctx context.Context, id uuid.UUID, req
 					if (emp.LicenseExpirationDate == nil || *emp.LicenseExpirationDate == "") && ocr.LicenseExpirationDate != "" {
 						d := ocr.LicenseExpirationDate
 						emp.LicenseExpirationDate = &d
+					}
+					if ocr.NationalID != "" {
+						ownID := extractASCIIOnlyDigits(emp.NationalID)
+						cardID := extractASCIIOnlyDigits(ocr.NationalID)
+						if len(ownID) >= 8 && len(cardID) >= 8 && ownID != cardID {
+							return nil, errors.New("هذه الرخصة لا تخصك — رقم الهوية في الصورة لا يطابق رقم هويتك")
+						}
 					}
 					if (emp.DateOfBirth == nil || *emp.DateOfBirth == "") && ocr.DateOfBirth != "" {
 						d := ocr.DateOfBirth
