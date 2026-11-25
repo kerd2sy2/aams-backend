@@ -70,6 +70,7 @@ func (s *employeeService) Create(ctx context.Context, req CreateEmployeeRequest)
 		NationalID:               req.NationalID,
 		PasswordHash:             string(hashedPwd),
 		IqamaExpirationDate:      req.IqamaExpirationDate,
+		LicenseExpirationDate:    req.LicenseExpirationDate,
 		Nationality:              strings.TrimSpace(req.Nationality),
 		DateOfBirth:              req.DateOfBirth,
 		LocalizedNames:           strings.TrimSpace(req.LocalizedNames),
@@ -146,6 +147,9 @@ func (s *employeeService) Update(ctx context.Context, id uuid.UUID, req UpdateEm
 	}
 	if req.IqamaExpirationDate != nil {
 		emp.IqamaExpirationDate = req.IqamaExpirationDate
+	}
+	if req.LicenseExpirationDate != nil {
+		emp.LicenseExpirationDate = req.LicenseExpirationDate
 	}
 	if strings.TrimSpace(req.Nationality) != "" {
 		emp.Nationality = strings.TrimSpace(req.Nationality)
@@ -345,6 +349,43 @@ func (s *employeeService) UpdateMyProfile(ctx context.Context, id uuid.UUID, req
 			emp.DateOfBirth = nil
 		} else {
 			emp.DateOfBirth = &v
+		}
+	}
+
+	if req.LicenseExpirationDate != nil {
+		v := strings.TrimSpace(*req.LicenseExpirationDate)
+		if v == "" {
+			emp.LicenseExpirationDate = nil
+		} else {
+			emp.LicenseExpirationDate = &v
+		}
+	}
+
+	if req.Phone != nil {
+		v := strings.TrimSpace(*req.Phone)
+		if v != "" {
+			emp.Phone = v
+		}
+	}
+
+	if req.PersonalImage != nil {
+		v := strings.TrimSpace(*req.PersonalImage)
+		if v != "" {
+			emp.PersonalImage = v
+		}
+	}
+
+	if req.NationalIDImage != nil {
+		v := strings.TrimSpace(*req.NationalIDImage)
+		if v != "" {
+			emp.NationalIDImage = v
+		}
+	}
+
+	if req.DrivingLicenseImage != nil {
+		v := strings.TrimSpace(*req.DrivingLicenseImage)
+		if v != "" {
+			emp.DrivingLicenseImage = v
 		}
 	}
 

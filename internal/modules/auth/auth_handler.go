@@ -187,6 +187,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 					"nationality":            emp.Nationality,
 					"date_of_birth":          emp.DateOfBirth,
 					"iqama_expiration_date":  emp.IqamaExpirationDate,
+					"license_expiration_date": emp.LicenseExpirationDate,
 					"localized_names":        emp.LocalizedNames,
 				})
 				return

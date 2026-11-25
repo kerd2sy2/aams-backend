@@ -47,6 +47,7 @@ type CreateEmployeeRequest struct {
 	PersonalImage            string              `json:"personal_image"`
 	NationalID               string              `json:"national_id" binding:"required"`
 	IqamaExpirationDate      *string             `json:"iqama_expiration_date"`
+	LicenseExpirationDate    *string             `json:"license_expiration_date"`
 	Nationality              string              `json:"nationality"`
 	DateOfBirth              *string             `json:"date_of_birth"`
 	LocalizedNames           string              `json:"localized_names"`
@@ -77,6 +78,7 @@ type UpdateEmployeeRequest struct {
 	PersonalImage            string              `json:"personal_image"`
 	NationalID               string              `json:"national_id"`
 	IqamaExpirationDate      *string             `json:"iqama_expiration_date"`
+	LicenseExpirationDate    *string             `json:"license_expiration_date"`
 	Nationality              string              `json:"nationality"`
 	DateOfBirth              *string             `json:"date_of_birth"`
 	LocalizedNames           string              `json:"localized_names"`
@@ -110,11 +112,16 @@ type SetLocalizedNameRequest struct {
 }
 
 type UpdateMyProfileRequest struct {
-	Language            string  `json:"language"`
-	LocalizedName       *string `json:"localized_name"`
-	Nationality         *string `json:"nationality"`
-	IqamaExpirationDate *string `json:"iqama_expiration_date"`
-	DateOfBirth         *string `json:"date_of_birth"`
+	Language              string  `json:"language"`
+	LocalizedName         *string `json:"localized_name"`
+	Nationality           *string `json:"nationality"`
+	IqamaExpirationDate   *string `json:"iqama_expiration_date"`
+	LicenseExpirationDate *string `json:"license_expiration_date"`
+	DateOfBirth           *string `json:"date_of_birth"`
+	Phone                 *string `json:"phone"`
+	PersonalImage         *string `json:"personal_image"`
+	NationalIDImage       *string `json:"national_id_image"`
+	DrivingLicenseImage   *string `json:"driving_license_image"`
 }
 
 type UpdateLocationRequest struct {
