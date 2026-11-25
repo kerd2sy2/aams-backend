@@ -126,6 +126,7 @@ func main() {
 
 	registerPrivacyRoutes(r)
 	registerCoreHealthRoutes(r, db, time.Now())
+	registerAppVersionRoute(r)
 
 	// 1. Unauthenticated Public Routes (Bulkhead Protected)
 	authModule.RegisterPublicRoutes(r)
