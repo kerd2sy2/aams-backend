@@ -334,32 +334,8 @@ func (s *employeeService) UpdateMyProfile(ctx context.Context, id uuid.UUID, req
 		emp.Nationality = strings.TrimSpace(*req.Nationality)
 	}
 
-	if req.IqamaExpirationDate != nil {
-		v := strings.TrimSpace(*req.IqamaExpirationDate)
-		if v == "" {
-			emp.IqamaExpirationDate = nil
-		} else {
-			emp.IqamaExpirationDate = &v
-		}
-	}
-
-	if req.DateOfBirth != nil {
-		v := strings.TrimSpace(*req.DateOfBirth)
-		if v == "" {
-			emp.DateOfBirth = nil
-		} else {
-			emp.DateOfBirth = &v
-		}
-	}
-
-	if req.LicenseExpirationDate != nil {
-		v := strings.TrimSpace(*req.LicenseExpirationDate)
-		if v == "" {
-			emp.LicenseExpirationDate = nil
-		} else {
-			emp.LicenseExpirationDate = &v
-		}
-	}
+	// Note: Manual editing of iqama_expiration_date / license_expiration_date is restricted to Supervisors & Admins.
+	// For self-service drivers, expiry dates are ONLY updated automatically via verified OCR when uploading a new document photo below.
 
 	if req.Phone != nil {
 		v := strings.TrimSpace(*req.Phone)
@@ -379,41 +355,42 @@ func (s *employeeService) UpdateMyProfile(ctx context.Context, id uuid.UUID, req
 		v := strings.TrimSpace(*req.NationalIDImage)
 		if v != "" {
 			emp.NationalIDImage = v
-			// Auto-extract missing Iqama fields when employee updates their Iqama image
-			if (emp.IqamaExpirationDate == nil || *emp.IqamaExpirationDate == "") || emp.Nationality == "" || (emp.DateOfBirth == nil || *emp.DateOfBirth == "") {
-				if imgB64, errImg := resolveDocumentImageBase64("", v); errImg == nil && imgB64 != "" {
-					ocr := callLocalDocumentOCR(imgB64, "iqama")
-					if ocr.IqamaExpirationDate == "" || ocr.DateOfBirth == "" || ocr.Nationality == "" {
-						if gem, errG := callGeminiDocumentOCR(imgB64, "iqama"); errG == nil && gem != nil {
-							if ocr.IqamaExpirationDate == "" {
-								ocr.IqamaExpirationDate = gem.IqamaExpirationDate
-							}
-							if ocr.DateOfBirth == "" {
-								ocr.DateOfBirth = gem.DateOfBirth
-							}
-							if ocr.Nationality == "" {
-								ocr.Nationality = gem.Nationality
-							}
+			// Always verify ownership & refresh Iqama expiry via OCR when employee uploads a new Iqama image
+			if imgB64, errImg := resolveDocumentImageBase64("", v); errImg == nil && imgB64 != "" {
+				ocr := callLocalDocumentOCR(imgB64, "iqama")
+				if ocr.IqamaExpirationDate == "" || ocr.NationalID == "" || ocr.DateOfBirth == "" || ocr.Nationality == "" {
+					if gem, errG := callGeminiDocumentOCR(imgB64, "iqama"); errG == nil && gem != nil {
+						if ocr.NationalID == "" {
+							ocr.NationalID = gem.NationalID
+						}
+						if ocr.IqamaExpirationDate == "" {
+							ocr.IqamaExpirationDate = gem.IqamaExpirationDate
+						}
+						if ocr.DateOfBirth == "" {
+							ocr.DateOfBirth = gem.DateOfBirth
+						}
+						if ocr.Nationality == "" {
+							ocr.Nationality = gem.Nationality
 						}
 					}
-					if (emp.IqamaExpirationDate == nil || *emp.IqamaExpirationDate == "") && ocr.IqamaExpirationDate != "" {
-						d := ocr.IqamaExpirationDate
-						emp.IqamaExpirationDate = &d
+				}
+				if ocr.NationalID != "" {
+					ownID := extractASCIIOnlyDigits(emp.NationalID)
+					cardID := extractASCIIOnlyDigits(ocr.NationalID)
+					if len(ownID) >= 8 && len(cardID) >= 8 && ownID != cardID {
+						return nil, errors.New("هذه الإقامة لا تخصك — رقم الهوية في الصورة لا يطابق رقم هويتك")
 					}
-					if ocr.NationalID != "" {
-						ownID := extractASCIIOnlyDigits(emp.NationalID)
-						cardID := extractASCIIOnlyDigits(ocr.NationalID)
-						if len(ownID) >= 8 && len(cardID) >= 8 && ownID != cardID {
-							return nil, errors.New("هذه الإقامة لا تخصك — رقم الهوية في الصورة لا يطابق رقم هويتك")
-						}
-					}
-					if (emp.DateOfBirth == nil || *emp.DateOfBirth == "") && ocr.DateOfBirth != "" {
-						d := ocr.DateOfBirth
-						emp.DateOfBirth = &d
-					}
-					if emp.Nationality == "" && ocr.Nationality != "" {
-						emp.Nationality = normalizeDocNationality(ocr.Nationality)
-					}
+				}
+				if ocr.IqamaExpirationDate != "" {
+					d := ocr.IqamaExpirationDate
+					emp.IqamaExpirationDate = &d
+				}
+				if (emp.DateOfBirth == nil || *emp.DateOfBirth == "") && ocr.DateOfBirth != "" {
+					d := ocr.DateOfBirth
+					emp.DateOfBirth = &d
+				}
+				if emp.Nationality == "" && ocr.Nationality != "" {
+					emp.Nationality = normalizeDocNationality(ocr.Nationality)
 				}
 			}
 		}
@@ -423,41 +400,42 @@ func (s *employeeService) UpdateMyProfile(ctx context.Context, id uuid.UUID, req
 		v := strings.TrimSpace(*req.DrivingLicenseImage)
 		if v != "" {
 			emp.DrivingLicenseImage = v
-			// Auto-extract missing License expiry / DOB / Nationality when employee updates their License image
-			if (emp.LicenseExpirationDate == nil || *emp.LicenseExpirationDate == "") || emp.Nationality == "" || (emp.DateOfBirth == nil || *emp.DateOfBirth == "") {
-				if imgB64, errImg := resolveDocumentImageBase64("", v); errImg == nil && imgB64 != "" {
-					ocr := callLocalDocumentOCR(imgB64, "license")
-					if ocr.LicenseExpirationDate == "" || ocr.DateOfBirth == "" || ocr.Nationality == "" {
-						if gem, errG := callGeminiDocumentOCR(imgB64, "license"); errG == nil && gem != nil {
-							if ocr.LicenseExpirationDate == "" {
-								ocr.LicenseExpirationDate = gem.LicenseExpirationDate
-							}
-							if ocr.DateOfBirth == "" {
-								ocr.DateOfBirth = gem.DateOfBirth
-							}
-							if ocr.Nationality == "" {
-								ocr.Nationality = gem.Nationality
-							}
+			// Always verify ownership & refresh License expiry via OCR when employee uploads a new License image
+			if imgB64, errImg := resolveDocumentImageBase64("", v); errImg == nil && imgB64 != "" {
+				ocr := callLocalDocumentOCR(imgB64, "license")
+				if ocr.LicenseExpirationDate == "" || ocr.NationalID == "" || ocr.DateOfBirth == "" || ocr.Nationality == "" {
+					if gem, errG := callGeminiDocumentOCR(imgB64, "license"); errG == nil && gem != nil {
+						if ocr.NationalID == "" {
+							ocr.NationalID = gem.NationalID
+						}
+						if ocr.LicenseExpirationDate == "" {
+							ocr.LicenseExpirationDate = gem.LicenseExpirationDate
+						}
+						if ocr.DateOfBirth == "" {
+							ocr.DateOfBirth = gem.DateOfBirth
+						}
+						if ocr.Nationality == "" {
+							ocr.Nationality = gem.Nationality
 						}
 					}
-					if (emp.LicenseExpirationDate == nil || *emp.LicenseExpirationDate == "") && ocr.LicenseExpirationDate != "" {
-						d := ocr.LicenseExpirationDate
-						emp.LicenseExpirationDate = &d
+				}
+				if ocr.NationalID != "" {
+					ownID := extractASCIIOnlyDigits(emp.NationalID)
+					cardID := extractASCIIOnlyDigits(ocr.NationalID)
+					if len(ownID) >= 8 && len(cardID) >= 8 && ownID != cardID {
+						return nil, errors.New("هذه الرخصة لا تخصك — رقم الهوية في الصورة لا يطابق رقم هويتك")
 					}
-					if ocr.NationalID != "" {
-						ownID := extractASCIIOnlyDigits(emp.NationalID)
-						cardID := extractASCIIOnlyDigits(ocr.NationalID)
-						if len(ownID) >= 8 && len(cardID) >= 8 && ownID != cardID {
-							return nil, errors.New("هذه الرخصة لا تخصك — رقم الهوية في الصورة لا يطابق رقم هويتك")
-						}
-					}
-					if (emp.DateOfBirth == nil || *emp.DateOfBirth == "") && ocr.DateOfBirth != "" {
-						d := ocr.DateOfBirth
-						emp.DateOfBirth = &d
-					}
-					if emp.Nationality == "" && ocr.Nationality != "" {
-						emp.Nationality = normalizeDocNationality(ocr.Nationality)
-					}
+				}
+				if ocr.LicenseExpirationDate != "" {
+					d := ocr.LicenseExpirationDate
+					emp.LicenseExpirationDate = &d
+				}
+				if (emp.DateOfBirth == nil || *emp.DateOfBirth == "") && ocr.DateOfBirth != "" {
+					d := ocr.DateOfBirth
+					emp.DateOfBirth = &d
+				}
+				if emp.Nationality == "" && ocr.Nationality != "" {
+					emp.Nationality = normalizeDocNationality(ocr.Nationality)
 				}
 			}
 		}
