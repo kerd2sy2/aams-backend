@@ -28,6 +28,7 @@ type EmployeeService interface {
 	SetPhone(ctx context.Context, id uuid.UUID, phone string) error
 	SetLocalizedName(ctx context.Context, id uuid.UUID, lang, name string) (string, error)
 	UpdateMyProfile(ctx context.Context, id uuid.UUID, req UpdateMyProfileRequest) (*Employee, error)
+	SaveVehicleRegistrationImage(ctx context.Context, empID uuid.UUID, plate, plateDigits, imageURL string) error
 	ChangePassword(ctx context.Context, id uuid.UUID, oldPassword, newPassword string) error
 	ResetPassword(ctx context.Context, id uuid.UUID, newPassword string) error
 	BatchSetOilChange(ctx context.Context, req BatchOilSetupRequest) (int, error)
@@ -499,6 +500,10 @@ func (s *employeeService) ChangePassword(ctx context.Context, id uuid.UUID, oldP
 	}
 
 	return s.repo.UpdatePassword(ctx, id, string(hashed))
+}
+
+func (s *employeeService) SaveVehicleRegistrationImage(ctx context.Context, empID uuid.UUID, plate, plateDigits, imageURL string) error {
+	return s.repo.SaveVehicleRegistrationImage(ctx, empID, plate, plateDigits, imageURL)
 }
 
 func (s *employeeService) ResetPassword(ctx context.Context, id uuid.UUID, newPassword string) error {

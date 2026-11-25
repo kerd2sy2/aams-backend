@@ -23,6 +23,7 @@ type EmployeeRepository interface {
 	UpdatePhone(ctx context.Context, id uuid.UUID, phone string) error
 	UpdateLocalizedNames(ctx context.Context, id uuid.UUID, localizedNames string) error
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
+	SaveVehicleRegistrationImage(ctx context.Context, empID uuid.UUID, plate, plateDigits, imageURL string) error
 	BatchSetOilChange(ctx context.Context, entries []OilSetupEntry) (int, error)
 }
 
@@ -317,6 +318,18 @@ func (r *gormEmployeeRepository) UpdatePassword(ctx context.Context, id uuid.UUI
 		"password_hash":        passwordHash,
 		"must_change_password": false,
 	}).Error
+}
+
+func (r *gormEmployeeRepository) SaveVehicleRegistrationImage(ctx context.Context, empID uuid.UUID, plate, plateDigits, imageURL string) error {
+	// 1. Permanently save registration_image on the vehicle record so any future driver linked to this bike gets it automatically
+	if plateDigits != "" {
+		_ = r.db.WithContext(ctx).Table("vehicles").
+			Where("deleted_at IS NULL AND (TRIM(plate_number) = ? OR regexp_replace(plate_number, '[^0-9]', '', 'g') = ?)", strings.TrimSpace(plate), plateDigits).
+			Update("registration_image", imageURL).Error
+	}
+	// 2. Also update employee's own vehicle_registration_image
+	return r.db.WithContext(ctx).Model(&Employee{}).Where("id = ?", empID).
+		Update("vehicle_registration_image", imageURL).Error
 }
 
 func (r *gormEmployeeRepository) BatchSetOilChange(ctx context.Context, entries []OilSetupEntry) (int, error) {
