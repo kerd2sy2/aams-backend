@@ -184,6 +184,10 @@ func (h *AuthHandler) Me(c *gin.Context) {
 					"key_number":             emp.KeyNumber,
 					"shift":                  emp.Shift,
 					"vehicle_type":           emp.VehicleType,
+					"nationality":            emp.Nationality,
+					"date_of_birth":          emp.DateOfBirth,
+					"iqama_expiration_date":  emp.IqamaExpirationDate,
+					"localized_names":        emp.LocalizedNames,
 				})
 				return
 			}
