@@ -379,6 +379,36 @@ func (s *employeeService) UpdateMyProfile(ctx context.Context, id uuid.UUID, req
 		v := strings.TrimSpace(*req.NationalIDImage)
 		if v != "" {
 			emp.NationalIDImage = v
+			// Auto-extract missing Iqama fields when employee updates their Iqama image
+			if (emp.IqamaExpirationDate == nil || *emp.IqamaExpirationDate == "") || emp.Nationality == "" || (emp.DateOfBirth == nil || *emp.DateOfBirth == "") {
+				if imgB64, errImg := resolveDocumentImageBase64("", v); errImg == nil && imgB64 != "" {
+					ocr := callLocalDocumentOCR(imgB64, "iqama")
+					if ocr.IqamaExpirationDate == "" || ocr.DateOfBirth == "" || ocr.Nationality == "" {
+						if gem, errG := callGeminiDocumentOCR(imgB64, "iqama"); errG == nil && gem != nil {
+							if ocr.IqamaExpirationDate == "" {
+								ocr.IqamaExpirationDate = gem.IqamaExpirationDate
+							}
+							if ocr.DateOfBirth == "" {
+								ocr.DateOfBirth = gem.DateOfBirth
+							}
+							if ocr.Nationality == "" {
+								ocr.Nationality = gem.Nationality
+							}
+						}
+					}
+					if (emp.IqamaExpirationDate == nil || *emp.IqamaExpirationDate == "") && ocr.IqamaExpirationDate != "" {
+						d := ocr.IqamaExpirationDate
+						emp.IqamaExpirationDate = &d
+					}
+					if (emp.DateOfBirth == nil || *emp.DateOfBirth == "") && ocr.DateOfBirth != "" {
+						d := ocr.DateOfBirth
+						emp.DateOfBirth = &d
+					}
+					if emp.Nationality == "" && ocr.Nationality != "" {
+						emp.Nationality = normalizeDocNationality(ocr.Nationality)
+					}
+				}
+			}
 		}
 	}
 
@@ -386,6 +416,36 @@ func (s *employeeService) UpdateMyProfile(ctx context.Context, id uuid.UUID, req
 		v := strings.TrimSpace(*req.DrivingLicenseImage)
 		if v != "" {
 			emp.DrivingLicenseImage = v
+			// Auto-extract missing License expiry / DOB / Nationality when employee updates their License image
+			if (emp.LicenseExpirationDate == nil || *emp.LicenseExpirationDate == "") || emp.Nationality == "" || (emp.DateOfBirth == nil || *emp.DateOfBirth == "") {
+				if imgB64, errImg := resolveDocumentImageBase64("", v); errImg == nil && imgB64 != "" {
+					ocr := callLocalDocumentOCR(imgB64, "license")
+					if ocr.LicenseExpirationDate == "" || ocr.DateOfBirth == "" || ocr.Nationality == "" {
+						if gem, errG := callGeminiDocumentOCR(imgB64, "license"); errG == nil && gem != nil {
+							if ocr.LicenseExpirationDate == "" {
+								ocr.LicenseExpirationDate = gem.LicenseExpirationDate
+							}
+							if ocr.DateOfBirth == "" {
+								ocr.DateOfBirth = gem.DateOfBirth
+							}
+							if ocr.Nationality == "" {
+								ocr.Nationality = gem.Nationality
+							}
+						}
+					}
+					if (emp.LicenseExpirationDate == nil || *emp.LicenseExpirationDate == "") && ocr.LicenseExpirationDate != "" {
+						d := ocr.LicenseExpirationDate
+						emp.LicenseExpirationDate = &d
+					}
+					if (emp.DateOfBirth == nil || *emp.DateOfBirth == "") && ocr.DateOfBirth != "" {
+						d := ocr.DateOfBirth
+						emp.DateOfBirth = &d
+					}
+					if emp.Nationality == "" && ocr.Nationality != "" {
+						emp.Nationality = normalizeDocNationality(ocr.Nationality)
+					}
+				}
+			}
 		}
 	}
 
